@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: nairatag-web
+    runtime: node
+    plan: starter
+    region: frankfurt
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NT_SESSION_SECRET
+        generateValue: true
+      - key: NT_OTP_SECRET
+        generateValue: true
+      - key: MONO_PUBLIC_KEY
+        sync: false
+      - key: MONO_SECRET_KEY
+        sync: false
+      - key: MONO_BASE_URL
+        value: https://api.withmono.com/v3
+      - key: MONO_ENV
+        value: sandbox
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
