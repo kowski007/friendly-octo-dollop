@@ -90,6 +90,6 @@ if ($envVars.Count -eq 0) {
   throw "No env vars found to sync. Check $EnvFile."
 }
 
-Invoke-RenderApi -Method PUT -Path "/services/$ServiceId/env-vars" -Body @{ envVars = $envVars } | Out-Null
+Invoke-RenderApi -Method PUT -Path "/services/$ServiceId/env-vars" -Body $envVars | Out-Null
 
 Write-Output "Synced $($envVars.Count) env vars to $ServiceId"

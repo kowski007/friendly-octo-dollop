@@ -60,12 +60,14 @@ $serviceBody = @{
   autoDeploy = "yes"
   rootDir = ""
   serviceDetails = @{
-    env = "node"
+    runtime = "node"
     region = $Region
     plan = "starter"
-    buildCommand = "npm ci && npm run build"
-    startCommand = "npm run start"
     healthCheckPath = "/"
+    envSpecificDetails = @{
+      buildCommand = "npm ci && npm run build"
+      startCommand = "npm run start"
+    }
   }
 }
 
