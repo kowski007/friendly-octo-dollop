@@ -1,15 +1,10 @@
-import type { ClaimRecord } from "@/lib/adminTypes";
+import type { MarketplaceListingView as ListingView, MarketplaceStats } from "@/lib/adminTypes";
 import { AppPageHeader } from "./AppPageHeader";
-import {
-  Badge,
-  ButtonLink,
-  Card,
-  Container,
-  NairaTermBadge,
-  SectionHeader,
-} from "./ui";
+import { Badge, ButtonLink, Card, Container, SectionHeader } from "./ui";
+import { MarketplaceConsole } from "./MarketplaceConsole";
 
-function formatCurrency(amount: number) {
+function formatCurrency(amount?: number | null) {
+  if (amount == null) return "—";
   return new Intl.NumberFormat("en-NG", {
     style: "currency",
     currency: "NGN",
@@ -17,73 +12,57 @@ function formatCurrency(amount: number) {
   }).format(amount);
 }
 
-function handleTier(handle: string) {
-  if (handle.length <= 4) return "Ultra short";
-  if (handle.length <= 6) return "Premium";
-  if (handle.includes("_")) return "Merchant-style";
-  return "Standard";
+function formatCompactCurrency(amount: number) {
+  return new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: "NGN",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(amount);
 }
 
-function indicativePrice(claim: ClaimRecord) {
-  const lengthBoost = Math.max(0, 8 - claim.handle.length) * 60000;
-  const verificationBoost =
-    claim.verification === "business"
-      ? 220000
-      : claim.verification === "verified"
-        ? 120000
-        : 0;
-  const base = 85000 + lengthBoost + verificationBoost;
-  return Math.round(base / 5000) * 5000;
-}
-
-function statusLabel(claim: ClaimRecord) {
-  return claim.verification === "pending" ? "Private offer" : "Broker-ready";
-}
-
-function typeLabel(claim: ClaimRecord) {
-  return claim.verification === "business" ? "Business" : "Personal";
+function trustTone(score: number) {
+  if (score >= 75) return "verify";
+  if (score >= 50) return "orange";
+  return "neutral";
 }
 
 export function MarketplaceView({
-  claims,
+  listings,
+  stats,
   query,
 }: {
-  claims: ClaimRecord[];
+  listings: ListingView[];
+  stats: MarketplaceStats;
   query?: string;
 }) {
-  const featured = claims.slice(0, 9);
-  const shortest = [...claims].sort((a, b) => a.handle.length - b.handle.length)[0];
-  const verifiedCount = claims.filter(
-    (claim) => claim.verification === "verified" || claim.verification === "business"
-  ).length;
-
   return (
     <div className="min-h-screen bg-white text-zinc-950 transition-colors dark:bg-zinc-950 dark:text-zinc-50">
-      <AppPageHeader ctaHref="/agent" ctaLabel="List a handle" />
+      <AppPageHeader ctaHref="/agent" ctaLabel="Claim a handle" />
 
       <main className="py-14 sm:py-18">
         <Container className="space-y-8">
           <SectionHeader
-            eyebrow="Marketplace beta"
-            title="Discover premium handles before the transfer rails open fully."
-            description="This is the secondary market surface for reserved identities. We are starting with discovery, indicative pricing, and brokered transfer workflows before full self-serve buying and selling goes live."
+            eyebrow="Marketplace"
+            title="Buy, list, and review handle transfers under live marketplace rules."
+            description="Only real listings appear here. Sellers must own the handle, have payout setup, and pass listing checks. Trust history stays tied to the verified owner and does not automatically transfer with the string."
           />
 
           <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
             <Card className="p-6 sm:p-7">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge tone="orange">Buying and selling</Badge>
-                <Badge tone="verify">Transfer-safe beta</Badge>
+                <Badge tone="orange">Live listings only</Badge>
+                <Badge tone="verify">Transfer review required</Badge>
+                <Badge tone="neutral">Trust remains owner-bound</Badge>
               </div>
 
               <div className="mt-5 max-w-3xl text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-5xl">
-                The future exchange for identity-native handles.
+                Turn scarce handles into reviewed marketplace inventory.
               </div>
 
               <div className="mt-4 max-w-2xl text-base leading-7 text-zinc-600 dark:text-zinc-300">
-                Search premium <NairaTermBadge term="handles" tone="orange" /> ,
-                assess scarcity, and route serious acquisition interest into a
-                brokered transfer flow while the trust and payout rails mature.
+                Browse listed handles, inspect provenance, and submit real offers. Accepted
+                deals move into review before any ownership change happens.
               </div>
 
               <form className="mt-6 flex flex-col gap-3 sm:flex-row">
@@ -104,119 +83,164 @@ export function MarketplaceView({
 
               <div className="mt-6 flex flex-wrap gap-3">
                 <ButtonLink href="/map" variant="secondary">
-                  Watch live demand
+                  Watch network demand
                 </ButtonLink>
-                <ButtonLink href="/agent">Start seller flow</ButtonLink>
+                <ButtonLink href="/pay" variant="secondary">
+                  Open pay links
+                </ButtonLink>
               </div>
             </Card>
 
-            <div className="grid gap-5 sm:grid-cols-3 lg:grid-cols-1">
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-1">
               <Card className="p-6">
                 <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-                  Claimed handles
+                  Live listings
                 </div>
                 <div className="mt-3 text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                  {claims.length.toLocaleString()}
+                  {stats.liveListings.toLocaleString()}
                 </div>
                 <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-                  Handles already inside the network.
+                  Public listings accepting real offers right now.
                 </div>
               </Card>
 
               <Card className="p-6">
                 <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-                  Verified identities
+                  Pending offers
                 </div>
                 <div className="mt-3 text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                  {verifiedCount.toLocaleString()}
+                  {stats.pendingOffers.toLocaleString()}
                 </div>
                 <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-                  Higher-trust handles ready for safer transfers.
+                  Buyer demand waiting for seller review.
                 </div>
               </Card>
 
               <Card className="p-6">
                 <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-                  Shortest live handle
+                  Average ask
                 </div>
                 <div className="mt-3 text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                  {shortest ? `₦${shortest.handle}` : "—"}
+                  {formatCurrency(stats.averageAskAmount)}
                 </div>
                 <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-                  Rare handles will command the earliest demand.
+                  Across currently priced listings.
+                </div>
+              </Card>
+
+              <Card className="p-6">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                  Average offer
+                </div>
+                <div className="mt-3 text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                  {formatCurrency(stats.averageOfferAmount)}
+                </div>
+                <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+                  Current offer flow through the marketplace.
                 </div>
               </Card>
             </div>
           </div>
 
+          <MarketplaceConsole />
+
           <Card className="p-6 sm:p-7">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                  Featured handle inventory
+                  Live inventory
                 </div>
                 <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                  Discovery-first for now: pricing is indicative, transfer execution is brokered, and final ownership checks still happen inside NairaTag.
+                  Every card below comes from a live seller-created listing backed by marketplace rules.
                 </div>
               </div>
-              <Badge tone="neutral">
-                {query?.trim() ? `Filtered by “${query.trim()}”` : "Live claimed feed"}
-              </Badge>
+              <div className="flex flex-wrap gap-2">
+                <Badge tone="verify">{stats.liveListings} live</Badge>
+                <Badge tone="neutral">{stats.underReviewListings} under review</Badge>
+              </div>
             </div>
 
             <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {featured.length === 0 ? (
+              {listings.length === 0 ? (
                 <div className="col-span-full rounded-[2rem] border border-dashed border-zinc-300/70 px-6 py-10 text-sm text-zinc-600 dark:border-zinc-700/70 dark:text-zinc-300">
-                  No handles matched this filter yet. Try another search term or claim a fresh handle first.
+                  No live listings yet. The first eligible seller can open the market from the seller console above.
                 </div>
               ) : (
-                featured.map((claim) => (
-                  <Card
-                    key={claim.id}
-                    className="rounded-[2rem] border-zinc-200/70 p-5 dark:border-zinc-800/70"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                          ₦{claim.handle}
+                listings.map((entry) => {
+                  const trustScore = entry.reputation?.trustScore ?? 12;
+
+                  return (
+                    <Card
+                      key={entry.listing.id}
+                      className="rounded-[2rem] border-zinc-200/70 p-5 dark:border-zinc-800/70"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                            ₦{entry.listing.handle}
+                          </div>
+                          <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                            {entry.claim.displayName}
+                          </div>
                         </div>
-                        <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                          {claim.displayName}
+                        <Badge tone={trustTone(trustScore)}>Trust {trustScore}/100</Badge>
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <Badge tone={entry.listing.status === "active" ? "verify" : "neutral"}>
+                          {entry.listing.status.replace("_", " ")}
+                        </Badge>
+                        <Badge tone="orange">
+                          {entry.listing.saleMode === "fixed_price" ? "Fixed price" : "Offers only"}
+                        </Badge>
+                        <Badge tone="neutral">{entry.bankLinked ? "Payout ready" : "No payout"}</Badge>
+                      </div>
+
+                      <div className="mt-5 grid grid-cols-3 gap-3">
+                        <div className="rounded-[1.25rem] border border-zinc-200/70 bg-zinc-50/80 px-3 py-3 dark:border-zinc-800/80 dark:bg-zinc-900/35">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                            Ask
+                          </div>
+                          <div className="mt-2 text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                            {entry.listing.askAmount
+                              ? formatCompactCurrency(entry.listing.askAmount)
+                              : "Offers"}
+                          </div>
+                        </div>
+                        <div className="rounded-[1.25rem] border border-zinc-200/70 bg-zinc-50/80 px-3 py-3 dark:border-zinc-800/80 dark:bg-zinc-900/35">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                            Offers
+                          </div>
+                          <div className="mt-2 text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                            {entry.pendingOfferCount}
+                          </div>
+                        </div>
+                        <div className="rounded-[1.25rem] border border-zinc-200/70 bg-zinc-50/80 px-3 py-3 dark:border-zinc-800/80 dark:bg-zinc-900/35">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                            Volume
+                          </div>
+                          <div className="mt-2 text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                            {formatCompactCurrency(entry.reputation?.totalVolume ?? 0)}
+                          </div>
                         </div>
                       </div>
-                      <Badge tone={claim.verification === "pending" ? "neutral" : "verify"}>
-                        {statusLabel(claim)}
-                      </Badge>
-                    </div>
 
-                    <div className="mt-5 flex flex-wrap gap-2">
-                      <Badge tone="orange">{handleTier(claim.handle)}</Badge>
-                      <Badge tone="neutral">{typeLabel(claim)}</Badge>
-                      <Badge tone="neutral">{claim.bank}</Badge>
-                    </div>
+                      <div className="mt-4 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
+                        Owned since {new Date(entry.ownerSinceAt).toLocaleDateString()} · {entry.offerCount} total offer(s)
+                        {entry.listing.sellerNote ? ` · ${entry.listing.sellerNote}` : ""}
+                      </div>
 
-                    <div className="mt-5 rounded-[1.5rem] border border-zinc-200/70 bg-zinc-50/80 p-4 dark:border-zinc-800/80 dark:bg-zinc-900/45">
-                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-                        Indicative market value
+                      <div className="mt-5 flex flex-wrap gap-3">
+                        <ButtonLink href={`/marketplace/${entry.listing.handle}`}>
+                          View listing
+                        </ButtonLink>
+                        <ButtonLink href={`/pay/${entry.listing.handle}`} variant="secondary">
+                          Open pay page
+                        </ButtonLink>
                       </div>
-                      <div className="mt-2 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                        {formatCurrency(indicativePrice(claim))}
-                      </div>
-                      <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-                        Based on rarity, length, identity strength, and transfer readiness.
-                      </div>
-                    </div>
-
-                    <div className="mt-5 flex flex-wrap gap-3">
-                      <ButtonLink href={`/pay/${claim.handle}`} variant="secondary">
-                        Open pay link
-                      </ButtonLink>
-                      <ButtonLink href={`/agent?prompt=list%20%E2%82%A6${claim.handle}`}>
-                        Broker this handle
-                      </ButtonLink>
-                    </div>
-                  </Card>
-                ))
+                    </Card>
+                  );
+                })
               )}
             </div>
           </Card>
@@ -224,34 +248,25 @@ export function MarketplaceView({
           <div className="grid gap-5 lg:grid-cols-2">
             <Card className="p-6 sm:p-7">
               <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                Seller onboarding
+                Seller policy
               </div>
               <div className="mt-4 space-y-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
-                <p>1. Verify the identity behind the handle.</p>
-                <p>2. Confirm payout destination and ownership history.</p>
-                <p>3. List the handle with a private floor or broker-assist mode.</p>
-                <p>4. Complete transfer only after recipient and seller clear compliance checks.</p>
-              </div>
-              <div className="mt-5">
-                <ButtonLink href="/agent">Join seller beta</ButtonLink>
+                <p>Sellers must own the handle and have payout setup before listing.</p>
+                <p>Reserved short handles stay out of self-serve listings and are handled separately.</p>
+                <p>Accepted offers move into review before any transfer or settlement.</p>
+                <p>Misleading brand claims or impersonation can cancel a listing immediately.</p>
               </div>
             </Card>
 
             <Card className="p-6 sm:p-7">
               <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                What unlocks the full marketplace
+                Buyer protection
               </div>
               <div className="mt-4 space-y-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
-                <p>Ownership transfer rails and settlement escrow</p>
-                <p>Identity-aware dispute handling</p>
-                <p>Verified payment links that survive platform boundaries</p>
-                <p>Buyer reputation and demand signals from the live network</p>
-              </div>
-              <div className="mt-5 flex flex-wrap gap-3">
-                <ButtonLink href="/map" variant="secondary">
-                  View demand map
-                </ButtonLink>
-                <ButtonLink href="/">Back to product</ButtonLink>
+                <p>Trust history belongs to the verified owner, not the raw string alone.</p>
+                <p>Listing provenance stays visible so buyers can inspect handle history before offering.</p>
+                <p>Transfer review is required before a sale can complete.</p>
+                <p>The public pay page and trust score remain visible during negotiation.</p>
               </div>
             </Card>
           </div>

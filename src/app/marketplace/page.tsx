@@ -1,4 +1,4 @@
-import { listClaims } from "@/lib/adminStore";
+import { getMarketplaceStats, listMarketplaceListings } from "@/lib/adminStore";
 import { MarketplaceView } from "@/components/nairatag/MarketplaceView";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,10 @@ export default async function MarketplacePage({
   searchParams,
 }: MarketplacePageProps) {
   const query = (await searchParams).q?.trim() || undefined;
-  const data = await listClaims({ limit: 24, q: query });
+  const [data, stats] = await Promise.all([
+    listMarketplaceListings({ limit: 24, q: query }),
+    getMarketplaceStats(),
+  ]);
 
-  return <MarketplaceView claims={data.items} query={query} />;
+  return <MarketplaceView listings={data.items} stats={stats} query={query} />;
 }

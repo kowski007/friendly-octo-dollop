@@ -1,6 +1,10 @@
 import Link from "next/link";
 
-import type { BankAccountRecord, ClaimRecord } from "@/lib/adminTypes";
+import type {
+  BankAccountRecord,
+  ClaimRecord,
+  HandleReputation,
+} from "@/lib/adminTypes";
 import { AppPageHeader } from "./AppPageHeader";
 import { CopyButton } from "./CopyButton";
 import {
@@ -91,9 +95,25 @@ function AmountPill({ amount }: { amount: number }) {
   );
 }
 
+function formatCompactCurrency(amount: number) {
+  return new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: "NGN",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(amount);
+}
+
+function trustTone(score: number) {
+  if (score >= 75) return "verify";
+  if (score >= 50) return "orange";
+  return "neutral";
+}
+
 export function PaymentLinkView({
   handle,
   payment,
+  reputation,
   requestedAmount,
   note,
   shareUrl,
@@ -103,6 +123,7 @@ export function PaymentLinkView({
     claim: ClaimRecord;
     bankAccount: PublicBankAccount | null;
   } | null;
+  reputation: HandleReputation | null;
   requestedAmount: number | null;
   note?: string;
   shareUrl: string;
@@ -111,6 +132,7 @@ export function PaymentLinkView({
   const bankAccount = payment?.bankAccount ?? null;
   const amountLabel = formatCurrency(requestedAmount);
   const recipientName = presentRecipientName(claim, handle);
+  const trustScore = reputation?.trustScore ?? 12;
   const shareText = amountLabel
     ? `Pay ${amountLabel} to ₦${handle}${note ? ` for ${note}` : ""}`
     : `Pay ₦${handle}${note ? ` for ${note}` : ""}`;
@@ -159,6 +181,7 @@ export function PaymentLinkView({
                           {claim.verification === "pending" ? "Claimed" : "Verified"}
                         </Badge>
                         <NairaTermBadge term="handle" tone="orange" />
+                        <Badge tone={trustTone(trustScore)}>Trust {trustScore}/100</Badge>
                       </div>
                       <h1 className="mt-4 text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-5xl">
                         ₦{claim.handle}
@@ -198,13 +221,17 @@ export function PaymentLinkView({
 
                     <Card className="rounded-[1.75rem] border-emerald-200/60 bg-emerald-50/70 p-5 dark:border-emerald-900/40 dark:bg-emerald-950/15">
                       <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-                        Share link
+                        Trust score
                       </div>
-                      <div className="mt-3 text-base font-semibold text-zinc-950 dark:text-zinc-50">
-                        Send this payment page anywhere
+                      <div className="mt-3 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                        {trustScore}/100
                       </div>
                       <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-                        Works in DMs, chat threads, bio links, and invoices.
+                        {reputation
+                          ? `${reputation.settledTransactionCount} settled payments · ${formatCompactCurrency(
+                              reputation.totalVolume
+                            )} volume`
+                          : "Trust starts with identity and grows with payment history."}
                       </div>
                     </Card>
                   </div>
@@ -268,11 +295,80 @@ export function PaymentLinkView({
                     </Card>
 
                     <Card className="rounded-[2rem] p-6">
-                      <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                        Quick send presets
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                            Reputation layer
+                          </div>
+                          <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                            How this handle looks before a sender moves money.
+                          </div>
+                        </div>
+                        <Badge tone={trustTone(trustScore)}>{trustScore}/100</Badge>
                       </div>
-                      <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                        Use hosted links for common amounts while the widget and partner embeds come later.
+
+                      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-[1.4rem] border border-zinc-200/70 bg-zinc-50/80 p-4 dark:border-zinc-800/80 dark:bg-zinc-900/40">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                            Transactions
+                          </div>
+                          <div className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                            {reputation?.transactionCount ?? 0}
+                          </div>
+                          <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+                            Total recorded payments
+                          </div>
+                        </div>
+                        <div className="rounded-[1.4rem] border border-zinc-200/70 bg-zinc-50/80 p-4 dark:border-zinc-800/80 dark:bg-zinc-900/40">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                            Recent 30d
+                          </div>
+                          <div className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                            {reputation?.recentTransactionCount30d ?? 0}
+                          </div>
+                          <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+                            Fresh activity signal
+                          </div>
+                        </div>
+                        <div className="rounded-[1.4rem] border border-zinc-200/70 bg-zinc-50/80 p-4 dark:border-zinc-800/80 dark:bg-zinc-900/40">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                            Settled volume
+                          </div>
+                          <div className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                            {formatCompactCurrency(reputation?.totalVolume ?? 0)}
+                          </div>
+                          <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+                            Successful transfers only
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-5 flex flex-wrap gap-2">
+                        {(reputation?.badges.length ? reputation.badges : ["New handle"]).map(
+                          (badge) => (
+                            <Badge
+                              key={badge}
+                              tone={
+                                badge === "Verified" ||
+                                badge === "High trust" ||
+                                badge === "Clean history"
+                                  ? "verify"
+                                  : "neutral"
+                              }
+                            >
+                              {badge}
+                            </Badge>
+                          )
+                        )}
+                      </div>
+
+                      <div className="mt-6 border-t border-zinc-200/70 pt-6 dark:border-zinc-800/80">
+                        <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                          Quick send presets
+                        </div>
+                        <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                          Use hosted links for common amounts while the widget and partner embeds come later.
+                        </div>
                       </div>
 
                       <div className="mt-5 flex flex-wrap gap-3">

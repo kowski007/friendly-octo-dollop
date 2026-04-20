@@ -8,6 +8,9 @@ const HANDLES_TABLE = "nt_phase0_handles";
 const API_LOGS_TABLE = "nt_phase0_api_logs";
 const OTPS_TABLE = "nt_phase0_otps";
 const BANK_ACCOUNTS_TABLE = "nt_phase0_bank_accounts";
+const TRANSACTIONS_TABLE = "nt_phase1_transactions";
+const MARKETPLACE_LISTINGS_TABLE = "nt_marketplace_listings";
+const MARKETPLACE_OFFERS_TABLE = "nt_marketplace_offers";
 
 declare global {
   var __nairatagAdminPool: Pool | undefined;
@@ -139,6 +142,81 @@ async function ensureSchema() {
   await pool.query(
     `create index if not exists ${BANK_ACCOUNTS_TABLE}_linked_at_idx on ${BANK_ACCOUNTS_TABLE}(linked_at desc)`
   );
+  await pool.query(`
+    create table if not exists ${TRANSACTIONS_TABLE} (
+      id text primary key,
+      handle text not null,
+      user_id text,
+      counterparty_handle text,
+      amount integer not null,
+      currency text not null,
+      channel text not null,
+      status text not null,
+      reference text,
+      note text,
+      sender_name text,
+      sender_phone text,
+      recorded_at timestamptz not null,
+      settled_at timestamptz,
+      disputed_at timestamptz,
+      metadata jsonb
+    )
+  `);
+  await pool.query(
+    `create index if not exists ${TRANSACTIONS_TABLE}_handle_idx on ${TRANSACTIONS_TABLE}(handle)`
+  );
+  await pool.query(
+    `create index if not exists ${TRANSACTIONS_TABLE}_user_id_idx on ${TRANSACTIONS_TABLE}(user_id)`
+  );
+  await pool.query(
+    `create index if not exists ${TRANSACTIONS_TABLE}_recorded_at_idx on ${TRANSACTIONS_TABLE}(recorded_at desc)`
+  );
+  await pool.query(`
+    create table if not exists ${MARKETPLACE_LISTINGS_TABLE} (
+      id text primary key,
+      handle text not null unique,
+      seller_user_id text not null,
+      sale_mode text not null,
+      ask_amount integer,
+      min_offer_amount integer,
+      status text not null,
+      seller_note text,
+      commission_bps integer not null,
+      created_at timestamptz not null,
+      updated_at timestamptz not null,
+      published_at timestamptz not null,
+      review_started_at timestamptz,
+      withdrawn_at timestamptz
+    )
+  `);
+  await pool.query(
+    `create index if not exists ${MARKETPLACE_LISTINGS_TABLE}_seller_idx on ${MARKETPLACE_LISTINGS_TABLE}(seller_user_id)`
+  );
+  await pool.query(
+    `create index if not exists ${MARKETPLACE_LISTINGS_TABLE}_status_idx on ${MARKETPLACE_LISTINGS_TABLE}(status)`
+  );
+  await pool.query(`
+    create table if not exists ${MARKETPLACE_OFFERS_TABLE} (
+      id text primary key,
+      listing_id text not null,
+      handle text not null,
+      buyer_user_id text,
+      buyer_name text not null,
+      buyer_phone text not null,
+      amount integer not null,
+      note text,
+      status text not null,
+      created_at timestamptz not null,
+      updated_at timestamptz not null,
+      responded_at timestamptz
+    )
+  `);
+  await pool.query(
+    `create index if not exists ${MARKETPLACE_OFFERS_TABLE}_listing_idx on ${MARKETPLACE_OFFERS_TABLE}(listing_id)`
+  );
+  await pool.query(
+    `create index if not exists ${MARKETPLACE_OFFERS_TABLE}_status_idx on ${MARKETPLACE_OFFERS_TABLE}(status)`
+  );
 }
 
 async function countRows(client: PoolClient, table: string) {
@@ -155,6 +233,9 @@ async function hasNormalizedData(client: PoolClient) {
     await countRows(client, API_LOGS_TABLE),
     await countRows(client, OTPS_TABLE),
     await countRows(client, BANK_ACCOUNTS_TABLE),
+    await countRows(client, TRANSACTIONS_TABLE),
+    await countRows(client, MARKETPLACE_LISTINGS_TABLE),
+    await countRows(client, MARKETPLACE_OFFERS_TABLE),
   ];
 
   return counts.some((count) => count > 0);
@@ -167,6 +248,13 @@ function normalizeData(data: Partial<AdminData> | null | undefined): AdminData {
     users: Array.isArray(data?.users) ? data.users : [],
     otps: Array.isArray(data?.otps) ? data.otps : [],
     bankAccounts: Array.isArray(data?.bankAccounts) ? data.bankAccounts : [],
+    transactions: Array.isArray(data?.transactions) ? data.transactions : [],
+    marketplaceListings: Array.isArray(data?.marketplaceListings)
+      ? data.marketplaceListings
+      : [],
+    marketplaceOffers: Array.isArray(data?.marketplaceOffers)
+      ? data.marketplaceOffers
+      : [],
   };
 }
 
@@ -334,6 +422,117 @@ async function replaceSnapshot(client: PoolClient, data: AdminData) {
       bankAccount.lookupMessage ?? null,
     ])
   );
+
+  await replaceTable(
+    client,
+    TRANSACTIONS_TABLE,
+    [
+      "id",
+      "handle",
+      "user_id",
+      "counterparty_handle",
+      "amount",
+      "currency",
+      "channel",
+      "status",
+      "reference",
+      "note",
+      "sender_name",
+      "sender_phone",
+      "recorded_at",
+      "settled_at",
+      "disputed_at",
+      "metadata",
+    ],
+    data.transactions.map((transaction) => [
+      transaction.id,
+      transaction.handle,
+      transaction.userId ?? null,
+      transaction.counterpartyHandle ?? null,
+      transaction.amount,
+      transaction.currency,
+      transaction.channel,
+      transaction.status,
+      transaction.reference ?? null,
+      transaction.note ?? null,
+      transaction.senderName ?? null,
+      transaction.senderPhone ?? null,
+      transaction.recordedAt,
+      transaction.settledAt ?? null,
+      transaction.disputedAt ?? null,
+      transaction.metadata ?? null,
+    ])
+  );
+
+  await replaceTable(
+    client,
+    MARKETPLACE_LISTINGS_TABLE,
+    [
+      "id",
+      "handle",
+      "seller_user_id",
+      "sale_mode",
+      "ask_amount",
+      "min_offer_amount",
+      "status",
+      "seller_note",
+      "commission_bps",
+      "created_at",
+      "updated_at",
+      "published_at",
+      "review_started_at",
+      "withdrawn_at",
+    ],
+    data.marketplaceListings.map((listing) => [
+      listing.id,
+      listing.handle,
+      listing.sellerUserId,
+      listing.saleMode,
+      listing.askAmount ?? null,
+      listing.minOfferAmount ?? null,
+      listing.status,
+      listing.sellerNote ?? null,
+      listing.commissionBps,
+      listing.createdAt,
+      listing.updatedAt,
+      listing.publishedAt,
+      listing.reviewStartedAt ?? null,
+      listing.withdrawnAt ?? null,
+    ])
+  );
+
+  await replaceTable(
+    client,
+    MARKETPLACE_OFFERS_TABLE,
+    [
+      "id",
+      "listing_id",
+      "handle",
+      "buyer_user_id",
+      "buyer_name",
+      "buyer_phone",
+      "amount",
+      "note",
+      "status",
+      "created_at",
+      "updated_at",
+      "responded_at",
+    ],
+    data.marketplaceOffers.map((offer) => [
+      offer.id,
+      offer.listingId,
+      offer.handle,
+      offer.buyerUserId ?? null,
+      offer.buyerName,
+      offer.buyerPhone,
+      offer.amount,
+      offer.note ?? null,
+      offer.status,
+      offer.createdAt,
+      offer.updatedAt,
+      offer.respondedAt ?? null,
+    ])
+  );
 }
 
 async function readLegacySnapshot(client: PoolClient): Promise<AdminData | null> {
@@ -351,7 +550,11 @@ async function migrateLegacySnapshotIfNeeded(client: PoolClient) {
     legacy.claims.length > 0 ||
     legacy.apiLogs.length > 0 ||
     legacy.users.length > 0 ||
-    legacy.otps.length > 0;
+    legacy.otps.length > 0 ||
+    legacy.bankAccounts.length > 0 ||
+    legacy.transactions.length > 0 ||
+    legacy.marketplaceListings.length > 0 ||
+    legacy.marketplaceOffers.length > 0;
 
   if (!hasLegacyData) return;
 
@@ -420,6 +623,54 @@ function mapRowsToSnapshot(rows: {
     linked_at: string;
     verified_at: string | null;
     lookup_message: string | null;
+  }>;
+  transactions: Array<{
+    id: string;
+    handle: string;
+    user_id: string | null;
+    counterparty_handle: string | null;
+    amount: number;
+    currency: "NGN";
+    channel: AdminData["transactions"][number]["channel"];
+    status: AdminData["transactions"][number]["status"];
+    reference: string | null;
+    note: string | null;
+    sender_name: string | null;
+    sender_phone: string | null;
+    recorded_at: string;
+    settled_at: string | null;
+    disputed_at: string | null;
+    metadata: AdminData["transactions"][number]["metadata"] | null;
+  }>;
+  marketplaceListings: Array<{
+    id: string;
+    handle: string;
+    seller_user_id: string;
+    sale_mode: AdminData["marketplaceListings"][number]["saleMode"];
+    ask_amount: number | null;
+    min_offer_amount: number | null;
+    status: AdminData["marketplaceListings"][number]["status"];
+    seller_note: string | null;
+    commission_bps: number;
+    created_at: string;
+    updated_at: string;
+    published_at: string;
+    review_started_at: string | null;
+    withdrawn_at: string | null;
+  }>;
+  marketplaceOffers: Array<{
+    id: string;
+    listing_id: string;
+    handle: string;
+    buyer_user_id: string | null;
+    buyer_name: string;
+    buyer_phone: string;
+    amount: number;
+    note: string | null;
+    status: AdminData["marketplaceOffers"][number]["status"];
+    created_at: string;
+    updated_at: string;
+    responded_at: string | null;
   }>;
 }): AdminData {
   const toIso = (value: Date | string | null | undefined) =>
@@ -490,6 +741,54 @@ function mapRowsToSnapshot(rows: {
       linkedAt: toIso(bankAccount.linked_at) ?? new Date().toISOString(),
       verifiedAt: toIso(bankAccount.verified_at),
       lookupMessage: bankAccount.lookup_message ?? undefined,
+    })),
+    transactions: rows.transactions.map((transaction) => ({
+      id: transaction.id,
+      handle: transaction.handle,
+      userId: transaction.user_id ?? undefined,
+      counterpartyHandle: transaction.counterparty_handle ?? undefined,
+      amount: transaction.amount,
+      currency: transaction.currency,
+      channel: transaction.channel,
+      status: transaction.status,
+      reference: transaction.reference ?? undefined,
+      note: transaction.note ?? undefined,
+      senderName: transaction.sender_name ?? undefined,
+      senderPhone: transaction.sender_phone ?? undefined,
+      recordedAt: toIso(transaction.recorded_at) ?? new Date().toISOString(),
+      settledAt: toIso(transaction.settled_at),
+      disputedAt: toIso(transaction.disputed_at),
+      metadata: transaction.metadata ?? undefined,
+    })),
+    marketplaceListings: rows.marketplaceListings.map((listing) => ({
+      id: listing.id,
+      handle: listing.handle,
+      sellerUserId: listing.seller_user_id,
+      saleMode: listing.sale_mode,
+      askAmount: listing.ask_amount ?? undefined,
+      minOfferAmount: listing.min_offer_amount ?? undefined,
+      status: listing.status,
+      sellerNote: listing.seller_note ?? undefined,
+      commissionBps: listing.commission_bps,
+      createdAt: toIso(listing.created_at) ?? new Date().toISOString(),
+      updatedAt: toIso(listing.updated_at) ?? new Date().toISOString(),
+      publishedAt: toIso(listing.published_at) ?? new Date().toISOString(),
+      reviewStartedAt: toIso(listing.review_started_at),
+      withdrawnAt: toIso(listing.withdrawn_at),
+    })),
+    marketplaceOffers: rows.marketplaceOffers.map((offer) => ({
+      id: offer.id,
+      listingId: offer.listing_id,
+      handle: offer.handle,
+      buyerUserId: offer.buyer_user_id ?? undefined,
+      buyerName: offer.buyer_name,
+      buyerPhone: offer.buyer_phone,
+      amount: offer.amount,
+      note: offer.note ?? undefined,
+      status: offer.status,
+      createdAt: toIso(offer.created_at) ?? new Date().toISOString(),
+      updatedAt: toIso(offer.updated_at) ?? new Date().toISOString(),
+      respondedAt: toIso(offer.responded_at),
     })),
   };
 }
@@ -574,6 +873,54 @@ export async function readAdminStateFromDatabase(): Promise<AdminData | null> {
       verified_at: string | null;
       lookup_message: string | null;
     }>(`select * from ${BANK_ACCOUNTS_TABLE} order by linked_at desc`);
+    const transactions = await client.query<{
+      id: string;
+      handle: string;
+      user_id: string | null;
+      counterparty_handle: string | null;
+      amount: number;
+      currency: "NGN";
+      channel: AdminData["transactions"][number]["channel"];
+      status: AdminData["transactions"][number]["status"];
+      reference: string | null;
+      note: string | null;
+      sender_name: string | null;
+      sender_phone: string | null;
+      recorded_at: string;
+      settled_at: string | null;
+      disputed_at: string | null;
+      metadata: AdminData["transactions"][number]["metadata"] | null;
+    }>(`select * from ${TRANSACTIONS_TABLE} order by recorded_at desc`);
+    const marketplaceListings = await client.query<{
+      id: string;
+      handle: string;
+      seller_user_id: string;
+      sale_mode: AdminData["marketplaceListings"][number]["saleMode"];
+      ask_amount: number | null;
+      min_offer_amount: number | null;
+      status: AdminData["marketplaceListings"][number]["status"];
+      seller_note: string | null;
+      commission_bps: number;
+      created_at: string;
+      updated_at: string;
+      published_at: string;
+      review_started_at: string | null;
+      withdrawn_at: string | null;
+    }>(`select * from ${MARKETPLACE_LISTINGS_TABLE} order by published_at desc`);
+    const marketplaceOffers = await client.query<{
+      id: string;
+      listing_id: string;
+      handle: string;
+      buyer_user_id: string | null;
+      buyer_name: string;
+      buyer_phone: string;
+      amount: number;
+      note: string | null;
+      status: AdminData["marketplaceOffers"][number]["status"];
+      created_at: string;
+      updated_at: string;
+      responded_at: string | null;
+    }>(`select * from ${MARKETPLACE_OFFERS_TABLE} order by created_at desc`);
 
     return mapRowsToSnapshot({
       users: users.rows,
@@ -581,6 +928,9 @@ export async function readAdminStateFromDatabase(): Promise<AdminData | null> {
       apiLogs: apiLogs.rows,
       otps: otps.rows,
       bankAccounts: bankAccounts.rows,
+      transactions: transactions.rows,
+      marketplaceListings: marketplaceListings.rows,
+      marketplaceOffers: marketplaceOffers.rows,
     });
   } finally {
     client.release();
