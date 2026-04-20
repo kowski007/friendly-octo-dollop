@@ -188,6 +188,18 @@ export function AdminDashboard() {
 
         <Card className="p-6">
           <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            Bank linked users
+          </div>
+          <div className="mt-3 text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+            {metrics ? metrics.bankLinkedUsers.toLocaleString() : "â€”"}
+          </div>
+          <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+            Payout destinations saved
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
             API calls
           </div>
           <div className="mt-3 text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">

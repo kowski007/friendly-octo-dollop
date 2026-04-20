@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 
 import { Badge, Container, cn } from "@/components/nairatag/ui";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 function NavLink({
   href,
@@ -42,15 +43,18 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             </Badge>
           </Link>
 
-          <nav
-            aria-label="Admin"
-            className="flex items-center gap-2"
-          >
-            <NavLink href="/admin">Dashboard</NavLink>
-            <NavLink href="/admin/users">Users</NavLink>
-            <NavLink href="/admin/claims">Claims</NavLink>
-            <NavLink href="/admin/api">API usage</NavLink>
-          </nav>
+          <div className="flex items-center gap-3">
+            <nav
+              aria-label="Admin"
+              className="flex items-center gap-2"
+            >
+              <NavLink href="/admin">Dashboard</NavLink>
+              <NavLink href="/admin/users">Users</NavLink>
+              <NavLink href="/admin/claims">Claims</NavLink>
+              <NavLink href="/admin/api">API usage</NavLink>
+            </nav>
+            <ThemeToggle className="px-3 py-2" />
+          </div>
         </Container>
       </header>
 

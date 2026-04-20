@@ -124,10 +124,14 @@ export function AdminUsers() {
                     </td>
                     <td className="py-3 pr-4">
                       <Badge
-                        tone={u.bvnLinkedAt ? "verify" : "neutral"}
+                        tone={u.bankLinkedAt || u.bvnLinkedAt ? "verify" : "neutral"}
                         className={cn("px-2 py-0.5 text-[11px]")}
                       >
-                        {u.bvnLinkedAt ? "bvn linked" : "phone verified"}
+                        {u.bankLinkedAt
+                          ? "bank linked"
+                          : u.bvnLinkedAt
+                            ? "bvn linked"
+                            : "phone verified"}
                       </Badge>
                     </td>
                     <td className="py-3 pr-4 text-xs text-zinc-500 dark:text-zinc-400">
@@ -168,4 +172,3 @@ export function AdminUsers() {
     </div>
   );
 }
-

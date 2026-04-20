@@ -1,4 +1,5 @@
 export type Verification = "verified" | "business" | "pending";
+export type BankLinkStatus = "verified" | "pending_lookup";
 
 export type ClaimRecord = {
   id: string;
@@ -32,12 +33,30 @@ export type UserRecord = {
   fullName?: string;
   bvnLast4?: string;
   bvnLinkedAt?: string; // ISO
+  bankLinkedAt?: string; // ISO
   geo?: {
     ip?: string;
     country?: string;
     region?: string;
     city?: string;
   };
+};
+
+export type BankAccountRecord = {
+  id: string;
+  userId: string;
+  bankCode: string;
+  bankName: string;
+  nipCode?: string;
+  accountName?: string;
+  accountNumberMasked: string;
+  accountNumberLast4: string;
+  accountNumberEncrypted: string;
+  provider: "mono" | "manual";
+  status: BankLinkStatus;
+  linkedAt: string; // ISO
+  verifiedAt?: string; // ISO
+  lookupMessage?: string;
 };
 
 export type OtpRecord = {
@@ -62,6 +81,7 @@ export type AdminMetrics = {
   totalUsers: number;
   phoneVerifiedUsers: number;
   bvnLinkedUsers: number;
+  bankLinkedUsers: number;
   totalApiCalls: number;
   apiCallsToday: number;
   successRate24h: number | null;

@@ -19,10 +19,18 @@
 
 # local admin datastore (can contain PII)
 /data/nairatag-admin.json
+/data/*.corrupt-*
 
 # Botpress build artifacts
 /botpress-agent/nairatag-agent/.botpress/
 /botpress-agent/nairatag-agent/node_modules/
+/botpress-agent/brunch24-agent/.botpress/
+/botpress-agent/brunch24-agent/node_modules/
+/botpress-agent/brunch24-agent/*.log
+/botpress-agent/brunch24-agent/*.pid
+
+# local sandboxes
+/Brunch24-AI/
 
 # local tools
 /tools/mingit/
@@ -39,9 +47,13 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+.next-dev.err.log
+.next-dev.out.log
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+!**/.env.example
 
 # vercel
 .vercel

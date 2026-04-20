@@ -1,6 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { getUserById } from "@/lib/adminStore";
+import {
+  getBankAccountForUser,
+  getClaimByUserId,
+  getUserById,
+} from "@/lib/adminStore";
 import { verifySessionToken } from "@/lib/session";
 
 export async function GET(req: NextRequest) {
@@ -13,7 +17,11 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const user = await getUserById(payload.uid);
+  const [user, claim, bankAccount] = await Promise.all([
+    getUserById(payload.uid),
+    getClaimByUserId(payload.uid),
+    getBankAccountForUser(payload.uid),
+  ]);
   if (!user) {
     return NextResponse.json(
       { error: "unauthorized" },
@@ -22,8 +30,7 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json(
-    { ok: true, user },
+    { ok: true, user, claim, bankAccount },
     { headers: { "Cache-Control": "no-store" } }
   );
 }
-

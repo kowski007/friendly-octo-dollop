@@ -2,9 +2,15 @@ import { promises as fs } from "fs";
 import path from "path";
 import crypto from "crypto";
 
+import {
+  isDatabaseBackedAdminStoreEnabled,
+  readAdminStateFromDatabase,
+  writeAdminStateToDatabase,
+} from "./adminPersistence";
 import type {
   AdminMetrics,
   ApiLogRecord,
+  BankAccountRecord,
   ClaimRecord,
   OtpRecord,
   UserRecord,
@@ -16,10 +22,16 @@ export type AdminData = {
   apiLogs: ApiLogRecord[];
   users: UserRecord[];
   otps: OtpRecord[];
+  bankAccounts: BankAccountRecord[];
 };
 
 const DATA_FILE = path.join(process.cwd(), "data", "nairatag-admin.json");
 const MAX_API_LOGS = 5000;
+let storageWarningShown = false;
+
+function emptyData(): AdminData {
+  return { claims: [], apiLogs: [], users: [], otps: [], bankAccounts: [] };
+}
 
 let queue: Promise<unknown> = Promise.resolve();
 function enqueue<T>(fn: () => Promise<T>): Promise<T> {
@@ -36,15 +48,11 @@ async function ensureDataFile() {
   try {
     await fs.access(DATA_FILE);
   } catch {
-    const initial: AdminData = { claims: [], apiLogs: [], users: [], otps: [] };
-    await fs.writeFile(DATA_FILE, JSON.stringify(initial, null, 2), "utf8");
+    await fs.writeFile(DATA_FILE, JSON.stringify(emptyData(), null, 2), "utf8");
   }
 }
 
-async function readDataUnsafe(): Promise<AdminData> {
-  await ensureDataFile();
-  const raw = await fs.readFile(DATA_FILE, "utf8");
-  const parsed = JSON.parse(raw) as Partial<AdminData> | null;
+function normalizeData(parsed: Partial<AdminData> | null | undefined): AdminData {
   return {
     claims: Array.isArray(parsed?.claims)
       ? (parsed!.claims as ClaimRecord[])
@@ -54,12 +62,73 @@ async function readDataUnsafe(): Promise<AdminData> {
       : [],
     users: Array.isArray(parsed?.users) ? (parsed!.users as UserRecord[]) : [],
     otps: Array.isArray(parsed?.otps) ? (parsed!.otps as OtpRecord[]) : [],
+    bankAccounts: Array.isArray(parsed?.bankAccounts)
+      ? (parsed!.bankAccounts as BankAccountRecord[])
+      : [],
   };
 }
 
-async function writeDataUnsafe(data: AdminData) {
+async function readFileDataUnsafe(): Promise<AdminData> {
+  await ensureDataFile();
+  try {
+    const raw = await fs.readFile(DATA_FILE, "utf8");
+    const parsed = JSON.parse(raw) as Partial<AdminData> | null;
+    return normalizeData(parsed);
+  } catch {
+    const corruptPath = `${DATA_FILE}.corrupt-${Date.now()}`;
+    try {
+      await fs.rename(DATA_FILE, corruptPath);
+    } catch {
+      // Ignore rename failures; we'll still rewrite a healthy copy below.
+    }
+
+    const initial = emptyData();
+    await fs.writeFile(DATA_FILE, JSON.stringify(initial, null, 2), "utf8");
+    return initial;
+  }
+}
+
+async function writeFileDataUnsafe(data: AdminData) {
   await ensureDataFile();
   await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
+}
+
+function warnStorageFallback(error: unknown) {
+  if (storageWarningShown) return;
+  storageWarningShown = true;
+  console.warn(
+    "[nairatag] Falling back to file-backed admin store:",
+    error instanceof Error ? error.message : String(error)
+  );
+}
+
+async function readDataUnsafe(): Promise<AdminData> {
+  if (isDatabaseBackedAdminStoreEnabled()) {
+    try {
+      const dbData = await readAdminStateFromDatabase();
+      if (dbData) return normalizeData(dbData);
+
+      const fileData = await readFileDataUnsafe();
+      await writeAdminStateToDatabase(fileData);
+      return fileData;
+    } catch (error) {
+      warnStorageFallback(error);
+    }
+  }
+
+  return readFileDataUnsafe();
+}
+
+async function writeDataUnsafe(data: AdminData) {
+  if (isDatabaseBackedAdminStoreEnabled()) {
+    try {
+      await writeAdminStateToDatabase(data);
+    } catch (error) {
+      warnStorageFallback(error);
+    }
+  }
+
+  await writeFileDataUnsafe(data);
 }
 
 function newId(prefix: string) {
@@ -215,6 +284,7 @@ export async function getAdminMetrics(): Promise<AdminMetrics> {
     const phoneVerifiedUsers = data.users.filter((u) => Boolean(u.phoneVerifiedAt))
       .length;
     const bvnLinkedUsers = data.users.filter((u) => Boolean(u.bvnLinkedAt)).length;
+    const bankLinkedUsers = data.users.filter((u) => Boolean(u.bankLinkedAt)).length;
 
     const totalApiCalls = data.apiLogs.length;
     const apiCallsToday = data.apiLogs.filter((l) => dayKey(l.ts) === today)
@@ -254,6 +324,7 @@ export async function getAdminMetrics(): Promise<AdminMetrics> {
       totalUsers,
       phoneVerifiedUsers,
       bvnLinkedUsers,
+      bankLinkedUsers,
       totalApiCalls,
       apiCallsToday,
       successRate24h,
@@ -351,6 +422,49 @@ function safeEqual(a: string, b: string) {
 
 function generateOtpCode() {
   return String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+}
+
+function bankEncryptionKey() {
+  const secret =
+    process.env.NT_BANK_ENCRYPTION_SECRET ||
+    process.env.NT_SESSION_SECRET ||
+    "dev_bank_encryption_secret_change_me";
+
+  return crypto.createHash("sha256").update(secret).digest();
+}
+
+function encryptSensitiveValue(value: string) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", bankEncryptionKey(), iv);
+  const ciphertext = Buffer.concat([
+    cipher.update(value, "utf8"),
+    cipher.final(),
+  ]);
+  const authTag = cipher.getAuthTag();
+
+  return Buffer.concat([iv, authTag, ciphertext]).toString("base64url");
+}
+
+function decryptSensitiveValue(value: string) {
+  const payload = Buffer.from(value, "base64url");
+  const iv = payload.subarray(0, 12);
+  const authTag = payload.subarray(12, 28);
+  const ciphertext = payload.subarray(28);
+  const decipher = crypto.createDecipheriv(
+    "aes-256-gcm",
+    bankEncryptionKey(),
+    iv
+  );
+  decipher.setAuthTag(authTag);
+
+  return Buffer.concat([
+    decipher.update(ciphertext),
+    decipher.final(),
+  ]).toString("utf8");
+}
+
+function maskAccountNumber(accountNumber: string) {
+  return `******${accountNumber.slice(-4)}`;
 }
 
 export async function requestPhoneOtp({
@@ -472,6 +586,60 @@ export async function getUserById(userId: string) {
   });
 }
 
+export async function getClaimByUserId(userId: string) {
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    return data.claims.find((claim) => claim.userId === userId) ?? null;
+  });
+}
+
+export async function getBankAccountForUser(userId: string) {
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    return (
+      data.bankAccounts
+        .filter((account) => account.userId === userId)
+        .sort((a, b) => Date.parse(b.linkedAt) - Date.parse(a.linkedAt))[0] ??
+      null
+    );
+  });
+}
+
+export async function getClaimByHandle(handle: string) {
+  const normalized = normalizeHandle(handle);
+  if (!normalized) return null;
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    return data.claims.find((claim) => claim.handle === normalized) ?? null;
+  });
+}
+
+export async function getPaymentDestinationByHandle(handle: string) {
+  const normalized = normalizeHandle(handle);
+  if (!normalized) return null;
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const claim = data.claims.find((entry) => entry.handle === normalized);
+    if (!claim) return null;
+
+    const bankAccount = claim.userId
+      ? data.bankAccounts.find((entry) => entry.userId === claim.userId) ?? null
+      : null;
+
+    return {
+      claim,
+      bankAccount: bankAccount
+        ? {
+            ...bankAccount,
+            accountNumber: decryptSensitiveValue(bankAccount.accountNumberEncrypted),
+          }
+        : null,
+    };
+  });
+}
+
 export async function claimHandleForUser({
   userId,
   handle,
@@ -557,6 +725,87 @@ export async function linkBvnForUser({
 
     await writeDataUnsafe(data);
     return { user, claim: claim ?? null };
+  });
+}
+
+export async function linkBankAccountForUser({
+  userId,
+  bankCode,
+  bankName,
+  accountNumber,
+  accountName,
+  nipCode,
+  provider = "manual",
+  status,
+  lookupMessage,
+}: {
+  userId: string;
+  bankCode: string;
+  bankName: string;
+  accountNumber: string;
+  accountName?: string;
+  nipCode?: string;
+  provider?: "mono" | "manual";
+  status: BankAccountRecord["status"];
+  lookupMessage?: string;
+}) {
+  const normalizedBankCode = bankCode.trim();
+  const normalizedBankName = bankName.trim();
+  const normalizedAccountNumber = accountNumber.replace(/\D/g, "");
+
+  if (!normalizedBankCode) throw new Error("missing_bank_code");
+  if (!normalizedBankName) throw new Error("missing_bank_name");
+  if (!/^\d{10}$/.test(normalizedAccountNumber)) {
+    throw new Error("invalid_account_number");
+  }
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const user = data.users.find((entry) => entry.id === userId);
+    if (!user) throw new Error("user_not_found");
+    if (!user.phoneVerifiedAt) throw new Error("phone_not_verified");
+
+    const nowIso = new Date().toISOString();
+    const existingIndex = data.bankAccounts.findIndex(
+      (account) => account.userId === userId
+    );
+    const existingAccount =
+      existingIndex >= 0 ? data.bankAccounts[existingIndex] : null;
+
+    const bankAccount: BankAccountRecord = {
+      id: existingAccount?.id ?? newId("bank"),
+      userId,
+      bankCode: normalizedBankCode,
+      bankName: normalizedBankName,
+      nipCode: nipCode?.trim() || undefined,
+      accountName: accountName?.trim() || existingAccount?.accountName,
+      accountNumberMasked: maskAccountNumber(normalizedAccountNumber),
+      accountNumberLast4: normalizedAccountNumber.slice(-4),
+      accountNumberEncrypted: encryptSensitiveValue(normalizedAccountNumber),
+      provider,
+      status,
+      linkedAt: nowIso,
+      verifiedAt: status === "verified" ? nowIso : existingAccount?.verifiedAt,
+      lookupMessage: lookupMessage?.trim() || undefined,
+    };
+
+    if (existingIndex >= 0) {
+      data.bankAccounts.splice(existingIndex, 1);
+    }
+    data.bankAccounts.unshift(bankAccount);
+
+    user.bankLinkedAt = nowIso;
+
+    const claim = data.claims.find((entry) => entry.userId === userId);
+    if (claim) {
+      claim.bank = normalizedBankName;
+      if (bankAccount.accountName && !user.fullName) {
+        claim.displayName = bankAccount.accountName;
+      }
+    }
+
+    await writeDataUnsafe(data);
+    return { user, claim: claim ?? null, bankAccount };
   });
 }
 

@@ -5,6 +5,9 @@ const links = [
   { label: "Privacy", href: "#faq" },
   { label: "Contact", href: "#claim" },
   { label: "Partners", href: "#services" },
+  { label: "Pay links", href: "/pay" },
+  { label: "Marketplace", href: "/marketplace" },
+  { label: "Live map", href: "/map" },
 ];
 
 export function FooterSection() {
@@ -39,4 +42,3 @@ export function FooterSection() {
     </footer>
   );
 }
-

@@ -1,5 +1,5 @@
 {
-  "name": "@bp-templates/empty-bot",
+  "name": "@mytag/brunch24-agent",
   "scripts": {
     "check:type": "tsc --noEmit"
   },
