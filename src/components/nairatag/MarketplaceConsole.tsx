@@ -231,39 +231,18 @@ export function MarketplaceConsole() {
 
   return (
     <Card className="p-6 sm:p-7">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge tone="orange">Seller console</Badge>
-        <Badge tone="neutral">Live marketplace</Badge>
-        <Badge tone="verify">Trust does not transfer automatically</Badge>
-      </div>
-
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h3 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-            List your handle with real rules.
-          </h3>
-          <p className="mt-2 max-w-2xl text-sm leading-7 text-zinc-600 dark:text-zinc-300">
-            A handle can change hands, but trust stays tied to the verified owner. Every
-            accepted deal goes into review before transfer.
-          </p>
-        </div>
-        <ButtonLink href="/agent" variant="secondary">
-          Need to claim first?
-        </ButtonLink>
-      </div>
-
       {loading ? (
-        <div className="mt-6 rounded-[1.6rem] border border-zinc-200/70 bg-zinc-50/80 p-5 text-sm text-zinc-600 dark:border-zinc-800/80 dark:bg-zinc-900/40 dark:text-zinc-300">
-          Loading your seller console...
+        <div className="rounded-[1.6rem] border border-zinc-200/70 bg-zinc-50/80 p-5 text-sm text-zinc-600 dark:border-zinc-800/80 dark:bg-zinc-900/40 dark:text-zinc-300">
+          Loading marketplace access...
         </div>
       ) : dashboard && "error" in dashboard ? (
-        <div className="mt-6 rounded-[1.6rem] border border-zinc-200/70 bg-zinc-50/80 p-5 text-sm text-zinc-600 dark:border-zinc-800/80 dark:bg-zinc-900/40 dark:text-zinc-300">
+        <div className="rounded-[1.6rem] border border-zinc-200/70 bg-zinc-50/80 p-5 text-sm text-zinc-600 dark:border-zinc-800/80 dark:bg-zinc-900/40 dark:text-zinc-300">
           {dashboard.error === "unauthorized"
-            ? "Sign in through the claim flow to open or manage a listing."
+            ? "Sign in to manage listings."
             : "Could not load marketplace access right now."}
         </div>
       ) : dashboard && "ok" in dashboard ? (
-        <div className="mt-6 space-y-5">
+        <div className="space-y-5">
           <div className="grid gap-4 md:grid-cols-4">
             <div className="rounded-[1.5rem] border border-zinc-200/70 bg-zinc-50/80 p-4 dark:border-zinc-800/80 dark:bg-zinc-900/40">
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
