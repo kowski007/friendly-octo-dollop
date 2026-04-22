@@ -8,17 +8,7 @@ import type {
 } from "@/lib/adminTypes";
 import { AppPageHeader } from "./AppPageHeader";
 import { CopyButton } from "./CopyButton";
-import { PaymentSimulator } from "./PaymentSimulator";
-import {
-  Badge,
-  ButtonLink,
-  Card,
-  CheckIcon,
-  Container,
-  NairaTermBadge,
-  SectionHeader,
-  cn,
-} from "./ui";
+import { Badge, ButtonLink, Card, Container, cn } from "./ui";
 
 type PublicBankAccount = BankAccountRecord & {
   accountNumber: string;
@@ -40,8 +30,30 @@ function formatAmount(input?: string) {
   return Math.round(value);
 }
 
+function formatCompactCurrency(amount: number) {
+  return new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: "NGN",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(amount);
+}
+
 function verificationTone(verification: ClaimRecord["verification"]) {
   return verification === "pending" ? "neutral" : "verify";
+}
+
+function trustTone(score: number) {
+  if (score >= 75) return "verify";
+  if (score >= 50) return "orange";
+  return "neutral";
+}
+
+function creditTone(profile: CreditProfile | null) {
+  if (!profile) return "neutral";
+  if (profile.riskBand === "low") return "verify";
+  if (profile.riskBand === "medium") return "orange";
+  return "neutral";
 }
 
 function presentRecipientName(claim: ClaimRecord | null, fallbackHandle: string) {
@@ -70,7 +82,7 @@ function QrPreview({ seed }: { seed: string }) {
   const bits = qrBits(seed);
 
   return (
-    <div className="rounded-[2rem] border border-zinc-200/70 bg-white p-5 shadow-sm dark:border-zinc-800/70 dark:bg-zinc-950">
+    <div className="rounded-[1.75rem] border border-zinc-200/70 bg-white p-4 shadow-sm dark:border-zinc-800/70 dark:bg-zinc-950">
       <div className="grid grid-cols-[repeat(21,minmax(0,1fr))] gap-[2px] rounded-2xl bg-zinc-100 p-3 dark:bg-zinc-900">
         {bits.map((on, index) => (
           <div
@@ -86,10 +98,13 @@ function QrPreview({ seed }: { seed: string }) {
   );
 }
 
-function AmountPill({ amount }: { amount: number }) {
+function AmountPill({ amount, note }: { amount: number; note?: string }) {
+  const params = new URLSearchParams({ amount: String(amount) });
+  if (note) params.set("note", note);
+
   return (
     <Link
-      href={`?amount=${amount}`}
+      href={`?${params.toString()}`}
       className="inline-flex rounded-full border border-zinc-200/70 bg-white/80 px-3 py-2 text-sm font-semibold text-zinc-900 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800/80 dark:bg-zinc-950/40 dark:text-zinc-50 dark:hover:bg-zinc-900/70"
     >
       {formatCurrency(amount)}
@@ -97,26 +112,28 @@ function AmountPill({ amount }: { amount: number }) {
   );
 }
 
-function formatCompactCurrency(amount: number) {
-  return new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(amount);
-}
-
-function trustTone(score: number) {
-  if (score >= 75) return "verify";
-  if (score >= 50) return "orange";
-  return "neutral";
-}
-
-function creditTone(profile: CreditProfile | null) {
-  if (!profile) return "neutral";
-  if (profile.riskBand === "low") return "verify";
-  if (profile.riskBand === "medium") return "orange";
-  return "neutral";
+function MetricCard({
+  label,
+  value,
+  caption,
+}: {
+  label: string;
+  value: string | number;
+  caption?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-zinc-200/70 bg-white/85 p-4 dark:border-zinc-800/70 dark:bg-zinc-950/45">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+        {label}
+      </div>
+      <div className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+        {value}
+      </div>
+      {caption ? (
+        <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{caption}</div>
+      ) : null}
+    </div>
+  );
 }
 
 export function PaymentLinkView({
@@ -144,220 +161,149 @@ export function PaymentLinkView({
   const amountLabel = formatCurrency(requestedAmount);
   const recipientName = presentRecipientName(claim, handle);
   const trustScore = reputation?.trustScore ?? 12;
-  const shareText = amountLabel
-    ? `Pay ${amountLabel} to ₦${handle}${note ? ` for ${note}` : ""}`
-    : `Pay ₦${handle}${note ? ` for ${note}` : ""}`;
+  const destinationStatus = bankAccount
+    ? bankAccount.status.replace(/_/g, " ")
+    : "needs linking";
 
   return (
     <div className="min-h-screen bg-white text-zinc-950 transition-colors dark:bg-zinc-950 dark:text-zinc-50">
       <AppPageHeader ctaHref="/marketplace" ctaLabel="Explore handles" />
 
-      <main className="py-14 sm:py-18">
-        <Container className="space-y-8">
-          <SectionHeader
-            eyebrow="Payment link"
-            title={`Pay ${recipientName}`}
-            description={
-              claim
-                ? "Resolve the right recipient before money moves. This hosted link is the Phase 2 bridge until partner apps embed NairaTag directly."
-                : "This handle has not been claimed yet. You can still reserve it or share a better payment link once the owner claims it."
-            }
-          />
-
-          <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+      <main className="py-10 sm:py-14">
+        <Container className="space-y-5">
+          {!claim ? (
             <Card className="p-6 sm:p-7">
-              {!claim ? (
-                <div className="space-y-5">
-                  <Badge tone="orange">Handle not claimed yet</Badge>
-                  <div className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                    ₦{handle} is still available.
-                  </div>
-                  <p className="max-w-2xl text-base leading-7 text-zinc-600 dark:text-zinc-300">
-                    Nobody owns this payment identity yet, so there is no verified destination to pay into.
-                    Claim it first or choose another handle.
-                  </p>
-                  <div className="flex flex-wrap gap-3">
-                    <ButtonLink href="/agent">Claim this handle</ButtonLink>
-                    <ButtonLink href="/" variant="secondary">
-                      Back home
-                    </ButtonLink>
-                  </div>
+              <div className="space-y-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone="orange">Payment link</Badge>
+                  <Badge tone="neutral">Handle not claimed</Badge>
                 </div>
-              ) : (
+
+                <div>
+                  <h1 className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-4xl">
+                    ₦{handle} is still available
+                  </h1>
+                  <p className="mt-3 max-w-2xl text-base leading-7 text-zinc-600 dark:text-zinc-300">
+                    There is no verified destination behind this handle yet. Claim it first before using it for payments.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <ButtonLink href="/agent">Claim this handle</ButtonLink>
+                  <ButtonLink href="/" variant="secondary">
+                    Back home
+                  </ButtonLink>
+                </div>
+              </div>
+            </Card>
+          ) : (
+            <>
+              <Card className="p-6 sm:p-7">
                 <div className="space-y-6">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
+                  <div className="flex flex-wrap items-start justify-between gap-5">
+                    <div className="min-w-0 flex-1 space-y-4">
                       <div className="flex flex-wrap items-center gap-2">
+                        <Badge tone="orange">Payment link</Badge>
                         <Badge tone={verificationTone(claim.verification)}>
                           {claim.verification === "pending" ? "Claimed" : "Verified"}
                         </Badge>
-                        <NairaTermBadge term="handle" tone="orange" />
                         <Badge tone={trustTone(trustScore)}>Trust {trustScore}/100</Badge>
                       </div>
-                      <h1 className="mt-4 text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-5xl">
-                        ₦{claim.handle}
-                      </h1>
-                      <div className="mt-3 text-lg text-zinc-600 dark:text-zinc-300">
-                        {recipientName}
+
+                      <div className="space-y-2">
+                        <h1 className="text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-5xl">
+                          ₦{claim.handle}
+                        </h1>
+                        <p className="text-lg text-zinc-600 dark:text-zinc-300">
+                          {recipientName}
+                        </p>
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-zinc-500 dark:text-zinc-400">
+                          <span>{claim.bank}</span>
+                          <span>{amountLabel ?? "Flexible amount"}</span>
+                          {note ? <span>{note}</span> : null}
+                        </div>
                       </div>
                     </div>
 
-                    <QrPreview seed={`${handle}-${requestedAmount ?? "open"}-${note ?? ""}`} />
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-3">
-                    <Card className="rounded-[1.75rem] border-orange-200/60 bg-orange-50/70 p-5 dark:border-orange-900/40 dark:bg-orange-950/15">
-                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-                        Requested amount
-                      </div>
-                      <div className="mt-3 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                        {amountLabel ?? "Flexible"}
-                      </div>
-                      <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-                        {note ? note : "Let the sender choose the amount."}
-                      </div>
-                    </Card>
-
-                    <Card className="rounded-[1.75rem] p-5">
-                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-                        Destination bank
-                      </div>
-                      <div className="mt-3 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                        {claim.bank}
-                      </div>
-                      <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-                        {bankAccount ? "Bank account is linked and ready." : "Recipient still needs to finish payout setup."}
-                      </div>
-                    </Card>
-
-                    <Card className="rounded-[1.75rem] border-emerald-200/60 bg-emerald-50/70 p-5 dark:border-emerald-900/40 dark:bg-emerald-950/15">
-                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-                        Trust score
-                      </div>
-                      <div className="mt-3 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                        {trustScore}/100
-                      </div>
-                      <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-                        {reputation
-                          ? `${reputation.settledTransactionCount} settled payments · ${formatCompactCurrency(
-                              reputation.totalVolume
-                            )} volume`
-                          : "Trust starts with identity and grows with payment history."}
-                      </div>
-                    </Card>
-                  </div>
-
-                  <div className="grid gap-5 xl:grid-cols-[1fr_0.95fr]">
-                    <Card className="rounded-[2rem] p-6">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                            Transfer details
-                          </div>
-                          <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                            Resolve the person first, then pay into the linked destination.
-                          </div>
-                        </div>
-                        <Badge tone={bankAccount ? "verify" : "neutral"}>
-                          {bankAccount ? bankAccount.status.replace("_", " ") : "needs linking"}
-                        </Badge>
-                      </div>
-
-                      <div className="mt-5 space-y-4">
-                        <div className="rounded-3xl border border-zinc-200/70 bg-zinc-50/80 p-4 dark:border-zinc-800/70 dark:bg-zinc-900/40">
-                          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
-                            Recipient
-                          </div>
-                          <div className="mt-2 text-xl font-semibold text-zinc-950 dark:text-zinc-50">
-                            {recipientName}
-                          </div>
-                          <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                            ₦{claim.handle}
-                          </div>
-                        </div>
-
-                        <div className="rounded-3xl border border-zinc-200/70 bg-zinc-50/80 p-4 dark:border-zinc-800/70 dark:bg-zinc-900/40">
-                          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
-                            Bank
-                          </div>
-                          <div className="mt-2 text-xl font-semibold text-zinc-950 dark:text-zinc-50">
-                            {claim.bank}
-                          </div>
-                          <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                            {bankAccount?.accountName ?? "Account name will surface once provider lookup is enabled."}
-                          </div>
-                        </div>
-
-                        <div className="rounded-3xl border border-zinc-200/70 bg-zinc-50/80 p-4 dark:border-zinc-800/70 dark:bg-zinc-900/40">
-                          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
-                            Account number
-                          </div>
-                          <div className="mt-2 text-xl font-semibold tracking-[0.18em] text-zinc-950 dark:text-zinc-50">
-                            {bankAccount?.accountNumber ?? "Not published yet"}
-                          </div>
-                      <div className="mt-3 flex flex-wrap gap-3">
-                        {bankAccount?.accountNumber ? (
-                          <CopyButton value={bankAccount.accountNumber} label="Copy account no." />
-                        ) : null}
-                        <CopyButton value={shareUrl} label="Copy payment link" copiedLabel="Link copied" />
-                        <ButtonLink href={`/h/${claim.handle}`} variant="secondary">
-                          Public profile
-                        </ButtonLink>
-                      </div>
+                    <div className="mx-auto w-full max-w-[190px] sm:mx-0">
+                      <QrPreview seed={`${handle}-${requestedAmount ?? "open"}-${note ?? ""}`} />
                     </div>
                   </div>
-                    </Card>
 
-                    <Card className="rounded-[2rem] p-6">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                            Reputation layer
-                          </div>
-                          <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                            How this handle looks before a sender moves money.
-                          </div>
+                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+                    <div className="rounded-[1.75rem] border border-zinc-200/70 bg-zinc-50/75 p-5 dark:border-zinc-800/70 dark:bg-zinc-900/35">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                          Pay into
+                        </div>
+                        <Badge tone={bankAccount ? "verify" : "neutral"}>{destinationStatus}</Badge>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <MetricCard
+                          label="Recipient"
+                          value={recipientName}
+                          caption={`₦${claim.handle}`}
+                        />
+                        <MetricCard
+                          label="Bank"
+                          value={claim.bank}
+                          caption={bankAccount?.accountName ?? "Account name pending"}
+                        />
+                        <MetricCard
+                          label="Amount"
+                          value={amountLabel ?? "Flexible"}
+                          caption={note ?? "Sender can choose any amount."}
+                        />
+                        <MetricCard
+                          label="Account number"
+                          value={bankAccount?.accountNumber ?? "Not published"}
+                          caption="Copy before sending."
+                        />
+                      </div>
+                    </div>
+
+                    <div className="rounded-[1.75rem] border border-zinc-200/70 bg-zinc-50/75 p-5 dark:border-zinc-800/70 dark:bg-zinc-900/35">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                          Trust snapshot
                         </div>
                         <Badge tone={trustTone(trustScore)}>{trustScore}/100</Badge>
                       </div>
 
-                      <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                        <div className="rounded-[1.4rem] border border-zinc-200/70 bg-zinc-50/80 p-4 dark:border-zinc-800/80 dark:bg-zinc-900/40">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-                            Transactions
-                          </div>
-                          <div className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                            {reputation?.transactionCount ?? 0}
-                          </div>
-                          <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-                            Total recorded payments
-                          </div>
-                        </div>
-                        <div className="rounded-[1.4rem] border border-zinc-200/70 bg-zinc-50/80 p-4 dark:border-zinc-800/80 dark:bg-zinc-900/40">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-                            Recent 30d
-                          </div>
-                          <div className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                            {reputation?.recentTransactionCount30d ?? 0}
-                          </div>
-                          <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-                            Fresh activity signal
-                          </div>
-                        </div>
-                        <div className="rounded-[1.4rem] border border-zinc-200/70 bg-zinc-50/80 p-4 dark:border-zinc-800/80 dark:bg-zinc-900/40">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-                            Settled volume
-                          </div>
-                          <div className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                            {formatCompactCurrency(reputation?.totalVolume ?? 0)}
-                          </div>
-                          <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-                            Successful transfers only
-                          </div>
-                        </div>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                        <MetricCard label="Payments" value={reputation?.transactionCount ?? 0} />
+                        <MetricCard label="Recent 30d" value={reputation?.recentTransactionCount30d ?? 0} />
+                        <MetricCard
+                          label="Volume"
+                          value={formatCompactCurrency(reputation?.totalVolume ?? 0)}
+                        />
                       </div>
 
-                      <div className="mt-5 flex flex-wrap gap-2">
+                      {creditProfile ? (
+                        <div className="mt-4 rounded-2xl border border-zinc-200/70 bg-white/85 p-4 dark:border-zinc-800/70 dark:bg-zinc-950/45">
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                                Suggested limit
+                              </div>
+                              <div className="mt-2 text-xl font-semibold text-zinc-950 dark:text-zinc-50">
+                                {formatCompactCurrency(creditProfile.recommendedLimit)}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                                Risk
+                              </div>
+                              <Badge tone={creditTone(creditProfile)} className="mt-2 capitalize">
+                                {creditProfile.riskBand}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <div className="mt-4 flex flex-wrap gap-2">
                         {(reputation?.badges.length ? reputation.badges : ["New handle"]).map(
                           (badge) => (
                             <Badge
@@ -375,159 +321,41 @@ export function PaymentLinkView({
                           )
                         )}
                       </div>
+                    </div>
+                  </div>
 
-                      {creditProfile ? (
-                        <div className="mt-6 rounded-[1.75rem] border border-zinc-200/70 bg-white/70 p-5 dark:border-zinc-800/70 dark:bg-zinc-950/35">
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                                Credit profile
-                              </div>
-                              <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                                Phase 2 scoring from ownership, settlement, and verification signals.
-                              </div>
-                            </div>
-                            <Badge tone={creditTone(creditProfile)}>
-                              {creditProfile.score}
-                            </Badge>
-                          </div>
-
-                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                            <div className="rounded-[1.25rem] border border-zinc-200/70 bg-zinc-50/80 p-4 dark:border-zinc-800/80 dark:bg-zinc-900/40">
-                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-                                Risk band
-                              </div>
-                              <div className="mt-2 text-xl font-semibold capitalize text-zinc-950 dark:text-zinc-50">
-                                {creditProfile.riskBand}
-                              </div>
-                            </div>
-                            <div className="rounded-[1.25rem] border border-zinc-200/70 bg-zinc-50/80 p-4 dark:border-zinc-800/80 dark:bg-zinc-900/40">
-                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-                                Suggested limit
-                              </div>
-                              <div className="mt-2 text-xl font-semibold text-zinc-950 dark:text-zinc-50">
-                                {formatCompactCurrency(creditProfile.recommendedLimit)}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="mt-4 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-                            {creditProfile.drivers.slice(0, 2).join(" · ")}
-                          </div>
-                        </div>
-                      ) : null}
-
-                      <div className="mt-6 border-t border-zinc-200/70 pt-6 dark:border-zinc-800/80">
-                        <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                          Quick send presets
-                        </div>
-                        <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                          Use hosted links for common amounts while the widget and partner embeds come later.
-                        </div>
-                      </div>
-
-                      <div className="mt-5 flex flex-wrap gap-3">
-                        {[2000, 5000, 10000, 25000].map((amount) => (
-                          <AmountPill key={amount} amount={amount} />
-                        ))}
-                      </div>
-
-                      <div className="mt-6 rounded-[1.75rem] border border-zinc-200/70 bg-white/70 p-5 dark:border-zinc-800/70 dark:bg-zinc-950/35">
-                        <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                          Why this works now
-                        </div>
-                        <ul className="mt-4 space-y-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-                          <li className="flex items-start gap-3">
-                            <CheckIcon className="mt-0.5 h-4 w-4 text-emerald-500" />
-                            Sender sees the handle owner before initiating a transfer.
-                          </li>
-                          <li className="flex items-start gap-3">
-                            <CheckIcon className="mt-0.5 h-4 w-4 text-emerald-500" />
-                            Shareable links give NairaTag a usable payment surface before partner embeds go live.
-                          </li>
-                          <li className="flex items-start gap-3">
-                            <CheckIcon className="mt-0.5 h-4 w-4 text-emerald-500" />
-                            The same route can later upgrade into full processor-backed checkout.
-                          </li>
-                        </ul>
-                      </div>
-
-                      <div className="mt-6 rounded-[1.75rem] border border-orange-200/70 bg-orange-50/80 p-5 dark:border-orange-900/50 dark:bg-orange-950/15">
-                        <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                          Suggested share copy
-                        </div>
-                        <p className="mt-3 text-sm leading-6 text-zinc-700 dark:text-zinc-200">
-                          {shareText}
-                        </p>
-                        <div className="mt-4">
-                          <CopyButton value={`${shareText} — ${shareUrl}`} label="Copy share text" />
-                        </div>
-                      </div>
-                    </Card>
+                  <div className="flex flex-wrap gap-3">
+                    {bankAccount?.accountNumber ? (
+                      <CopyButton value={bankAccount.accountNumber} label="Copy account no." />
+                    ) : null}
+                    <CopyButton value={shareUrl} label="Copy payment link" copiedLabel="Link copied" />
+                    <ButtonLink href={`/h/${claim.handle}`} variant="secondary">
+                      View profile
+                    </ButtonLink>
                   </div>
                 </div>
-              )}
-            </Card>
-
-            <div className="space-y-5">
-              {claim ? (
-                <PaymentSimulator
-                  handle={claim.handle}
-                  defaultAmount={requestedAmount}
-                  defaultNote={note}
-                />
-              ) : null}
-
-              <Card className="p-6">
-                <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                  Payment link format
-                </div>
-                <div className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
-                  Hosted links are the Phase 2 surface until fintech apps and merchant tools embed NairaTag directly.
-                </div>
-                <div className="mt-5 rounded-2xl border border-zinc-200/70 bg-zinc-50/80 px-4 py-3 text-sm font-medium text-zinc-700 dark:border-zinc-800/80 dark:bg-zinc-900/40 dark:text-zinc-200">
-                  {shareUrl}
-                </div>
-                <div className="mt-4">
-                  <CopyButton value={shareUrl} className="w-full" label="Copy public link" />
-                </div>
               </Card>
 
-              <Card className="p-6">
-                <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                  Next Phase 2 upgrade
-                </div>
-                <ul className="mt-4 space-y-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-                  <li className="flex items-start gap-3">
-                    <CheckIcon className="mt-0.5 h-4 w-4 text-emerald-500" />
-                    Mono Lookup for live account-name verification
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <CheckIcon className="mt-0.5 h-4 w-4 text-emerald-500" />
-                    Processor-backed checkout and mini pay sheet
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <CheckIcon className="mt-0.5 h-4 w-4 text-emerald-500" />
-                    Partner app embeds using the same hosted payment format
-                  </li>
-                </ul>
-              </Card>
+              <Card className="p-5 sm:p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                      Quick amounts
+                    </div>
+                    <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                      Pick an amount and keep the same payment route.
+                    </div>
+                  </div>
 
-              <Card className="p-6">
-                <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                  Explore the network
-                </div>
-                <div className="mt-3 flex flex-wrap gap-3">
-                  <ButtonLink href="/marketplace" variant="secondary">
-                    Browse marketplace
-                  </ButtonLink>
-                  <ButtonLink href="/map" variant="secondary">
-                    Open live map
-                  </ButtonLink>
+                  <div className="flex flex-wrap gap-3">
+                    {[2000, 5000, 10000, 25000].map((amount) => (
+                      <AmountPill key={amount} amount={amount} note={note} />
+                    ))}
+                  </div>
                 </div>
               </Card>
-            </div>
-          </div>
+            </>
+          )}
         </Container>
       </main>
     </div>

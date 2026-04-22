@@ -11,10 +11,22 @@ export default async function MarketplacePage({
   searchParams,
 }: MarketplacePageProps) {
   const query = (await searchParams).q?.trim() || undefined;
-  const [data, stats] = await Promise.all([
+  const [data, historyData, stats] = await Promise.all([
     listMarketplaceListings({ limit: 24, q: query }),
+    listMarketplaceListings({
+      limit: 40,
+      q: query,
+      statuses: ["active", "paused", "under_review", "withdrawn", "sold"],
+    }),
     getMarketplaceStats(),
   ]);
 
-  return <MarketplaceView listings={data.items} stats={stats} query={query} />;
+  return (
+    <MarketplaceView
+      listings={data.items}
+      historyListings={historyData.items}
+      stats={stats}
+      query={query}
+    />
+  );
 }

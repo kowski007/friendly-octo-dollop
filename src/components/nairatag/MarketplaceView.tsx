@@ -20,6 +20,15 @@ type CategoryRow = {
   tileClassName: string;
 };
 
+type HistoryRow = {
+  id: string;
+  label: string;
+  detail: string;
+  tone: "neutral" | "verify" | "orange";
+  at: string;
+  entry: ListingView;
+};
+
 function formatCurrency(amount?: number | null) {
   if (amount == null) return "-";
   return new Intl.NumberFormat("en-NG", {
@@ -95,6 +104,15 @@ function changeLabel(value: number) {
   return `${value >= 0 ? "+" : ""}${value}%`;
 }
 
+function formatHistoryTime(value: string) {
+  return new Date(value).toLocaleString("en-NG", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 function formatOfferExpiry(value: string, offsetDays: number) {
   return new Date(
     Date.parse(value) + offsetDays * 24 * 60 * 60 * 1000
@@ -104,6 +122,92 @@ function formatOfferExpiry(value: string, offsetDays: number) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function historyMoment(entry: ListingView) {
+  return (
+    entry.listing.reviewStartedAt ??
+    entry.listing.withdrawnAt ??
+    entry.listing.updatedAt ??
+    entry.listing.publishedAt
+  );
+}
+
+function buildHistoryRow(entry: ListingView): HistoryRow {
+  const at = historyMoment(entry);
+
+  if (entry.listing.status === "under_review") {
+    return {
+      id: `${entry.listing.id}:review`,
+      label: "Transfer review",
+      detail:
+        entry.highestOfferAmount != null
+          ? `Accepted offer near ${formatCurrency(entry.highestOfferAmount)}`
+          : "Accepted offer awaiting approval",
+      tone: "orange",
+      at,
+      entry,
+    };
+  }
+
+  if (entry.listing.status === "sold") {
+    return {
+      id: `${entry.listing.id}:sold`,
+      label: "Transfer completed",
+      detail: "Ownership transfer cleared through marketplace review.",
+      tone: "verify",
+      at,
+      entry,
+    };
+  }
+
+  if (entry.listing.status === "withdrawn") {
+    return {
+      id: `${entry.listing.id}:withdrawn`,
+      label: "Listing withdrawn",
+      detail: "Seller removed the handle from the live market.",
+      tone: "neutral",
+      at,
+      entry,
+    };
+  }
+
+  if (entry.listing.status === "paused") {
+    return {
+      id: `${entry.listing.id}:paused`,
+      label: "Listing paused",
+      detail: "Seller paused buyer access while keeping the listing draft.",
+      tone: "neutral",
+      at,
+      entry,
+    };
+  }
+
+  if (entry.pendingOfferCount > 0) {
+    return {
+      id: `${entry.listing.id}:offers`,
+      label: "Offer activity",
+      detail:
+        entry.highestOfferAmount != null
+          ? `${entry.pendingOfferCount} pending offer(s), best bid ${formatCurrency(entry.highestOfferAmount)}`
+          : `${entry.pendingOfferCount} pending offer(s)`,
+      tone: "verify",
+      at,
+      entry,
+    };
+  }
+
+  return {
+    id: `${entry.listing.id}:listed`,
+    label: "Listing published",
+    detail:
+      entry.listing.saleMode === "fixed_price"
+        ? `Opened at ${formatCurrency(entry.listing.askAmount)}`
+        : "Opened for offers",
+    tone: "neutral",
+    at,
+    entry,
+  };
 }
 
 function IconButton({
@@ -175,15 +279,20 @@ function CategoryTile({ category }: { category: CategoryRow }) {
 
 export function MarketplaceView({
   listings,
+  historyListings,
   stats,
   query,
 }: {
   listings: ListingView[];
+  historyListings?: ListingView[];
   stats: MarketplaceStats;
   query?: string;
 }) {
   const sortedListings = [...listings].sort(
     (a, b) => listingSortValue(b) - listingSortValue(a)
+  );
+  const sortedHistoryListings = [...(historyListings ?? listings)].sort(
+    (a, b) => Date.parse(historyMoment(b)) - Date.parse(historyMoment(a))
   );
   const bestOffer = sortedListings.reduce<number | null>((best, entry) => {
     const amount = entry.highestOfferAmount;
@@ -213,6 +322,25 @@ export function MarketplaceView({
   const payoutReady = sortedListings.filter((entry) => entry.bankLinked);
   const newOwners = sortedListings.filter((entry) => entry.ownerSinceDays <= 30);
   const listedVolume = volumeFor(sortedListings);
+  const historyRows = sortedHistoryListings.slice(0, 12).map(buildHistoryRow);
+  const latestHistoryTimestamp = sortedHistoryListings.reduce(
+    (latest, entry) => Math.max(latest, Date.parse(historyMoment(entry)) || 0),
+    0
+  );
+  const recentHistoryCount = sortedHistoryListings.filter(
+    (entry) =>
+      latestHistoryTimestamp - Date.parse(historyMoment(entry)) <=
+      7 * 24 * 60 * 60 * 1000
+  ).length;
+  const reviewCount = sortedHistoryListings.filter(
+    (entry) => entry.listing.status === "under_review"
+  ).length;
+  const soldCount = sortedHistoryListings.filter(
+    (entry) => entry.listing.status === "sold"
+  ).length;
+  const withdrawnCount = sortedHistoryListings.filter(
+    (entry) => entry.listing.status === "withdrawn"
+  ).length;
 
   const categoryRows: CategoryRow[] = [
     {
@@ -850,30 +978,142 @@ export function MarketplaceView({
 
           <section
             id="history"
-            className="grid gap-4 rounded-3xl bg-zinc-50 p-5 dark:bg-zinc-900/45 sm:grid-cols-3"
+            className="rounded-[2rem] bg-zinc-50 p-5 dark:bg-zinc-900/45 sm:p-7"
           >
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
-                Newest listing
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                  History
+                </h2>
+                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                  Listing lifecycle, offer pressure, and review movement across
+                  the marketplace.
+                </p>
               </div>
-              <div className="mt-2 text-2xl font-semibold tracking-tight">
-                {sortedListings[0] ? ageLabel(sortedListings[0].ownerSinceDays) : "-"}
+              <div className="inline-flex w-fit rounded-full bg-white p-1 text-sm font-semibold text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
+                <button type="button" className="rounded-full px-4 py-2">
+                  1 day
+                </button>
+                <button
+                  type="button"
+                  className="rounded-full bg-zinc-950 px-4 py-2 text-white dark:bg-white dark:text-zinc-950"
+                >
+                  7 days
+                </button>
+                <button type="button" className="rounded-full px-4 py-2">
+                  30 days
+                </button>
               </div>
             </div>
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
-                Fixed price
-              </div>
-              <div className="mt-2 text-2xl font-semibold tracking-tight">
-                {fixedPrice.length.toLocaleString()}
-              </div>
+
+            <div className="mt-7 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {[
+                ["Recent events", recentHistoryCount.toLocaleString()],
+                ["In review", reviewCount.toLocaleString()],
+                ["Sold", soldCount.toLocaleString()],
+                ["Withdrawn", withdrawnCount.toLocaleString()],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  className="rounded-3xl bg-white p-5 shadow-sm dark:bg-zinc-950/65"
+                >
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
+                    {label}
+                  </div>
+                  <div className="mt-3 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                    {value}
+                  </div>
+                </div>
+              ))}
             </div>
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
-                Offers only
-              </div>
-              <div className="mt-2 text-2xl font-semibold tracking-tight">
-                {offersOnly.length.toLocaleString()}
+
+            <div className="mt-5 overflow-hidden rounded-3xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+              <div className="overflow-x-auto">
+                <table className="min-w-[1080px] w-full border-collapse text-left">
+                  <thead>
+                    <tr className="border-b border-zinc-200 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                      <th className="px-6 py-4">Event</th>
+                      <th className="px-6 py-4">Handle</th>
+                      <th className="px-6 py-4">Market</th>
+                      <th className="px-6 py-4">Price / bid</th>
+                      <th className="px-6 py-4">When</th>
+                      <th className="px-6 py-4">Owner</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-900">
+                    {historyRows.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="px-6 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400"
+                        >
+                          No marketplace history is visible yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      historyRows.map((row) => (
+                        <tr key={row.id} className="text-sm">
+                          <td className="px-6 py-5">
+                            <div className="flex items-center gap-3">
+                              <Badge
+                                tone={row.tone}
+                                className="px-2 py-0.5 text-[11px]"
+                              >
+                                {row.label}
+                              </Badge>
+                              <span className="text-zinc-500 dark:text-zinc-400">
+                                {row.detail}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5 font-semibold text-zinc-950 dark:text-zinc-50">
+                            {NAIRA}
+                            {row.entry.listing.handle}
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="font-medium text-zinc-950 dark:text-zinc-50">
+                              {row.entry.listing.status.replace("_", " ")}
+                            </div>
+                            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                              {row.entry.listing.saleMode === "fixed_price"
+                                ? "Fixed price"
+                                : "Offers only"}
+                            </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="font-semibold text-zinc-950 dark:text-zinc-50">
+                              {formatCurrency(
+                                row.entry.highestOfferAmount ??
+                                  row.entry.listing.askAmount ??
+                                  row.entry.listing.minOfferAmount
+                              )}
+                            </div>
+                            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                              {row.entry.pendingOfferCount} pending /{" "}
+                              {row.entry.offerCount} total offers
+                            </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="font-medium text-zinc-950 dark:text-zinc-50">
+                              {formatHistoryTime(row.at)}
+                            </div>
+                            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                              Held {ageLabel(row.entry.ownerSinceDays)}
+                            </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="font-mono font-semibold text-zinc-950 dark:text-zinc-50">
+                              {shortOwnerId(row.entry)}
+                            </div>
+                            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                              {row.entry.claim.displayName}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </section>
