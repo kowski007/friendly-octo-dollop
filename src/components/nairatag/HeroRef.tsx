@@ -1,29 +1,9 @@
 import type { CSSProperties } from "react";
 
+import { AuthModalButton } from "@/components/auth/AuthModalButton";
+
 import { HandleDemo } from "./HandleDemo";
 import { ButtonLink, NairaTermBadge, cn } from "./ui";
-
-function Naira({ className }: { className?: string }) {
-  return (
-    <span className={cn("font-semibold", className)} aria-hidden="true">
-      {"\u20A6"}
-    </span>
-  );
-}
-
-function BrandMark() {
-  return (
-    <div className="relative h-12 w-12">
-      <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-orange-500 via-orange-500 to-emerald-500 opacity-90 blur-[0.5px]" />
-      <div className="absolute inset-0 rounded-2xl bg-white/70 shadow-sm backdrop-blur dark:bg-zinc-950/40" />
-      <div className="absolute inset-0 grid place-items-center">
-        <div className="rounded-xl bg-zinc-950 px-2 py-1 text-sm font-semibold tracking-tight text-white dark:bg-white dark:text-zinc-950">
-          <Naira />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function CursorIcon({ className }: { className?: string }) {
   return (
@@ -127,17 +107,94 @@ export function HeroRef() {
     <section className="relative isolate overflow-hidden">
       <div className="absolute inset-0 bg-white dark:bg-black" />
 
-      <div className="relative mx-auto w-full max-w-6xl px-5 pb-16 pt-12 sm:px-8 sm:pb-24 sm:pt-16">
-        <div className="flex justify-center">
-          <BrandMark />
-        </div>
-
-        <div className="relative mx-auto mt-10 max-w-5xl text-center sm:mt-14">
-          <h1 className="font-display text-[54px] font-semibold leading-[0.92] tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-[96px]">
+      <div className="relative mx-auto w-full max-w-6xl px-5 pb-10 pt-10 sm:px-8 sm:pb-16 sm:pt-14">
+        <div className="relative mx-auto max-w-5xl text-center">
+          <h1 className="relative z-10 mx-auto max-w-[21rem] font-display text-[54px] font-semibold leading-[0.92] tracking-tight text-zinc-950 dark:text-zinc-50 sm:max-w-none sm:text-[96px]">
             Send money
             <br />
             to a name
           </h1>
+
+          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-[-14px] z-0 h-[155px] sm:hidden">
+            <FloatingPill
+              label={"\u20A6victor"}
+              tone="violet"
+              compact
+              className="nt-drift left-[2%] top-0"
+              cursorClassName="scale-75 rotate-[-18deg]"
+              style={
+                {
+                  ["--nt-delay" as never]: "-0.6s",
+                  ["--nt-in-delay" as never]: "30ms",
+                  ["--nt-dur" as never]: "9.5s",
+                  ["--nt-dx" as never]: "5px",
+                  ["--nt-dy" as never]: "5px",
+                } as CSSProperties
+              }
+            />
+            <FloatingPill
+              label={"\u20A6fioso"}
+              tone="rose"
+              compact
+              className="nt-drift right-[3%] top-[4px]"
+              cursorClassName="scale-75 rotate-[10deg]"
+              style={
+                {
+                  ["--nt-delay" as never]: "-1.2s",
+                  ["--nt-in-delay" as never]: "100ms",
+                  ["--nt-dur" as never]: "10.5s",
+                  ["--nt-dx" as never]: "6px",
+                  ["--nt-dy" as never]: "4px",
+                } as CSSProperties
+              }
+            />
+            <FloatingPill
+              label={"\u20A6mama_ijebu"}
+              tone="orange"
+              compact
+              className="nt-float left-[-2%] top-[70px]"
+              cursorClassName="scale-75"
+              style={
+                {
+                  ["--nt-delay" as never]: "-1.8s",
+                  ["--nt-in-delay" as never]: "160ms",
+                  ["--nt-dur" as never]: "7s",
+                  ["--nt-amp" as never]: "5px",
+                } as CSSProperties
+              }
+            />
+            <FloatingPill
+              label={"\u20A6mikki"}
+              tone="emerald"
+              compact
+              className="nt-drift right-[-1%] top-[82px]"
+              cursorClassName="scale-75 rotate-[14deg]"
+              style={
+                {
+                  ["--nt-delay" as never]: "-2.4s",
+                  ["--nt-in-delay" as never]: "220ms",
+                  ["--nt-dur" as never]: "11s",
+                  ["--nt-dx" as never]: "5px",
+                  ["--nt-dy" as never]: "6px",
+                } as CSSProperties
+              }
+            />
+            <FloatingPill
+              label={"\u20A6shop"}
+              tone="sky"
+              compact
+              className="nt-float left-[40%] top-[128px]"
+              cursorClassName="scale-75 rotate-[-10deg]"
+              style={
+                {
+                  ["--nt-delay" as never]: "-0.2s",
+                  ["--nt-in-delay" as never]: "280ms",
+                  ["--nt-dur" as never]: "7.6s",
+                  ["--nt-amp" as never]: "5px",
+                } as CSSProperties
+              }
+            />
+          </div>
 
           <div className="pointer-events-none absolute inset-0 hidden sm:block">
             <FloatingPill
@@ -219,52 +276,28 @@ export function HeroRef() {
             />
           </div>
 
-          <p className="mx-auto mt-8 max-w-2xl text-base leading-7 text-zinc-700 dark:text-zinc-200 sm:mt-10 sm:text-lg">
+          <p className="mx-auto mt-6 max-w-2xl text-base leading-7 text-zinc-700 dark:text-zinc-200 sm:text-lg">
             NairaTag lets you send, receive, and request money using simple{" "}
             <NairaTermBadge term="handles" tone="neutral" /> like{" "}
             <span className="font-semibold">{samples[0].label}</span>. No more
             typing 10-digit account numbers.
           </p>
 
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <ButtonLink href="#claim">
-              Claim your <NairaTermBadge term="name" tone="inverted" />
+          <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <ButtonLink
+              href="#claim"
+              className="min-h-10 whitespace-nowrap px-4 py-2 text-xs sm:text-sm"
+            >
+              Claim your name
             </ButtonLink>
-            <ButtonLink href="#demo" variant="secondary">
+            <AuthModalButton afterAuthHref="#demo" variant="secondary">
               Check availability
-            </ButtonLink>
+            </AuthModalButton>
           </div>
 
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-2 sm:hidden">
-            {samples.map((s, i) => (
-              <span
-                key={s.label}
-                className={cn(
-                  "rounded-full px-3 py-1 text-xs font-semibold shadow-sm",
-                  i % 2 === 0 ? "nt-float" : "nt-drift",
-                  toneClasses(s.tone)
-                )}
-                style={
-                  {
-                    ["--nt-in-delay" as never]: `${i * 90}ms`,
-                    ["--nt-delay" as never]: `-${i * 0.35}s`,
-                    ["--nt-dur" as never]: `${7.2 + i * 0.9}s`,
-                    ["--nt-amp" as never]: "4px",
-                    ["--nt-dx" as never]: "4px",
-                    ["--nt-dy" as never]: "4px",
-                    ["--nt-rot-a" as never]: "-0.6deg",
-                    ["--nt-rot-b" as never]: "0.9deg",
-                  } as CSSProperties
-                }
-              >
-                {s.label}
-              </span>
-            ))}
-          </div>
-
-          <div className="mt-10">
-            <div className="mx-auto max-w-xl">
-              <HandleDemo compact defaultValue="mama_ijebu" />
+          <div className="mt-6">
+            <div className="mx-auto max-w-lg">
+              <HandleDemo compact />
             </div>
           </div>
         </div>

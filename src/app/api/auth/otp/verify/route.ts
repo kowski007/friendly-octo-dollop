@@ -1,6 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { getUserById, logApiUsage, verifyPhoneOtp } from "@/lib/adminStore";
+import {
+  applyReferralCodeForUser,
+  getUserById,
+  logApiUsage,
+  verifyPhoneOtp,
+} from "@/lib/adminStore";
 import { createSessionToken } from "@/lib/session";
 
 function getIp(req: NextRequest) {
@@ -13,6 +18,7 @@ export async function POST(req: NextRequest) {
   const started = Date.now();
   const clientKey = req.headers.get("x-nt-api-key") ?? undefined;
   const ip = getIp(req);
+  const referralCookie = req.cookies.get("nt_ref")?.value || "";
 
   let status = 200;
 
@@ -24,6 +30,17 @@ export async function POST(req: NextRequest) {
     const code = body?.code ?? "";
 
     const user = await verifyPhoneOtp({ phone, code, ip });
+    if (referralCookie) {
+      try {
+        await applyReferralCodeForUser({
+          userId: user.id,
+          referralCode: referralCookie,
+          source: "link",
+        });
+      } catch {
+        // Best-effort; never block sign-in.
+      }
+    }
     const token = createSessionToken({ uid: user.id, phone: user.phone });
 
     status = 200;
@@ -38,6 +55,15 @@ export async function POST(req: NextRequest) {
       path: "/",
       maxAge: 60 * 60 * 24 * 30,
     });
+    if (referralCookie) {
+      res.cookies.set("nt_ref", "", {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 0,
+      });
+    }
 
     await logApiUsage({
       endpoint: "/api/auth/otp/verify",
@@ -76,4 +102,3 @@ export async function POST(req: NextRequest) {
     return res;
   }
 }
-

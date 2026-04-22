@@ -1,11 +1,22 @@
 import { HandleDemo } from "./HandleDemo";
-import { Badge, ButtonLink, Card, CheckIcon, Container, NairaTermBadge } from "./ui";
+import { Badge, ButtonLink, CheckIcon, Container, NairaTermBadge } from "./ui";
+
+function SignalRow({ label }: { label: string }) {
+  return (
+    <div className="flex items-center justify-between rounded-2xl bg-white/70 px-4 py-3 text-sm font-semibold text-zinc-700 shadow-sm dark:bg-zinc-950/35 dark:text-zinc-200">
+      <span>{label}</span>
+      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
+        <CheckIcon className="h-4 w-4" />
+      </span>
+    </div>
+  );
+}
 
 export function LiveDemoSection() {
   return (
-    <section id="demo" className="py-16 sm:py-24">
+    <section id="demo" className="py-10 sm:py-16">
       <Container>
-        <div className="grid gap-10 lg:grid-cols-12 lg:items-start">
+        <div className="grid gap-8 lg:grid-cols-12 lg:items-start">
           <div className="lg:col-span-5">
             <Badge tone="orange">Live demo</Badge>
             <h2 className="mt-4 font-display text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-5xl">
@@ -18,27 +29,17 @@ export function LiveDemoSection() {
               . See identity instantly.
             </h2>
             <p className="mt-4 max-w-xl text-base leading-7 text-zinc-700 dark:text-zinc-200">
-              This is the interaction that matters most: before money is sent,
-              users see the recipient name, bank destination, and verification
-              badge.
+              The demo is the whole product idea in one move: type a name,
+              receive a usable identity preview.
             </p>
 
-            <div className="mt-6 space-y-3">
-              {[
-                "Preview recipient identity in the send flow",
-                "Show Verified and Business badges clearly",
-                "Reduce wrong transfers with identity-first UI",
-              ].map((t) => (
-                <div key={t} className="flex items-start gap-2 text-sm">
-                  <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
-                    <CheckIcon className="h-4 w-4" />
-                  </span>
-                  <span className="text-zinc-700 dark:text-zinc-200">{t}</span>
-                </div>
-              ))}
+            <div className="mt-6 grid gap-3">
+              <SignalRow label="Recipient name" />
+              <SignalRow label="Bank destination" />
+              <SignalRow label="Verification badge" />
             </div>
 
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <ButtonLink href="#claim">
                 Claim your <NairaTermBadge term="handle" tone="inverted" />
               </ButtonLink>
@@ -49,26 +50,30 @@ export function LiveDemoSection() {
           </div>
 
           <div className="lg:col-span-7">
-            <HandleDemo defaultValue="mama_ijebu" />
-            <div className="mt-5 grid gap-5 sm:grid-cols-2">
-              <Card className="p-6">
-                <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                  Verified ✓ badge styling
+            <HandleDemo />
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <div className="rounded-[1.7rem] bg-orange-50 p-5 shadow-sm dark:bg-orange-950/25">
+                <div className="text-3xl font-semibold text-zinc-950 dark:text-zinc-50">
+                  2 sec
                 </div>
-                <div className="mt-2 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
-                  A consistent green verification badge makes it obvious when a
-                  recipient is confirmed.
+                <div className="mt-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300">
+                  Resolve flow
                 </div>
-              </Card>
-              <Card className="p-6">
-                <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                  Clear recipient details
+              </div>
+              <div className="rounded-[1.7rem] bg-emerald-50 p-5 shadow-sm dark:bg-emerald-950/20">
+                <div className="text-3xl font-semibold text-zinc-950 dark:text-zinc-50">
+                  ID
                 </div>
-                <div className="mt-2 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
-                  Show the name and bank destination in plain language, not
-                  hidden behind account digits.
+                <div className="mt-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300">
+                  Preview first
                 </div>
-              </Card>
+              </div>
+              <div className="rounded-[1.7rem] bg-zinc-950 p-5 text-white shadow-sm">
+                <div className="text-3xl font-semibold">Pay</div>
+                <div className="mt-2 text-sm font-semibold text-white/70">
+                  Confirm later
+                </div>
+              </div>
             </div>
           </div>
         </div>

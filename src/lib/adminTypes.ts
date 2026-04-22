@@ -18,6 +18,37 @@ export type MarketplaceOfferStatus =
   | "accepted"
   | "rejected"
   | "withdrawn";
+export type MarketplaceTransferStatus =
+  | "pending_review"
+  | "approved"
+  | "rejected";
+export type CreditRiskBand = "low" | "medium" | "high";
+export type NotificationType =
+  | "otp_requested"
+  | "payment_received"
+  | "payment_failed"
+  | "payment_disputed"
+  | "marketplace_offer_submitted"
+  | "marketplace_offer_accepted"
+  | "marketplace_offer_rejected"
+  | "marketplace_transfer_approved"
+  | "marketplace_transfer_rejected"
+  | "referral_signup"
+  | "referral_points_awarded"
+  | "referral_converted"
+  | "bvn_linked"
+  | "bank_linked"
+  | "admin_review_required"
+  | "suspicious_activity";
+export type NotificationPriority = "low" | "normal" | "high";
+export type NotificationStatus = "unread" | "read";
+export type NotificationDeliveryChannel = "in_app" | "webhook";
+export type NotificationDeliveryStatus =
+  | "queued"
+  | "delivered"
+  | "failed"
+  | "skipped";
+export type ReferralSource = "link" | "unknown";
 
 export type ClaimRecord = {
   id: string;
@@ -43,21 +74,60 @@ export type ApiLogRecord = {
   clientKey?: string;
 };
 
+export type NotificationRecord = {
+  id: string;
+  userId?: string;
+  handle?: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  priority: NotificationPriority;
+  status: NotificationStatus;
+  createdAt: string; // ISO
+  readAt?: string; // ISO
+  deliveryChannels?: NotificationDeliveryChannel[];
+  deliveryStatus?: NotificationDeliveryStatus;
+  deliveryAttempts?: number;
+  lastDeliveryAttemptAt?: string; // ISO
+  deliveredAt?: string; // ISO
+  deliveryError?: string;
+  metadata?: Record<string, string | number | boolean | null | undefined>;
+};
+
 export type UserRecord = {
   id: string;
   phone: string; // E.164-ish
   createdAt: string; // ISO
   phoneVerifiedAt: string; // ISO
+  privyUserId?: string;
+  privyLinkedAt?: string; // ISO
+  email?: string;
+  walletAddress?: string;
   fullName?: string;
   bvnLast4?: string;
   bvnLinkedAt?: string; // ISO
   bankLinkedAt?: string; // ISO
+  referralCode?: string;
+  referredByUserId?: string;
+  referredAt?: string; // ISO
   geo?: {
     ip?: string;
     country?: string;
     region?: string;
     city?: string;
   };
+};
+
+export type ReferralRecord = {
+  id: string;
+  referrerUserId: string;
+  referredUserId: string;
+  referralCode: string;
+  source: ReferralSource;
+  createdAt: string; // ISO
+  convertedAt?: string; // ISO
+  signupPoints?: number;
+  conversionPoints?: number;
 };
 
 export type BankAccountRecord = {
@@ -111,6 +181,8 @@ export type TransactionRecord = {
     sourcePage?: string;
     ip?: string;
     provider?: string;
+    eventId?: string;
+    externalStatus?: string;
   };
 };
 
@@ -162,6 +234,24 @@ export type MarketplaceOfferRecord = {
   respondedAt?: string; // ISO
 };
 
+export type MarketplaceTransferRecord = {
+  id: string;
+  listingId: string;
+  offerId: string;
+  handle: string;
+  sellerUserId: string;
+  buyerUserId?: string;
+  buyerName: string;
+  buyerPhone: string;
+  amount: number;
+  status: MarketplaceTransferStatus;
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
+  reviewedAt?: string; // ISO
+  transferredAt?: string; // ISO
+  reviewNote?: string;
+};
+
 export type MarketplaceEligibilityReason =
   | "eligible"
   | "unauthorized"
@@ -196,6 +286,8 @@ export type MarketplaceListingView = {
 export type MarketplaceListingDetail = MarketplaceListingView & {
   offers: MarketplaceOfferRecord[];
   recentTransactions: TransactionRecord[];
+  transfer?: MarketplaceTransferRecord | null;
+  creditProfile: CreditProfile | null;
   transferReviewRequired: true;
   reputationTransfersOnSale: false;
 };
@@ -203,10 +295,79 @@ export type MarketplaceListingDetail = MarketplaceListingView & {
 export type MarketplaceStats = {
   liveListings: number;
   underReviewListings: number;
+  pendingTransfers: number;
+  approvedTransfers: number;
   totalOffers: number;
   pendingOffers: number;
   averageAskAmount: number | null;
   averageOfferAmount: number | null;
+};
+
+export type MarketplaceTransferDetail = MarketplaceTransferRecord & {
+  listing: MarketplaceListingRecord;
+  offer: MarketplaceOfferRecord;
+  claim: ClaimRecord | null;
+  seller: UserRecord | null;
+  buyer: UserRecord | null;
+  buyerBankAccount: BankAccountRecord | null;
+  currentReputation: HandleReputation | null;
+};
+
+export type CreditProfile = {
+  handle: string;
+  score: number;
+  riskBand: CreditRiskBand;
+  trustScore: number;
+  activeMonths: number;
+  accountAgeDays: number;
+  settledTransactionCount: number;
+  disputedTransactionCount: number;
+  totalVolume: number;
+  monthlyAverageVolume: number;
+  recommendedLimit: number;
+  repaymentConfidence: number;
+  drivers: string[];
+  lastEvaluatedAt: string;
+};
+
+export type PublicHandleProfile = {
+  handle: string;
+  displayName: string;
+  bio?: string;
+  location?: string;
+  memberSince: string; // ISO
+  lastActiveAt?: string; // ISO
+  verification: {
+    status: Verification;
+    verified: boolean;
+    verifiedAt?: string; // ISO
+    badges: string[];
+    bankAccountVerified: boolean;
+    bvnVerified: boolean;
+  };
+  bank: {
+    name: string;
+    accountVerified: boolean;
+  };
+  reputation: {
+    trustScore: number;
+    stars: number;
+    reviewCount: number;
+    riskLevel: CreditRiskBand | "unknown";
+    creditScoreRange?: string;
+    badges: string[];
+  };
+  publicStats: {
+    transactionCount: number;
+    settledTransactionCount: number;
+    totalVolume: number;
+    recentTransactionCount30d: number;
+    chargebackRate: number;
+    averageTransactionSize: number;
+  };
+  shareUrl: string;
+  payUrl: string;
+  qrPayload: string;
 };
 
 export type AdminMetrics = {

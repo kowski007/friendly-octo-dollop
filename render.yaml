@@ -14,6 +14,14 @@ services:
         generateValue: true
       - key: NT_OTP_SECRET
         generateValue: true
+      - key: NEXT_PUBLIC_PRIVY_APP_ID
+        value: cm8s0beg200jbava4d5szjlyc
+      - key: PRIVY_APP_ID
+        value: cm8s0beg200jbava4d5szjlyc
+      - key: PRIVY_APP_SECRET
+        sync: false
+      - key: PRIVY_JWT_VERIFICATION_KEY
+        sync: false
       - key: MONO_PUBLIC_KEY
         sync: false
       - key: MONO_SECRET_KEY
@@ -33,4 +41,10 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: DIRECT_URL
+        sync: false
+      - key: NT_NOTIFICATION_WEBHOOK_URL
+        sync: false
+      - key: NT_NOTIFICATION_WEBHOOK_SECRET
+        sync: false
+      - key: NT_TRANSACTION_WEBHOOK_SECRET
         sync: false

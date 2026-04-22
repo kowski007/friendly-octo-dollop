@@ -3,7 +3,13 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 
-import type { AdminMetrics, ApiLogRecord, ClaimRecord } from "@/lib/adminTypes";
+import type {
+  AdminMetrics,
+  ApiLogRecord,
+  ClaimRecord,
+  MarketplaceTransferDetail,
+  NotificationRecord,
+} from "@/lib/adminTypes";
 import { Badge, Card, NairaTermBadge, cn } from "@/components/nairatag/ui";
 
 type Paged<T> = { total: number; items: T[] };
@@ -16,6 +22,14 @@ function formatPct(value: number | null) {
 function formatMs(value: number | null) {
   if (value === null) return "—";
   return `${Math.round(value)}ms`;
+}
+
+function formatCurrency(amount: number) {
+  return new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: "NGN",
+    maximumFractionDigits: 0,
+  }).format(amount);
 }
 
 function dayLabel(day: string) {
@@ -41,10 +55,22 @@ function StatusPill({ status }: { status: number }) {
   );
 }
 
+function deliveryTone(status?: NotificationRecord["deliveryStatus"]) {
+  if (status === "delivered") return "verify";
+  if (status === "failed") return "orange";
+  return "neutral";
+}
+
 export function AdminDashboard() {
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
   const [claims, setClaims] = useState<Paged<ClaimRecord> | null>(null);
   const [logs, setLogs] = useState<Paged<ApiLogRecord> | null>(null);
+  const [transfers, setTransfers] = useState<Paged<MarketplaceTransferDetail> | null>(
+    null
+  );
+  const [notifications, setNotifications] = useState<Paged<NotificationRecord> | null>(
+    null
+  );
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -52,24 +78,36 @@ export function AdminDashboard() {
     startTransition(async () => {
       try {
         setError(null);
-        const [mRes, cRes, lRes] = await Promise.all([
+        const [mRes, cRes, lRes, tRes, nRes] = await Promise.all([
           fetch("/api/admin/metrics", { cache: "no-store" }),
           fetch("/api/admin/claims?limit=8", { cache: "no-store" }),
           fetch("/api/admin/logs?limit=10", { cache: "no-store" }),
+          fetch("/api/admin/marketplace/transfers?limit=6&status=pending_review", {
+            cache: "no-store",
+          }),
+          fetch("/api/admin/notifications?limit=6&unread=1", {
+            cache: "no-store",
+          }),
         ]);
 
         if (!mRes.ok) throw new Error("Failed to load metrics");
         if (!cRes.ok) throw new Error("Failed to load claims");
         if (!lRes.ok) throw new Error("Failed to load logs");
+        if (!tRes.ok) throw new Error("Failed to load transfers");
+        if (!nRes.ok) throw new Error("Failed to load notifications");
 
-        const [m, c, l] = await Promise.all([
+        const [m, c, l, t, n] = await Promise.all([
           mRes.json(),
           cRes.json(),
           lRes.json(),
+          tRes.json(),
+          nRes.json(),
         ]);
         setMetrics(m as AdminMetrics);
         setClaims(c as Paged<ClaimRecord>);
         setLogs(l as Paged<ApiLogRecord>);
+        setTransfers(t as Paged<MarketplaceTransferDetail>);
+        setNotifications(n as Paged<NotificationRecord>);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Unknown error");
       }
@@ -89,6 +127,42 @@ export function AdminDashboard() {
 
   const topEndpoints = metrics?.topEndpoints ?? [];
   const callsLast7 = metrics?.callsLast7Days ?? [];
+
+  const reviewTransfer = useCallback(
+    (transferId: string, action: "approve" | "reject") => {
+      startTransition(async () => {
+        try {
+          setError(null);
+          const res = await fetch(
+            `/api/admin/marketplace/transfers/${transferId}`,
+            {
+              method: "PATCH",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                action,
+                reviewNote:
+                  action === "approve"
+                    ? "Approved from admin review queue"
+                    : "Rejected from admin review queue",
+              }),
+            }
+          );
+
+          if (!res.ok) {
+            const body = (await res.json().catch(() => null)) as
+              | { error?: string }
+              | null;
+            throw new Error(body?.error ?? "Transfer review failed");
+          }
+
+          refresh();
+        } catch (e) {
+          setError(e instanceof Error ? e.message : "Transfer review failed");
+        }
+      });
+    },
+    [refresh, startTransition]
+  );
 
   return (
     <div className="space-y-6">
@@ -234,6 +308,126 @@ export function AdminDashboard() {
           </div>
         </Card>
       </div>
+
+      <Card className="p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+              Marketplace transfer review
+            </div>
+            <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+              Accepted offers waiting for Phase 2 approval.
+            </div>
+          </div>
+          <Badge tone="orange">
+            {transfers ? transfers.total.toLocaleString() : "0"} pending
+          </Badge>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {(transfers?.items ?? []).length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-zinc-300/70 px-4 py-6 text-sm text-zinc-600 dark:border-zinc-700/70 dark:text-zinc-300">
+              No transfer reviews are open.
+            </div>
+          ) : (
+            (transfers?.items ?? []).map((transfer) => (
+              <div
+                key={transfer.id}
+                className="rounded-2xl border border-zinc-200/70 bg-white/60 p-4 shadow-sm backdrop-blur dark:border-zinc-800/70 dark:bg-zinc-950/30"
+              >
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                        â‚¦{transfer.handle}
+                      </span>
+                      <Badge tone="orange">{transfer.status.replace("_", " ")}</Badge>
+                      <Badge tone="neutral">{formatCurrency(transfer.amount)}</Badge>
+                    </div>
+                    <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+                      Seller {transfer.seller?.phone ?? transfer.sellerUserId} · Buyer{" "}
+                      {transfer.buyerName} ({transfer.buyerPhone})
+                    </div>
+                    <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                      Current trust {transfer.currentReputation?.trustScore ?? 12}/100 · opened{" "}
+                      {new Date(transfer.createdAt).toLocaleString()}
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => reviewTransfer(transfer.id, "approve")}
+                      disabled={isPending}
+                      className="rounded-full bg-nt-orange px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => reviewTransfer(transfer.id, "reject")}
+                      disabled={isPending}
+                      className="rounded-full border border-zinc-300/70 bg-white/80 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50 dark:hover:bg-zinc-900/50"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </Card>
+
+      <Card className="p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+              Notification delivery
+            </div>
+            <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+              In-app alerts plus signed webhook delivery when configured.
+            </div>
+          </div>
+          <Badge tone="neutral">
+            {notifications ? notifications.total.toLocaleString() : "0"} unread
+          </Badge>
+        </div>
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-2">
+          {(notifications?.items ?? []).length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-zinc-300/70 px-4 py-6 text-sm text-zinc-600 dark:border-zinc-700/70 dark:text-zinc-300 lg:col-span-2">
+              No unread notifications.
+            </div>
+          ) : (
+            (notifications?.items ?? []).map((notification) => (
+              <div
+                key={notification.id}
+                className="rounded-2xl border border-zinc-200/70 bg-white/60 p-4 shadow-sm backdrop-blur dark:border-zinc-800/70 dark:bg-zinc-950/30"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                      {notification.title}
+                    </div>
+                    <div className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                      {notification.body}
+                    </div>
+                  </div>
+                  <Badge tone={deliveryTone(notification.deliveryStatus)}>
+                    {notification.deliveryStatus ?? "in-app"}
+                  </Badge>
+                </div>
+                {notification.deliveryError ? (
+                  <div className="mt-2 text-xs text-orange-700 dark:text-orange-200">
+                    {notification.deliveryError}
+                  </div>
+                ) : null}
+              </div>
+            ))
+          )}
+        </div>
+      </Card>
 
       <div className="grid gap-5 lg:grid-cols-12">
         <Card className="p-6 lg:col-span-7">

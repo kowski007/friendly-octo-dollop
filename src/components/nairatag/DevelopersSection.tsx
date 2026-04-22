@@ -1,49 +1,28 @@
-import {
-  Badge,
-  ButtonLink,
-  Card,
-  CheckIcon,
-  CodeBlock,
-  Container,
-  NairaTermBadge,
-} from "./ui";
+import { Badge, ButtonLink, CodeBlock, Container, NairaTermBadge } from "./ui";
+
+function ApiPill({ label }: { label: string }) {
+  return (
+    <div className="rounded-2xl bg-white/80 px-4 py-3 text-sm font-semibold text-zinc-700 shadow-sm dark:bg-zinc-950/45 dark:text-zinc-200">
+      {label}
+    </div>
+  );
+}
 
 export function DevelopersSection() {
   return (
-    <section id="developers" className="py-16 sm:py-24">
+    <section id="developers" className="py-10 sm:py-16">
       <Container>
-        <div className="grid gap-10 lg:grid-cols-12 lg:items-start">
+        <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
           <div className="lg:col-span-5">
             <Badge tone="orange">For developers</Badge>
-            <h2 className="mt-4 font-display text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-5xl">
-              Built for fintechs and apps.
+            <h2 className="mt-4 max-w-xl font-display text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-5xl">
+              Add identity previews without changing settlement.
             </h2>
-            <p className="mt-4 max-w-xl text-base leading-7 text-zinc-700 dark:text-zinc-200">
-              Resolve handles instantly and show identity previews inside your
-              existing payment flows. Keep settlement on your current rails;
-              upgrade the UX and safety layer.
+            <p className="mt-4 max-w-lg text-base leading-7 text-zinc-700 dark:text-zinc-200">
+              Resolve <NairaTermBadge term="handles" tone="neutral" /> from your
+              send screen, invoice flow, marketplace, or payout tool.
             </p>
-
-            <div className="mt-6 space-y-3 text-sm text-zinc-700 dark:text-zinc-200">
-              {[
-                <>
-                  Resolve <NairaTermBadge term="handles" tone="neutral" /> to
-                  recipient preview payloads
-                </>,
-                "Return verification status (personal, business)",
-                "Surface fraud signals and safety flags in UI",
-                "Designed to fit send flows, invoices, and payouts",
-              ].map((t, idx) => (
-                <div key={idx} className="flex items-start gap-2">
-                  <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
-                    <CheckIcon className="h-4 w-4" />
-                  </span>
-                  <span>{t}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <ButtonLink href="#claim">Start building</ButtonLink>
               <ButtonLink href="#faq" variant="secondary">
                 Read FAQs
@@ -52,44 +31,50 @@ export function DevelopersSection() {
           </div>
 
           <div className="lg:col-span-7">
-            <CodeBlock code={"GET /resolve?handle=victor"} />
-            <div className="mt-5 grid gap-5 sm:grid-cols-2">
-              <Card className="p-6">
-                <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                  Resolve instantly
+            <div className="rounded-[2rem] bg-zinc-950 p-5 text-white shadow-sm">
+              <div className="flex items-center justify-between">
+                <Badge tone="inverted">API access</Badge>
+                <div className="text-xs font-semibold text-white/45">v1</div>
+              </div>
+              <div className="mt-5">
+                <CodeBlock
+                  className="border-white/10 bg-black/45"
+                  code={'GET /resolve?handle=victor\n\n{\n  "handle": "victor",\n  "displayName": "Victor Adeyemi",\n  "bank": "GTBank",\n  "verification": "verified"\n}'}
+                />
+              </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-4">
+                <ApiPill label="Resolve" />
+                <ApiPill label="Preview" />
+                <ApiPill label="Verify" />
+                <ApiPill label="Confirm" />
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <div className="rounded-[1.7rem] bg-orange-50 p-5 dark:bg-orange-950/25">
+                <div className="text-3xl font-semibold text-zinc-950 dark:text-zinc-50">
+                  1 call
                 </div>
-                <div className="mt-2 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
-                  Return recipient name + bank destination so your UI can
-                  confirm identity before send.
+                <div className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                  Fetch recipient identity.
                 </div>
-              </Card>
-              <Card className="p-6">
-                <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                  Display badges
+              </div>
+              <div className="rounded-[1.7rem] bg-white/80 p-5 dark:bg-zinc-950/35">
+                <div className="text-3xl font-semibold text-zinc-950 dark:text-zinc-50">
+                  JSON
                 </div>
-                <div className="mt-2 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
-                  Show Verified and Business badges in a consistent, user-trusted
-                  pattern.
+                <div className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                  Return clean preview payloads.
                 </div>
-              </Card>
-              <Card className="p-6">
-                <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                  Safer payouts
+              </div>
+              <div className="rounded-[1.7rem] bg-emerald-50 p-5 dark:bg-emerald-950/20">
+                <div className="text-3xl font-semibold text-zinc-950 dark:text-zinc-50">
+                  UI
                 </div>
-                <div className="mt-2 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
-                  Use handle resolution in refunds, creator payouts, and vendor
-                  disbursements.
+                <div className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                  Show trust before payment.
                 </div>
-              </Card>
-              <Card className="p-6">
-                <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                  Partner-friendly
-                </div>
-                <div className="mt-2 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
-                  Designed to integrate cleanly into fintech products without
-                  changing how you settle.
-                </div>
-              </Card>
+              </div>
             </div>
           </div>
         </div>

@@ -6,11 +6,14 @@ const LEGACY_TABLE = "nairatag_admin_state";
 const USERS_TABLE = "nt_phase0_users";
 const HANDLES_TABLE = "nt_phase0_handles";
 const API_LOGS_TABLE = "nt_phase0_api_logs";
+const NOTIFICATIONS_TABLE = "nt_notifications";
+const REFERRALS_TABLE = "nt_referrals";
 const OTPS_TABLE = "nt_phase0_otps";
 const BANK_ACCOUNTS_TABLE = "nt_phase0_bank_accounts";
 const TRANSACTIONS_TABLE = "nt_phase1_transactions";
 const MARKETPLACE_LISTINGS_TABLE = "nt_marketplace_listings";
 const MARKETPLACE_OFFERS_TABLE = "nt_marketplace_offers";
+const MARKETPLACE_TRANSFERS_TABLE = "nt_marketplace_transfers";
 
 declare global {
   var __nairatagAdminPool: Pool | undefined;
@@ -31,6 +34,10 @@ function getPool() {
       connectionString: databaseUrl(),
       ssl: { rejectUnauthorized: false },
       max: 3,
+      connectionTimeoutMillis: 2500,
+      idleTimeoutMillis: 10000,
+      query_timeout: 5000,
+      statement_timeout: 5000,
     });
   }
   return global.__nairatagAdminPool;
@@ -52,6 +59,10 @@ async function ensureSchema() {
       phone text not null unique,
       created_at timestamptz not null,
       phone_verified_at timestamptz,
+      privy_user_id text,
+      privy_linked_at timestamptz,
+      email text,
+      wallet_address text,
       full_name text,
       bvn_last4 text,
       bvn_linked_at timestamptz,
@@ -61,6 +72,36 @@ async function ensureSchema() {
   `);
   await pool.query(
     `alter table ${USERS_TABLE} add column if not exists bank_linked_at timestamptz`
+  );
+  await pool.query(
+    `alter table ${USERS_TABLE} add column if not exists privy_user_id text`
+  );
+  await pool.query(
+    `alter table ${USERS_TABLE} add column if not exists privy_linked_at timestamptz`
+  );
+  await pool.query(
+    `alter table ${USERS_TABLE} add column if not exists email text`
+  );
+  await pool.query(
+    `alter table ${USERS_TABLE} add column if not exists wallet_address text`
+  );
+  await pool.query(
+    `alter table ${USERS_TABLE} add column if not exists referral_code text`
+  );
+  await pool.query(
+    `alter table ${USERS_TABLE} add column if not exists referred_by_user_id text`
+  );
+  await pool.query(
+    `alter table ${USERS_TABLE} add column if not exists referred_at timestamptz`
+  );
+  await pool.query(
+    `create unique index if not exists ${USERS_TABLE}_privy_user_id_idx on ${USERS_TABLE}(privy_user_id) where privy_user_id is not null`
+  );
+  await pool.query(
+    `create index if not exists ${USERS_TABLE}_referred_by_idx on ${USERS_TABLE}(referred_by_user_id)`
+  );
+  await pool.query(
+    `create unique index if not exists ${USERS_TABLE}_referral_code_key on ${USERS_TABLE}(referral_code) where referral_code is not null`
   );
   await pool.query(`
     create table if not exists ${HANDLES_TABLE} (
@@ -99,6 +140,85 @@ async function ensureSchema() {
   );
   await pool.query(
     `create index if not exists ${API_LOGS_TABLE}_endpoint_idx on ${API_LOGS_TABLE}(endpoint)`
+  );
+  await pool.query(`
+    create table if not exists ${NOTIFICATIONS_TABLE} (
+      id text primary key,
+      user_id text,
+      handle text,
+      type text not null,
+      title text not null,
+      body text not null,
+      priority text not null,
+      status text not null,
+      created_at timestamptz not null,
+      read_at timestamptz,
+      delivery_channels jsonb,
+      delivery_status text,
+      delivery_attempts integer not null default 0,
+      last_delivery_attempt_at timestamptz,
+      delivered_at timestamptz,
+      delivery_error text,
+      metadata jsonb
+    )
+  `);
+  await pool.query(
+    `alter table ${NOTIFICATIONS_TABLE} add column if not exists delivery_channels jsonb`
+  );
+  await pool.query(
+    `alter table ${NOTIFICATIONS_TABLE} add column if not exists delivery_status text`
+  );
+  await pool.query(
+    `alter table ${NOTIFICATIONS_TABLE} add column if not exists delivery_attempts integer not null default 0`
+  );
+  await pool.query(
+    `alter table ${NOTIFICATIONS_TABLE} add column if not exists last_delivery_attempt_at timestamptz`
+  );
+  await pool.query(
+    `alter table ${NOTIFICATIONS_TABLE} add column if not exists delivered_at timestamptz`
+  );
+  await pool.query(
+    `alter table ${NOTIFICATIONS_TABLE} add column if not exists delivery_error text`
+  );
+  await pool.query(
+    `create index if not exists ${NOTIFICATIONS_TABLE}_user_idx on ${NOTIFICATIONS_TABLE}(user_id, created_at desc)`
+  );
+  await pool.query(
+    `create index if not exists ${NOTIFICATIONS_TABLE}_status_idx on ${NOTIFICATIONS_TABLE}(status)`
+  );
+  await pool.query(`
+    create table if not exists ${REFERRALS_TABLE} (
+      id text primary key,
+      referrer_user_id text not null,
+      referred_user_id text not null unique,
+      referral_code text not null,
+      source text not null,
+      created_at timestamptz not null,
+      converted_at timestamptz,
+      signup_points integer not null default 25,
+      conversion_points integer not null default 0
+    )
+  `);
+  await pool.query(
+    `alter table ${REFERRALS_TABLE} add column if not exists signup_points integer not null default 25`
+  );
+  await pool.query(
+    `alter table ${REFERRALS_TABLE} add column if not exists conversion_points integer not null default 0`
+  );
+  await pool.query(
+    `alter table ${REFERRALS_TABLE} alter column signup_points set default 25`
+  );
+  await pool.query(
+    `update ${REFERRALS_TABLE} set signup_points = 25 where signup_points = 0`
+  );
+  await pool.query(
+    `update ${REFERRALS_TABLE} set conversion_points = 100 where converted_at is not null and conversion_points = 0`
+  );
+  await pool.query(
+    `create index if not exists ${REFERRALS_TABLE}_referrer_idx on ${REFERRALS_TABLE}(referrer_user_id)`
+  );
+  await pool.query(
+    `create index if not exists ${REFERRALS_TABLE}_created_at_idx on ${REFERRALS_TABLE}(created_at desc)`
   );
   await pool.query(`
     create table if not exists ${OTPS_TABLE} (
@@ -217,6 +337,31 @@ async function ensureSchema() {
   await pool.query(
     `create index if not exists ${MARKETPLACE_OFFERS_TABLE}_status_idx on ${MARKETPLACE_OFFERS_TABLE}(status)`
   );
+  await pool.query(`
+    create table if not exists ${MARKETPLACE_TRANSFERS_TABLE} (
+      id text primary key,
+      listing_id text not null,
+      offer_id text not null,
+      handle text not null,
+      seller_user_id text not null,
+      buyer_user_id text,
+      buyer_name text not null,
+      buyer_phone text not null,
+      amount integer not null,
+      status text not null,
+      created_at timestamptz not null,
+      updated_at timestamptz not null,
+      reviewed_at timestamptz,
+      transferred_at timestamptz,
+      review_note text
+    )
+  `);
+  await pool.query(
+    `create index if not exists ${MARKETPLACE_TRANSFERS_TABLE}_listing_idx on ${MARKETPLACE_TRANSFERS_TABLE}(listing_id)`
+  );
+  await pool.query(
+    `create index if not exists ${MARKETPLACE_TRANSFERS_TABLE}_status_idx on ${MARKETPLACE_TRANSFERS_TABLE}(status)`
+  );
 }
 
 async function countRows(client: PoolClient, table: string) {
@@ -231,11 +376,14 @@ async function hasNormalizedData(client: PoolClient) {
     await countRows(client, USERS_TABLE),
     await countRows(client, HANDLES_TABLE),
     await countRows(client, API_LOGS_TABLE),
+    await countRows(client, NOTIFICATIONS_TABLE),
+    await countRows(client, REFERRALS_TABLE),
     await countRows(client, OTPS_TABLE),
     await countRows(client, BANK_ACCOUNTS_TABLE),
     await countRows(client, TRANSACTIONS_TABLE),
     await countRows(client, MARKETPLACE_LISTINGS_TABLE),
     await countRows(client, MARKETPLACE_OFFERS_TABLE),
+    await countRows(client, MARKETPLACE_TRANSFERS_TABLE),
   ];
 
   return counts.some((count) => count > 0);
@@ -245,7 +393,9 @@ function normalizeData(data: Partial<AdminData> | null | undefined): AdminData {
   return {
     claims: Array.isArray(data?.claims) ? data.claims : [],
     apiLogs: Array.isArray(data?.apiLogs) ? data.apiLogs : [],
+    notifications: Array.isArray(data?.notifications) ? data.notifications : [],
     users: Array.isArray(data?.users) ? data.users : [],
+    referrals: Array.isArray(data?.referrals) ? data.referrals : [],
     otps: Array.isArray(data?.otps) ? data.otps : [],
     bankAccounts: Array.isArray(data?.bankAccounts) ? data.bankAccounts : [],
     transactions: Array.isArray(data?.transactions) ? data.transactions : [],
@@ -254,6 +404,9 @@ function normalizeData(data: Partial<AdminData> | null | undefined): AdminData {
       : [],
     marketplaceOffers: Array.isArray(data?.marketplaceOffers)
       ? data.marketplaceOffers
+      : [],
+    marketplaceTransfers: Array.isArray(data?.marketplaceTransfers)
+      ? data.marketplaceTransfers
       : [],
   };
 }
@@ -291,6 +444,13 @@ async function replaceSnapshot(client: PoolClient, data: AdminData) {
       "phone",
       "created_at",
       "phone_verified_at",
+      "privy_user_id",
+      "privy_linked_at",
+      "email",
+      "wallet_address",
+      "referral_code",
+      "referred_by_user_id",
+      "referred_at",
       "full_name",
       "bvn_last4",
       "bvn_linked_at",
@@ -302,6 +462,13 @@ async function replaceSnapshot(client: PoolClient, data: AdminData) {
       user.phone,
       user.createdAt,
       user.phoneVerifiedAt,
+      user.privyUserId ?? null,
+      user.privyLinkedAt ?? null,
+      user.email ?? null,
+      user.walletAddress ?? null,
+      user.referralCode ?? null,
+      user.referredByUserId ?? null,
+      user.referredAt ?? null,
       user.fullName ?? null,
       user.bvnLast4 ?? null,
       user.bvnLinkedAt ?? null,
@@ -352,6 +519,78 @@ async function replaceSnapshot(client: PoolClient, data: AdminData) {
       log.latencyMs,
       log.handle ?? null,
       log.clientKey ?? null,
+    ])
+  );
+
+  await replaceTable(
+    client,
+    NOTIFICATIONS_TABLE,
+    [
+      "id",
+      "user_id",
+      "handle",
+      "type",
+      "title",
+      "body",
+      "priority",
+      "status",
+      "created_at",
+      "read_at",
+      "delivery_channels",
+      "delivery_status",
+      "delivery_attempts",
+      "last_delivery_attempt_at",
+      "delivered_at",
+      "delivery_error",
+      "metadata",
+    ],
+    data.notifications.map((notification) => [
+      notification.id,
+      notification.userId ?? null,
+      notification.handle ?? null,
+      notification.type,
+      notification.title,
+      notification.body,
+      notification.priority,
+      notification.status,
+      notification.createdAt,
+      notification.readAt ?? null,
+      notification.deliveryChannels
+        ? JSON.stringify(notification.deliveryChannels)
+        : null,
+      notification.deliveryStatus ?? null,
+      notification.deliveryAttempts ?? 0,
+      notification.lastDeliveryAttemptAt ?? null,
+      notification.deliveredAt ?? null,
+      notification.deliveryError ?? null,
+      notification.metadata ?? null,
+    ])
+  );
+
+  await replaceTable(
+    client,
+    REFERRALS_TABLE,
+    [
+      "id",
+      "referrer_user_id",
+      "referred_user_id",
+      "referral_code",
+      "source",
+      "created_at",
+      "converted_at",
+      "signup_points",
+      "conversion_points",
+    ],
+    data.referrals.map((referral) => [
+      referral.id,
+      referral.referrerUserId,
+      referral.referredUserId,
+      referral.referralCode,
+      referral.source,
+      referral.createdAt,
+      referral.convertedAt ?? null,
+      referral.signupPoints ?? 25,
+      referral.conversionPoints ?? (referral.convertedAt ? 100 : 0),
     ])
   );
 
@@ -533,9 +772,48 @@ async function replaceSnapshot(client: PoolClient, data: AdminData) {
       offer.respondedAt ?? null,
     ])
   );
+
+  await replaceTable(
+    client,
+    MARKETPLACE_TRANSFERS_TABLE,
+    [
+      "id",
+      "listing_id",
+      "offer_id",
+      "handle",
+      "seller_user_id",
+      "buyer_user_id",
+      "buyer_name",
+      "buyer_phone",
+      "amount",
+      "status",
+      "created_at",
+      "updated_at",
+      "reviewed_at",
+      "transferred_at",
+      "review_note",
+    ],
+    data.marketplaceTransfers.map((transfer) => [
+      transfer.id,
+      transfer.listingId,
+      transfer.offerId,
+      transfer.handle,
+      transfer.sellerUserId,
+      transfer.buyerUserId ?? null,
+      transfer.buyerName,
+      transfer.buyerPhone,
+      transfer.amount,
+      transfer.status,
+      transfer.createdAt,
+      transfer.updatedAt,
+      transfer.reviewedAt ?? null,
+      transfer.transferredAt ?? null,
+      transfer.reviewNote ?? null,
+    ])
+  );
 }
 
-async function readLegacySnapshot(client: PoolClient): Promise<AdminData | null> {
+async function readLegacySnapshot(client: PoolClient): Promise<AdminData> {
   const result = await client.query<{ payload: AdminData }>(
     `select payload from ${LEGACY_TABLE} where id = 1 limit 1`
   );
@@ -549,12 +827,15 @@ async function migrateLegacySnapshotIfNeeded(client: PoolClient) {
   const hasLegacyData =
     legacy.claims.length > 0 ||
     legacy.apiLogs.length > 0 ||
+    legacy.notifications.length > 0 ||
+    legacy.referrals.length > 0 ||
     legacy.users.length > 0 ||
     legacy.otps.length > 0 ||
     legacy.bankAccounts.length > 0 ||
     legacy.transactions.length > 0 ||
     legacy.marketplaceListings.length > 0 ||
-    legacy.marketplaceOffers.length > 0;
+    legacy.marketplaceOffers.length > 0 ||
+    legacy.marketplaceTransfers.length > 0;
 
   if (!hasLegacyData) return;
 
@@ -567,6 +848,13 @@ function mapRowsToSnapshot(rows: {
     phone: string;
     created_at: string;
     phone_verified_at: string;
+    privy_user_id: string | null;
+    privy_linked_at: string | null;
+    email: string | null;
+    wallet_address: string | null;
+    referral_code: string | null;
+    referred_by_user_id: string | null;
+    referred_at: string | null;
     full_name: string | null;
     bvn_last4: string | null;
     bvn_linked_at: string | null;
@@ -594,6 +882,36 @@ function mapRowsToSnapshot(rows: {
     latency_ms: number;
     handle: string | null;
     client_key: string | null;
+  }>;
+  notifications?: Array<{
+    id: string;
+    user_id: string | null;
+    handle: string | null;
+    type: AdminData["notifications"][number]["type"];
+    title: string;
+    body: string;
+    priority: AdminData["notifications"][number]["priority"];
+    status: AdminData["notifications"][number]["status"];
+    created_at: string;
+    read_at: string | null;
+    delivery_channels: AdminData["notifications"][number]["deliveryChannels"] | null;
+    delivery_status: AdminData["notifications"][number]["deliveryStatus"] | null;
+    delivery_attempts: number | null;
+    last_delivery_attempt_at: string | null;
+    delivered_at: string | null;
+    delivery_error: string | null;
+    metadata: AdminData["notifications"][number]["metadata"] | null;
+  }>;
+  referrals: Array<{
+    id: string;
+    referrer_user_id: string;
+    referred_user_id: string;
+    referral_code: string;
+    source: AdminData["referrals"][number]["source"];
+    created_at: string;
+    converted_at: string | null;
+    signup_points: number | null;
+    conversion_points: number | null;
   }>;
   otps: Array<{
     id: string;
@@ -672,6 +990,23 @@ function mapRowsToSnapshot(rows: {
     updated_at: string;
     responded_at: string | null;
   }>;
+  marketplaceTransfers: Array<{
+    id: string;
+    listing_id: string;
+    offer_id: string;
+    handle: string;
+    seller_user_id: string;
+    buyer_user_id: string | null;
+    buyer_name: string;
+    buyer_phone: string;
+    amount: number;
+    status: AdminData["marketplaceTransfers"][number]["status"];
+    created_at: string;
+    updated_at: string;
+    reviewed_at: string | null;
+    transferred_at: string | null;
+    review_note: string | null;
+  }>;
 }): AdminData {
   const toIso = (value: Date | string | null | undefined) =>
     value == null ? undefined : new Date(value).toISOString();
@@ -685,6 +1020,13 @@ function mapRowsToSnapshot(rows: {
         toIso(user.phone_verified_at) ??
         toIso(user.created_at) ??
         new Date().toISOString(),
+      privyUserId: user.privy_user_id ?? undefined,
+      privyLinkedAt: toIso(user.privy_linked_at),
+      email: user.email ?? undefined,
+      walletAddress: user.wallet_address ?? undefined,
+      referralCode: user.referral_code ?? undefined,
+      referredByUserId: user.referred_by_user_id ?? undefined,
+      referredAt: toIso(user.referred_at),
       fullName: user.full_name ?? undefined,
       bvnLast4: user.bvn_last4 ?? undefined,
       bvnLinkedAt: toIso(user.bvn_linked_at),
@@ -712,6 +1054,45 @@ function mapRowsToSnapshot(rows: {
       latencyMs: log.latency_ms,
       handle: log.handle ?? undefined,
       clientKey: log.client_key ?? undefined,
+    })),
+    notifications: (rows.notifications ?? []).map((notification) => ({
+      id: notification.id,
+      userId: notification.user_id ?? undefined,
+      handle: notification.handle ?? undefined,
+      type: notification.type,
+      title: notification.title,
+      body: notification.body,
+      priority: notification.priority,
+      status: notification.status,
+      createdAt: toIso(notification.created_at) ?? new Date().toISOString(),
+      readAt: toIso(notification.read_at),
+      deliveryChannels: notification.delivery_channels ?? undefined,
+      deliveryStatus: notification.delivery_status ?? undefined,
+      deliveryAttempts: notification.delivery_attempts ?? undefined,
+      lastDeliveryAttemptAt: toIso(notification.last_delivery_attempt_at),
+      deliveredAt: toIso(notification.delivered_at),
+      deliveryError: notification.delivery_error ?? undefined,
+      metadata: notification.metadata ?? undefined,
+    })),
+    referrals: rows.referrals.map((referral) => ({
+      id: referral.id,
+      referrerUserId: referral.referrer_user_id,
+      referredUserId: referral.referred_user_id,
+      referralCode: referral.referral_code,
+      source: referral.source,
+      createdAt: toIso(referral.created_at) ?? new Date().toISOString(),
+      convertedAt: toIso(referral.converted_at),
+      signupPoints:
+        typeof referral.signup_points === "number" && referral.signup_points > 0
+          ? referral.signup_points
+          : 25,
+      conversionPoints:
+        typeof referral.conversion_points === "number" &&
+        referral.conversion_points > 0
+          ? referral.conversion_points
+          : referral.converted_at
+            ? 100
+            : 0,
     })),
     otps: rows.otps.map((otp) => ({
       id: otp.id,
@@ -790,6 +1171,23 @@ function mapRowsToSnapshot(rows: {
       updatedAt: toIso(offer.updated_at) ?? new Date().toISOString(),
       respondedAt: toIso(offer.responded_at),
     })),
+    marketplaceTransfers: rows.marketplaceTransfers.map((transfer) => ({
+      id: transfer.id,
+      listingId: transfer.listing_id,
+      offerId: transfer.offer_id,
+      handle: transfer.handle,
+      sellerUserId: transfer.seller_user_id,
+      buyerUserId: transfer.buyer_user_id ?? undefined,
+      buyerName: transfer.buyer_name,
+      buyerPhone: transfer.buyer_phone,
+      amount: transfer.amount,
+      status: transfer.status,
+      createdAt: toIso(transfer.created_at) ?? new Date().toISOString(),
+      updatedAt: toIso(transfer.updated_at) ?? new Date().toISOString(),
+      reviewedAt: toIso(transfer.reviewed_at),
+      transferredAt: toIso(transfer.transferred_at),
+      reviewNote: transfer.review_note ?? undefined,
+    })),
   };
 }
 
@@ -816,6 +1214,13 @@ export async function readAdminStateFromDatabase(): Promise<AdminData | null> {
       phone: string;
       created_at: string;
       phone_verified_at: string;
+      privy_user_id: string | null;
+      privy_linked_at: string | null;
+      email: string | null;
+      wallet_address: string | null;
+      referral_code: string | null;
+      referred_by_user_id: string | null;
+      referred_at: string | null;
       full_name: string | null;
       bvn_last4: string | null;
       bvn_linked_at: string | null;
@@ -844,6 +1249,36 @@ export async function readAdminStateFromDatabase(): Promise<AdminData | null> {
       handle: string | null;
       client_key: string | null;
     }>(`select * from ${API_LOGS_TABLE} order by ts desc`);
+    const notifications = await client.query<{
+      id: string;
+      user_id: string | null;
+      handle: string | null;
+      type: AdminData["notifications"][number]["type"];
+      title: string;
+      body: string;
+      priority: AdminData["notifications"][number]["priority"];
+      status: AdminData["notifications"][number]["status"];
+      created_at: string;
+      read_at: string | null;
+      delivery_channels: AdminData["notifications"][number]["deliveryChannels"] | null;
+      delivery_status: AdminData["notifications"][number]["deliveryStatus"] | null;
+      delivery_attempts: number | null;
+      last_delivery_attempt_at: string | null;
+      delivered_at: string | null;
+      delivery_error: string | null;
+      metadata: AdminData["notifications"][number]["metadata"] | null;
+    }>(`select * from ${NOTIFICATIONS_TABLE} order by created_at desc`);
+    const referrals = await client.query<{
+      id: string;
+      referrer_user_id: string;
+      referred_user_id: string;
+      referral_code: string;
+      source: AdminData["referrals"][number]["source"];
+      created_at: string;
+      converted_at: string | null;
+      signup_points: number | null;
+      conversion_points: number | null;
+    }>(`select * from ${REFERRALS_TABLE} order by created_at desc`);
     const otps = await client.query<{
       id: string;
       phone: string;
@@ -921,16 +1356,36 @@ export async function readAdminStateFromDatabase(): Promise<AdminData | null> {
       updated_at: string;
       responded_at: string | null;
     }>(`select * from ${MARKETPLACE_OFFERS_TABLE} order by created_at desc`);
+    const marketplaceTransfers = await client.query<{
+      id: string;
+      listing_id: string;
+      offer_id: string;
+      handle: string;
+      seller_user_id: string;
+      buyer_user_id: string | null;
+      buyer_name: string;
+      buyer_phone: string;
+      amount: number;
+      status: AdminData["marketplaceTransfers"][number]["status"];
+      created_at: string;
+      updated_at: string;
+      reviewed_at: string | null;
+      transferred_at: string | null;
+      review_note: string | null;
+    }>(`select * from ${MARKETPLACE_TRANSFERS_TABLE} order by created_at desc`);
 
     return mapRowsToSnapshot({
       users: users.rows,
       claims: claims.rows,
       apiLogs: apiLogs.rows,
+      notifications: notifications.rows,
+      referrals: referrals.rows,
       otps: otps.rows,
       bankAccounts: bankAccounts.rows,
       transactions: transactions.rows,
       marketplaceListings: marketplaceListings.rows,
       marketplaceOffers: marketplaceOffers.rows,
+      marketplaceTransfers: marketplaceTransfers.rows,
     });
   } finally {
     client.release();

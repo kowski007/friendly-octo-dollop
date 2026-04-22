@@ -1,74 +1,105 @@
-import { Badge, Card, CheckIcon, Container } from "./ui";
+import { Badge, Container, cn } from "./ui";
 
-function TrustCard({
-  title,
-  description,
+function Naira({ className }: { className?: string }) {
+  return (
+    <span className={cn("font-semibold", className)} aria-hidden="true">
+      {"\u20A6"}
+    </span>
+  );
+}
+
+function MetricBox({
+  label,
+  value,
+  detail,
 }: {
-  title: string;
-  description: string;
+  label: string;
+  value: string;
+  detail: string;
 }) {
   return (
-    <Card className="p-6">
-      <div className="flex items-start gap-3">
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200">
-          <CheckIcon className="h-5 w-5" />
-        </span>
-        <div>
-          <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-            {title}
-          </div>
-          <div className="mt-2 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
-            {description}
-          </div>
-        </div>
+    <div className="rounded-[1.7rem] bg-zinc-50 p-5 dark:bg-zinc-950/45">
+      <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+        {label}
       </div>
-    </Card>
+      <div className="mt-6 text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+        {value}
+      </div>
+      <div className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
+        {detail}
+      </div>
+    </div>
   );
 }
 
 export function TrustSection() {
   return (
-    <section id="trust" className="py-16 sm:py-24">
+    <section id="trust" className="py-10 sm:py-16">
       <Container>
-        <div className="grid gap-10 lg:grid-cols-12 lg:items-start">
+        <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
           <div className="lg:col-span-5">
             <Badge tone="verify">Trust & verification</Badge>
-            <h2 className="mt-4 font-display text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-5xl">
-              Confidence before cash moves.
-            </h2>
-            <p className="mt-4 max-w-xl text-base leading-7 text-zinc-700 dark:text-zinc-200">
-              NairaTag is designed to show identity and verification signals in
-              the exact moment that matters: before a user confirms a transfer.
-            </p>
-
-            <div className="mt-6 space-y-2">
-              <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 px-4 py-3 text-sm font-semibold text-emerald-950 shadow-sm backdrop-blur dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-100">
-                ₦victor ✓ Verified
-              </div>
-              <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 px-4 py-3 text-sm font-semibold text-emerald-950 shadow-sm backdrop-blur dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-100">
-                ₦shop ✓✓ Business
-              </div>
+            <div className="mt-7 text-sm font-semibold text-zinc-500 dark:text-zinc-400">
+              Identity confidence
             </div>
+            <div className="mt-5 text-7xl font-semibold leading-none tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-8xl">
+              86
+            </div>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Badge tone="verify">BVN linked</Badge>
+              <Badge tone="orange">Bank matched</Badge>
+              <Badge>Public profile</Badge>
+            </div>
+            <p className="mt-6 max-w-md text-base leading-7 text-zinc-700 dark:text-zinc-200">
+              Trust is shown where it matters: before the user confirms the
+              transfer, offer, or payout.
+            </p>
           </div>
 
           <div className="lg:col-span-7">
-            <div className="grid gap-5 sm:grid-cols-2">
-              <TrustCard
-                title="BVN verification checks"
-                description="Designed to connect handles to real identity signals that users can trust."
-              />
-              <TrustCard
-                title="Account name matching"
-                description="Show the recipient name before sending, not after confirmation."
-              />
-              <TrustCard
-                title="Fraud protection signals"
-                description="Surface safety flags and suspicious change signals in the UI."
-              />
-              <TrustCard
-                title="Business identities"
-                description="Separate merchants from personal handles with clear business badges."
-              />
+            <div className="rounded-[2rem] bg-white/80 p-5 shadow-sm backdrop-blur dark:bg-zinc-950/35 sm:p-6">
+              <div className="rounded-[1.7rem] bg-gradient-to-r from-orange-300 via-orange-100 to-zinc-100 p-5 dark:from-orange-600/70 dark:via-orange-950/35 dark:to-zinc-900">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <div className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">
+                      Deployed signal
+                    </div>
+                    <div className="mt-4 text-5xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                      68%
+                    </div>
+                  </div>
+                  <div className="text-right text-xs font-semibold text-zinc-500 dark:text-zinc-300">
+                    Target 2030
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <MetricBox label="Wrong-transfer risk" value="-42%" detail="with preview" />
+                <MetricBox label="Verified handles" value="150+" detail="demo records" />
+              </div>
+
+              <div className="mt-4 rounded-[1.7rem] bg-zinc-950 p-5 text-white">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <div className="text-xs font-semibold text-white/55">
+                      Example payment
+                    </div>
+                    <div className="mt-3 text-2xl font-semibold">
+                      <Naira />
+                      victor
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs font-semibold text-white/55">
+                      Status
+                    </div>
+                    <div className="mt-3 text-sm font-semibold text-emerald-300">
+                      Safe to confirm
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -76,4 +107,3 @@ export function TrustSection() {
     </section>
   );
 }
-

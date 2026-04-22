@@ -20,15 +20,19 @@ export async function GET(req: NextRequest) {
   });
 
   const clientKey = req.headers.get("x-nt-api-key") ?? undefined;
-  await logApiUsage({
+  void logApiUsage({
     endpoint: "/api/resolve",
     method: "GET",
     status,
     latencyMs: Date.now() - started,
     handle: result.status === "invalid" ? undefined : result.handle,
     clientKey,
+  }).catch((error) => {
+    console.warn(
+      "[nairatag] Failed to log /api/resolve usage:",
+      error instanceof Error ? error.message : String(error)
+    );
   });
 
   return res;
 }
-

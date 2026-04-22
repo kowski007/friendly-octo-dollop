@@ -11,6 +11,11 @@ const eslintConfig = defineConfig([
     ".next/**",
     "out/**",
     "build/**",
+    "node_modules/**",
+    ".vercel/**",
+    "botpress-agent/**",
+    "Brunch24-AI/**",
+    "tools/**",
     "next-env.d.ts",
   ]),
 ]);

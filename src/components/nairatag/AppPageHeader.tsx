@@ -25,14 +25,34 @@ function LogoMark() {
   );
 }
 
-const links = [
-  { href: "/", label: "Home" },
-  { href: "/pay", label: "Pay Links" },
+const toolLinks = [
+  { href: "/pay", label: "Pay links" },
   { href: "/marketplace", label: "Marketplace" },
-  { href: "/map", label: "Live Map" },
-  { href: "/agent", label: "Agent" },
-  { href: "/admin", label: "Admin" },
+  { href: "/map", label: "Live map" },
+  { href: "/referrals", label: "Referrals" },
 ];
+
+function ToolsMenu() {
+  return (
+    <details className="group relative">
+      <summary className="flex cursor-pointer list-none items-center gap-1 rounded-full px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950 group-open:bg-zinc-100 group-open:text-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/70 dark:hover:text-white dark:group-open:bg-zinc-900/70 dark:group-open:text-white [&::-webkit-details-marker]:hidden">
+        Tools
+        <span className="text-[10px] text-zinc-400 transition group-open:rotate-180">v</span>
+      </summary>
+      <div className="absolute left-0 top-full z-50 mt-2 w-48 rounded-2xl border border-zinc-200/80 bg-white/95 p-1.5 shadow-xl shadow-zinc-950/10 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/95 dark:shadow-black/30">
+        {toolLinks.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="block rounded-xl px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 dark:hover:text-white"
+          >
+            {link.label}
+          </Link>
+        ))}
+      </div>
+    </details>
+  );
+}
 
 export function AppPageHeader({
   ctaHref = "/agent",
@@ -53,17 +73,27 @@ export function AppPageHeader({
 
         <nav
           aria-label="Product"
-          className="hidden items-center gap-6 text-sm font-medium text-zinc-700 dark:text-zinc-200 md:flex"
+          className="hidden items-center gap-1 text-sm font-medium text-zinc-700 dark:text-zinc-200 md:flex"
         >
-          {links.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="transition hover:text-zinc-950 dark:hover:text-white"
-            >
-              {link.label}
-            </Link>
-          ))}
+          <Link
+            href="/"
+            className="rounded-full px-3 py-2 font-semibold transition hover:bg-zinc-100 hover:text-zinc-950 dark:hover:bg-zinc-900/70 dark:hover:text-white"
+          >
+            Home
+          </Link>
+          <ToolsMenu />
+          <Link
+            href="/agent"
+            className="rounded-full px-3 py-2 font-semibold transition hover:bg-zinc-100 hover:text-zinc-950 dark:hover:bg-zinc-900/70 dark:hover:text-white"
+          >
+            Agent
+          </Link>
+          <Link
+            href="/admin"
+            className="rounded-full px-3 py-2 font-semibold transition hover:bg-zinc-100 hover:text-zinc-950 dark:hover:bg-zinc-900/70 dark:hover:text-white"
+          >
+            Admin
+          </Link>
         </nav>
 
         <div className="flex items-center gap-3">

@@ -12,15 +12,25 @@ import type {
   ApiLogRecord,
   BankAccountRecord,
   ClaimRecord,
+  CreditProfile,
   HandleReputation,
   MarketplaceEligibility,
   MarketplaceListingDetail,
   MarketplaceListingRecord,
   MarketplaceListingStatus,
+  MarketplaceTransferStatus,
+  MarketplaceTransferDetail,
+  MarketplaceTransferRecord,
   MarketplaceListingView,
   MarketplaceOfferRecord,
   MarketplaceStats,
+  NotificationPriority,
+  NotificationRecord,
+  NotificationType,
   OtpRecord,
+  PublicHandleProfile,
+  ReferralRecord,
+  ReferralSource,
   TransactionRecord,
   UserRecord,
   Verification,
@@ -29,28 +39,56 @@ import type {
 export type AdminData = {
   claims: ClaimRecord[];
   apiLogs: ApiLogRecord[];
+  notifications: NotificationRecord[];
   users: UserRecord[];
   otps: OtpRecord[];
   bankAccounts: BankAccountRecord[];
   transactions: TransactionRecord[];
   marketplaceListings: MarketplaceListingRecord[];
   marketplaceOffers: MarketplaceOfferRecord[];
+  marketplaceTransfers: MarketplaceTransferRecord[];
+  referrals: ReferralRecord[];
 };
 
 const DATA_FILE = path.join(process.cwd(), "data", "nairatag-admin.json");
 const MAX_API_LOGS = 5000;
+const MAX_NOTIFICATIONS = 5000;
+const REFERRAL_SIGNUP_POINTS = 25;
+const REFERRAL_CONVERSION_POINTS = 100;
+const DEFAULT_ADMIN_DB_TIMEOUT_MS = 1500;
+const DEFAULT_ADMIN_DB_FALLBACK_COOLDOWN_MS = 60000;
 let storageWarningShown = false;
+let databaseFallbackUntil = 0;
 
 function emptyData(): AdminData {
   return {
     claims: [],
     apiLogs: [],
+    notifications: [],
     users: [],
     otps: [],
     bankAccounts: [],
     transactions: [],
     marketplaceListings: [],
     marketplaceOffers: [],
+    marketplaceTransfers: [],
+    referrals: [],
+  };
+}
+
+function normalizeReferralRecord(referral: ReferralRecord): ReferralRecord {
+  return {
+    ...referral,
+    signupPoints:
+      typeof referral.signupPoints === "number" && referral.signupPoints > 0
+        ? referral.signupPoints
+        : REFERRAL_SIGNUP_POINTS,
+    conversionPoints:
+      typeof referral.conversionPoints === "number" && referral.conversionPoints > 0
+        ? referral.conversionPoints
+        : referral.convertedAt
+          ? REFERRAL_CONVERSION_POINTS
+          : 0,
   };
 }
 
@@ -81,6 +119,9 @@ function normalizeData(parsed: Partial<AdminData> | null | undefined): AdminData
     apiLogs: Array.isArray(parsed?.apiLogs)
       ? (parsed!.apiLogs as ApiLogRecord[])
       : [],
+    notifications: Array.isArray(parsed?.notifications)
+      ? (parsed!.notifications as NotificationRecord[])
+      : [],
     users: Array.isArray(parsed?.users) ? (parsed!.users as UserRecord[]) : [],
     otps: Array.isArray(parsed?.otps) ? (parsed!.otps as OtpRecord[]) : [],
     bankAccounts: Array.isArray(parsed?.bankAccounts)
@@ -94,6 +135,12 @@ function normalizeData(parsed: Partial<AdminData> | null | undefined): AdminData
       : [],
     marketplaceOffers: Array.isArray(parsed?.marketplaceOffers)
       ? (parsed!.marketplaceOffers as MarketplaceOfferRecord[])
+      : [],
+    marketplaceTransfers: Array.isArray(parsed?.marketplaceTransfers)
+      ? (parsed!.marketplaceTransfers as MarketplaceTransferRecord[])
+      : [],
+    referrals: Array.isArray(parsed?.referrals)
+      ? (parsed!.referrals as ReferralRecord[]).map(normalizeReferralRecord)
       : [],
   };
 }
@@ -124,6 +171,7 @@ async function writeFileDataUnsafe(data: AdminData) {
 }
 
 function warnStorageFallback(error: unknown) {
+  databaseFallbackUntil = Date.now() + adminDatabaseFallbackCooldownMs();
   if (storageWarningShown) return;
   storageWarningShown = true;
   console.warn(
@@ -132,14 +180,58 @@ function warnStorageFallback(error: unknown) {
   );
 }
 
+function databaseFallbackActive() {
+  return Date.now() < databaseFallbackUntil;
+}
+
+function adminDatabaseTimeoutMs() {
+  const configured = Number(process.env.NT_ADMIN_DB_TIMEOUT_MS ?? "");
+  return Number.isFinite(configured) && configured > 0
+    ? configured
+    : DEFAULT_ADMIN_DB_TIMEOUT_MS;
+}
+
+function adminDatabaseFallbackCooldownMs() {
+  const configured = Number(process.env.NT_ADMIN_DB_FALLBACK_COOLDOWN_MS ?? "");
+  return Number.isFinite(configured) && configured > 0
+    ? configured
+    : DEFAULT_ADMIN_DB_FALLBACK_COOLDOWN_MS;
+}
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`${label}_timeout`)), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 async function readDataUnsafe(): Promise<AdminData> {
-  if (isDatabaseBackedAdminStoreEnabled()) {
+  if (isDatabaseBackedAdminStoreEnabled() && !databaseFallbackActive()) {
     try {
-      const dbData = await readAdminStateFromDatabase();
+      const timeoutMs = adminDatabaseTimeoutMs();
+      const dbData = await withTimeout(
+        readAdminStateFromDatabase(),
+        timeoutMs,
+        "read_admin_db"
+      );
       if (dbData) return normalizeData(dbData);
 
       const fileData = await readFileDataUnsafe();
-      await writeAdminStateToDatabase(fileData);
+      await withTimeout(
+        writeAdminStateToDatabase(fileData),
+        timeoutMs,
+        "sync_admin_db"
+      );
       return fileData;
     } catch (error) {
       warnStorageFallback(error);
@@ -149,10 +241,136 @@ async function readDataUnsafe(): Promise<AdminData> {
   return readFileDataUnsafe();
 }
 
+function notificationWebhookUrl() {
+  return (
+    process.env.NT_NOTIFICATION_WEBHOOK_URL ||
+    process.env.NT_EXTERNAL_NOTIFICATION_WEBHOOK_URL ||
+    ""
+  ).trim();
+}
+
+function notificationWebhookSecret() {
+  return (
+    process.env.NT_NOTIFICATION_WEBHOOK_SECRET ||
+    process.env.NT_EXTERNAL_NOTIFICATION_WEBHOOK_SECRET ||
+    ""
+  ).trim();
+}
+
+function notificationDeliveryDisabled() {
+  return process.env.NT_NOTIFICATION_DELIVERY_DISABLED === "1";
+}
+
+function notificationDeliveryTimeoutMs() {
+  const configured = Number(process.env.NT_NOTIFICATION_DELIVERY_TIMEOUT_MS ?? "");
+  return Number.isFinite(configured) && configured > 0 ? configured : 2500;
+}
+
+function signWebhookBody(body: string, secret: string) {
+  return `sha256=${crypto.createHmac("sha256", secret).update(body).digest("hex")}`;
+}
+
+async function postNotificationWebhook(notification: NotificationRecord) {
+  const url = notificationWebhookUrl();
+  if (!url) return { status: "skipped" as const };
+
+  const body = JSON.stringify({
+    event: "notification.created",
+    sentAt: new Date().toISOString(),
+    notification,
+  });
+  const secret = notificationWebhookSecret();
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    notificationDeliveryTimeoutMs()
+  );
+
+  try {
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+      "x-nairatag-event": "notification.created",
+      "x-nairatag-notification-id": notification.id,
+    };
+    if (secret) headers["x-nairatag-signature"] = signWebhookBody(body, secret);
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body,
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      return {
+        status: "failed" as const,
+        error: `webhook_http_${response.status}`,
+      };
+    }
+
+    return { status: "delivered" as const };
+  } catch (error) {
+    return {
+      status: "failed" as const,
+      error: error instanceof Error ? error.message : "webhook_failed",
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function deliverQueuedNotificationsUnsafe(data: AdminData) {
+  if (notificationDeliveryDisabled()) return;
+
+  const candidates = data.notifications
+    .filter((notification) => {
+      const attempts = notification.deliveryAttempts ?? 0;
+      return (
+        (notification.deliveryStatus === "queued" ||
+          notification.deliveryStatus === "failed") &&
+        attempts < 3
+      );
+    })
+    .slice(0, 10);
+
+  if (candidates.length === 0) return;
+
+  if (!notificationWebhookUrl()) {
+    for (const notification of candidates) {
+      notification.deliveryStatus = "skipped";
+      notification.deliveryError = undefined;
+    }
+    return;
+  }
+
+  for (const notification of candidates) {
+    const nowIso = new Date().toISOString();
+    notification.deliveryAttempts = (notification.deliveryAttempts ?? 0) + 1;
+    notification.lastDeliveryAttemptAt = nowIso;
+
+    const result = await postNotificationWebhook(notification);
+    if (result.status === "delivered") {
+      notification.deliveryStatus = "delivered";
+      notification.deliveredAt = new Date().toISOString();
+      notification.deliveryError = undefined;
+    } else {
+      notification.deliveryStatus = result.status;
+      notification.deliveryError = "error" in result ? result.error : undefined;
+    }
+  }
+}
+
 async function writeDataUnsafe(data: AdminData) {
-  if (isDatabaseBackedAdminStoreEnabled()) {
+  await deliverQueuedNotificationsUnsafe(data);
+
+  if (isDatabaseBackedAdminStoreEnabled() && !databaseFallbackActive()) {
     try {
-      await writeAdminStateToDatabase(data);
+      await withTimeout(
+        writeAdminStateToDatabase(data),
+        adminDatabaseTimeoutMs(),
+        "write_admin_db"
+      );
+      return;
     } catch (error) {
       warnStorageFallback(error);
     }
@@ -257,6 +475,7 @@ export async function claimHandle({
     };
 
     data.claims.unshift(record);
+
     await writeDataUnsafe(data);
     return record;
   });
@@ -278,6 +497,123 @@ export async function logApiUsage(entry: Omit<ApiLogRecord, "id" | "ts">) {
 
     await writeDataUnsafe(data);
     return record;
+  });
+}
+
+function addNotificationUnsafe(
+  data: AdminData,
+  entry: {
+    userId?: string;
+    handle?: string;
+    type: NotificationType;
+    title: string;
+    body: string;
+    priority?: NotificationPriority;
+    metadata?: NotificationRecord["metadata"];
+  }
+) {
+  const record: NotificationRecord = {
+    id: newId("ntf"),
+    userId: entry.userId,
+    handle: entry.handle,
+    type: entry.type,
+    title: entry.title,
+    body: entry.body,
+    priority: entry.priority ?? "normal",
+    status: "unread",
+    createdAt: new Date().toISOString(),
+    deliveryChannels: ["in_app", "webhook"],
+    deliveryStatus: "queued",
+    deliveryAttempts: 0,
+    metadata: entry.metadata,
+  };
+
+  data.notifications.unshift(record);
+  if (data.notifications.length > MAX_NOTIFICATIONS) {
+    data.notifications = data.notifications.slice(0, MAX_NOTIFICATIONS);
+  }
+  return record;
+}
+
+function notificationAudienceMatches(
+  notification: NotificationRecord,
+  userId?: string,
+  handle?: string
+) {
+  if (userId) return notification.userId === userId;
+  if (handle) return notification.handle === handle;
+  return false;
+}
+
+export async function createNotification(
+  entry: Parameters<typeof addNotificationUnsafe>[1]
+) {
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const record = addNotificationUnsafe(data, entry);
+    await writeDataUnsafe(data);
+    return record;
+  });
+}
+
+export async function listNotifications({
+  limit = 25,
+  offset = 0,
+  userId,
+  handle,
+  unreadOnly = false,
+}: {
+  limit?: number;
+  offset?: number;
+  userId?: string;
+  handle?: string;
+  unreadOnly?: boolean;
+}) {
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const normalizedHandle = handle ? normalizeHandle(handle) : undefined;
+    const filtered = data.notifications.filter((notification) => {
+      if (userId || normalizedHandle) {
+        if (!notificationAudienceMatches(notification, userId, normalizedHandle)) {
+          return false;
+        }
+      }
+      if (unreadOnly && notification.status !== "unread") return false;
+      return true;
+    });
+
+    return {
+      total: filtered.length,
+      unread: filtered.filter((notification) => notification.status === "unread").length,
+      items: filtered.slice(offset, offset + limit),
+    };
+  });
+}
+
+export async function markNotificationsRead({
+  userId,
+  notificationIds,
+}: {
+  userId: string;
+  notificationIds?: string[];
+}) {
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const ids = notificationIds ? new Set(notificationIds) : null;
+    const nowIso = new Date().toISOString();
+    let count = 0;
+
+    for (const notification of data.notifications) {
+      if (notification.userId !== userId) continue;
+      if (ids && !ids.has(notification.id)) continue;
+      if (notification.status === "read") continue;
+      notification.status = "read";
+      notification.readAt = nowIso;
+      count += 1;
+    }
+
+    await writeDataUnsafe(data);
+    return { count };
   });
 }
 
@@ -312,6 +648,13 @@ function latestBankAccountForUser(
   );
 }
 
+function findUserByPhone(data: AdminData, phone: string | undefined) {
+  if (!phone) return null;
+  const normalizedPhone = normalizePhone(phone);
+  if (!normalizedPhone) return null;
+  return data.users.find((user) => user.phone === normalizedPhone) ?? null;
+}
+
 function buildHandleReputation(
   data: AdminData,
   claim: ClaimRecord | null
@@ -319,7 +662,9 @@ function buildHandleReputation(
   if (!claim) return null;
 
   const transactions = data.transactions.filter(
-    (transaction) => transaction.handle === claim.handle
+    (transaction) =>
+      transaction.handle === claim.handle &&
+      Date.parse(transaction.recordedAt) >= Date.parse(claim.claimedAt)
   );
   const settledTransactions = transactions.filter(
     (transaction) => transaction.status === "settled"
@@ -444,6 +789,17 @@ function getListingOfferStats(
   };
 }
 
+function latestTransferForListing(
+  data: AdminData,
+  listingId: string
+): MarketplaceTransferRecord | null {
+  return (
+    data.marketplaceTransfers
+      .filter((transfer) => transfer.listingId === listingId)
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0] ?? null
+  );
+}
+
 function buildMarketplaceListingView(
   data: AdminData,
   listing: MarketplaceListingRecord
@@ -484,8 +840,274 @@ function buildMarketplaceListingDetail(
     ...summary,
     offers,
     recentTransactions,
+    transfer: latestTransferForListing(data, listing.id),
+    creditProfile: buildCreditProfile(data, summary.claim),
     transferReviewRequired: true,
     reputationTransfersOnSale: false,
+  };
+}
+
+function buildMarketplaceTransferDetail(
+  data: AdminData,
+  transfer: MarketplaceTransferRecord
+): MarketplaceTransferDetail | null {
+  const listing =
+    data.marketplaceListings.find((entry) => entry.id === transfer.listingId) ?? null;
+  const offer =
+    data.marketplaceOffers.find((entry) => entry.id === transfer.offerId) ?? null;
+  if (!listing || !offer) return null;
+
+  const claim = data.claims.find((entry) => entry.handle === transfer.handle) ?? null;
+  const seller = data.users.find((entry) => entry.id === transfer.sellerUserId) ?? null;
+  const buyer =
+    (transfer.buyerUserId
+      ? data.users.find((entry) => entry.id === transfer.buyerUserId) ?? null
+      : null) ?? findUserByPhone(data, transfer.buyerPhone);
+  const buyerBankAccount = latestBankAccountForUser(data, buyer?.id);
+
+  return {
+    ...transfer,
+    listing,
+    offer,
+    claim,
+    seller,
+    buyer,
+    buyerBankAccount,
+    currentReputation: buildHandleReputation(data, claim),
+  };
+}
+
+function ensureMarketplaceTransferForOffer(
+  data: AdminData,
+  listing: MarketplaceListingRecord,
+  offer: MarketplaceOfferRecord,
+  nowIso: string
+): MarketplaceTransferRecord {
+  const existing = data.marketplaceTransfers.find(
+    (transfer) =>
+      transfer.listingId === listing.id &&
+      transfer.offerId === offer.id &&
+      transfer.status !== "rejected"
+  );
+
+  if (existing) {
+    existing.buyerUserId =
+      offer.buyerUserId ?? findUserByPhone(data, offer.buyerPhone)?.id;
+    existing.buyerName = offer.buyerName;
+    existing.buyerPhone = offer.buyerPhone;
+    existing.amount = offer.amount;
+    existing.updatedAt = nowIso;
+    return existing;
+  }
+
+  const buyer = offer.buyerUserId
+    ? data.users.find((user) => user.id === offer.buyerUserId) ?? null
+    : findUserByPhone(data, offer.buyerPhone);
+  const transfer: MarketplaceTransferRecord = {
+    id: newId("transfer"),
+    listingId: listing.id,
+    offerId: offer.id,
+    handle: listing.handle,
+    sellerUserId: listing.sellerUserId,
+    buyerUserId: buyer?.id,
+    buyerName: offer.buyerName,
+    buyerPhone: offer.buyerPhone,
+    amount: offer.amount,
+    status: "pending_review",
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+
+  data.marketplaceTransfers.unshift(transfer);
+  return transfer;
+}
+
+function buildCreditProfile(
+  data: AdminData,
+  claim: ClaimRecord | null
+): CreditProfile | null {
+  if (!claim) return null;
+
+  const reputation = buildHandleReputation(data, claim);
+  if (!reputation) return null;
+
+  const settledVolume = reputation.totalVolume;
+  const settledCount = reputation.settledTransactionCount;
+  const disputedCount = Math.round(reputation.transactionCount * reputation.disputeRate);
+  const activeMonths = Math.max(1, Math.ceil(reputation.accountAgeDays / 30));
+  const monthlyAverageVolume = Math.round(settledVolume / activeMonths);
+  const bankAccount = latestBankAccountForUser(data, claim.userId);
+
+  const paymentHistoryScore = Math.min(
+    260,
+    settledCount * 12 - disputedCount * 24 + (disputedCount === 0 ? 20 : 0)
+  );
+  const volumeScore = Math.min(220, Math.round(monthlyAverageVolume / 20_000) * 18);
+  const tenureScore = Math.min(140, Math.round(reputation.accountAgeDays / 14) * 14);
+  const trustScoreComponent = Math.min(140, Math.round(reputation.trustScore * 1.35));
+  const verificationScore =
+    (claim.verification !== "pending" ? 36 : 0) +
+    (bankAccount?.status === "verified" ? 26 : bankAccount ? 12 : 0);
+  const disputePenalty = Math.min(90, disputedCount * 25);
+
+  const rawScore =
+    300 +
+    paymentHistoryScore +
+    volumeScore +
+    tenureScore +
+    trustScoreComponent +
+    verificationScore -
+    disputePenalty;
+  const score = clamp(rawScore, 300, 850);
+  const riskBand = score >= 720 ? "low" : score >= 580 ? "medium" : "high";
+  const repaymentConfidence = clamp(
+    Math.round(
+      reputation.trustScore * 0.55 +
+        Math.min(25, settledCount * 2) +
+        Math.min(20, activeMonths * 2) -
+        disputedCount * 8
+    ),
+    5,
+    95
+  );
+  const recommendedLimitBase =
+    monthlyAverageVolume * 0.35 +
+    settledVolume * 0.08 +
+    repaymentConfidence * 450 -
+    disputedCount * 12_500;
+  const recommendedLimit = Math.max(0, Math.round(recommendedLimitBase / 1000) * 1000);
+
+  const drivers = [
+    `${settledCount} settled payment${settledCount === 1 ? "" : "s"} recorded`,
+    `${activeMonths} active month${activeMonths === 1 ? "" : "s"} in-system`,
+    bankAccount ? `${bankAccount.bankName} payout destination linked` : "No payout destination linked yet",
+    disputedCount === 0
+      ? "No dispute history on the current ownership window"
+      : `${disputedCount} dispute signal${disputedCount === 1 ? "" : "s"} in current ownership window`,
+  ];
+
+  return {
+    handle: claim.handle,
+    score,
+    riskBand,
+    trustScore: reputation.trustScore,
+    activeMonths,
+    accountAgeDays: reputation.accountAgeDays,
+    settledTransactionCount: settledCount,
+    disputedTransactionCount: disputedCount,
+    totalVolume: settledVolume,
+    monthlyAverageVolume,
+    recommendedLimit,
+    repaymentConfidence,
+    drivers,
+    lastEvaluatedAt: new Date().toISOString(),
+  };
+}
+
+function publicBaseUrl() {
+  return (process.env.NEXT_PUBLIC_APP_URL || process.env.NT_PUBLIC_APP_URL || "")
+    .trim()
+    .replace(/\/+$/, "");
+}
+
+function absoluteOrRelativeUrl(pathname: string) {
+  const base = publicBaseUrl();
+  return base ? `${base}${pathname}` : pathname;
+}
+
+function creditScoreRange(score?: number) {
+  if (!score || score < 700) return undefined;
+  const floor = Math.max(700, Math.floor(score / 50) * 50);
+  return `${floor}-${Math.min(850, floor + 49)}`;
+}
+
+function publicVolumeBucket(totalVolume: number) {
+  if (totalVolume < 100_000) return Math.round(totalVolume / 1_000) * 1_000;
+  if (totalVolume < 1_000_000) return Math.round(totalVolume / 10_000) * 10_000;
+  return Math.round(totalVolume / 100_000) * 100_000;
+}
+
+function buildPublicHandleProfile(
+  data: AdminData,
+  claim: ClaimRecord | null
+): PublicHandleProfile | null {
+  if (!claim) return null;
+
+  const user = claim.userId
+    ? data.users.find((entry) => entry.id === claim.userId) ?? null
+    : null;
+  const bankAccount = latestBankAccountForUser(data, claim.userId);
+  const reputation = buildHandleReputation(data, claim);
+  const creditProfile = buildCreditProfile(data, claim);
+  const activeListing =
+    data.marketplaceListings.find(
+      (listing) => listing.handle === claim.handle && listing.status === "active"
+    ) ?? null;
+  const transactions = data.transactions.filter(
+    (transaction) =>
+      transaction.handle === claim.handle &&
+      Date.parse(transaction.recordedAt) >= Date.parse(claim.claimedAt)
+  );
+  const settledTransactions = transactions.filter(
+    (transaction) => transaction.status === "settled"
+  );
+  const totalVolume = settledTransactions.reduce(
+    (sum, transaction) => sum + transaction.amount,
+    0
+  );
+  const trustScore = reputation?.trustScore ?? (claim.verification === "pending" ? 12 : 48);
+  const stars = Math.round((3.2 + (trustScore / 100) * 1.8) * 10) / 10;
+  const badges = Array.from(
+    new Set([
+      ...(reputation?.badges ?? []),
+      ...(creditProfile?.riskBand === "low" ? ["Low risk"] : []),
+      ...(activeListing ? ["Marketplace seller"] : []),
+    ])
+  );
+  const sharePath = `/h/${claim.handle}`;
+  const payPath = `/pay/${claim.handle}`;
+
+  return {
+    handle: claim.handle,
+    displayName: claim.displayName,
+    bio: activeListing?.sellerNote,
+    location: user?.geo?.city,
+    memberSince: claim.claimedAt,
+    lastActiveAt: reputation?.lastActivityAt,
+    verification: {
+      status: claim.verification,
+      verified: claim.verification !== "pending",
+      verifiedAt: claim.verifiedAt,
+      badges,
+      bankAccountVerified: bankAccount?.status === "verified",
+      bvnVerified: Boolean(user?.bvnLinkedAt),
+    },
+    bank: {
+      name: claim.bank,
+      accountVerified: bankAccount?.status === "verified",
+    },
+    reputation: {
+      trustScore,
+      stars,
+      reviewCount: reputation?.settledTransactionCount ?? 0,
+      riskLevel: creditProfile?.riskBand ?? "unknown",
+      creditScoreRange: creditScoreRange(creditProfile?.score),
+      badges,
+    },
+    publicStats: {
+      transactionCount: transactions.length,
+      settledTransactionCount: settledTransactions.length,
+      totalVolume: publicVolumeBucket(totalVolume),
+      recentTransactionCount30d: reputation?.recentTransactionCount30d ?? 0,
+      chargebackRate: reputation?.disputeRate ?? 0,
+      averageTransactionSize:
+        settledTransactions.length === 0
+          ? 0
+          : Math.round(totalVolume / settledTransactions.length),
+    },
+    shareUrl: absoluteOrRelativeUrl(sharePath),
+    payUrl: absoluteOrRelativeUrl(payPath),
+    qrPayload: absoluteOrRelativeUrl(payPath),
   };
 }
 
@@ -694,6 +1316,27 @@ export async function listClaims({
   });
 }
 
+export async function listPublicHandleSuggestions({ limit = 5 }: { limit?: number } = {}) {
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const cappedLimit = Math.min(12, Math.max(1, limit));
+    const items = data.claims
+      .slice()
+      .sort((a, b) => Date.parse(b.claimedAt) - Date.parse(a.claimedAt))
+      .slice(0, cappedLimit)
+      .map((claim) => ({
+        handle: claim.handle,
+        displayName: claim.displayName,
+        verification: claim.verification,
+      }));
+
+    return {
+      total: data.claims.length,
+      items,
+    };
+  });
+}
+
 export async function listApiLogs({
   limit = 25,
   offset = 0,
@@ -736,6 +1379,23 @@ export function normalizePhone(input: string) {
   return null;
 }
 
+function normalizeEmail(input: string | undefined) {
+  const value = input?.trim().toLowerCase();
+  if (!value) return null;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return null;
+  return value;
+}
+
+function normalizeWalletAddress(input: string | undefined) {
+  const value = input?.trim();
+  if (!value) return null;
+  return value.toLowerCase();
+}
+
+function fallbackPrivyPhone(privyUserId: string) {
+  return `privy:${privyUserId.replace(/[^a-zA-Z0-9:._-]/g, "_")}`;
+}
+
 function otpHash(phone: string, code: string) {
   const secret = process.env.NT_OTP_SECRET || process.env.NT_SESSION_SECRET || "dev_otp_secret_change_me";
   return crypto
@@ -749,6 +1409,41 @@ function safeEqual(a: string, b: string) {
   const bb = Buffer.from(b, "utf8");
   if (aa.length !== bb.length) return false;
   return crypto.timingSafeEqual(aa, bb);
+}
+
+function normalizeReferralCode(input: string) {
+  const raw = input.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!raw) return null;
+  if (raw.length < 6 || raw.length > 16) return null;
+  return raw;
+}
+
+function findUserByReferralCode(data: AdminData, code: string) {
+  const normalized = normalizeReferralCode(code);
+  if (!normalized) return null;
+  return (
+    data.users.find(
+      (user) => normalizeReferralCode(user.referralCode ?? "") === normalized
+    ) ?? null
+  );
+}
+
+function findUserByReferralHandle(data: AdminData, input: string) {
+  const normalized = normalizeHandle(input);
+  if (!isValidHandle(normalized)) return null;
+
+  const claim = data.claims.find((entry) => entry.handle === normalized);
+  if (!claim?.userId) return null;
+
+  return data.users.find((entry) => entry.id === claim.userId) ?? null;
+}
+
+function findUserByReferralIdentifier(data: AdminData, input: string) {
+  return findUserByReferralHandle(data, input) ?? findUserByReferralCode(data, input);
+}
+
+function referralTotalPoints(referral: ReferralRecord) {
+  return (referral.signupPoints ?? 0) + (referral.conversionPoints ?? 0);
 }
 
 function generateOtpCode() {
@@ -844,6 +1539,18 @@ export async function requestPhoneOtp({
 
     data.otps.unshift(record);
     data.otps = data.otps.slice(0, 5000);
+    const user = data.users.find((entry) => entry.phone === normalized);
+    addNotificationUnsafe(data, {
+      userId: user?.id,
+      type: "otp_requested",
+      title: "OTP requested",
+      body: "A sign-in code was requested for this phone number.",
+      priority: "low",
+      metadata: {
+        phone: normalized,
+        otpId: record.id,
+      },
+    });
     await writeDataUnsafe(data);
 
     return {
@@ -903,6 +1610,92 @@ export async function verifyPhoneOtp({
     } else {
       user.phoneVerifiedAt = user.phoneVerifiedAt || now.toISOString();
       user.geo = user.geo || (ip ? { ip } : undefined);
+    }
+
+    await writeDataUnsafe(data);
+    return user;
+  });
+}
+
+export async function upsertPrivyUser({
+  privyUserId,
+  phone,
+  email,
+  walletAddress,
+  fullName,
+  ip,
+}: {
+  privyUserId: string;
+  phone?: string;
+  email?: string;
+  walletAddress?: string;
+  fullName?: string;
+  ip?: string;
+}) {
+  const cleanPrivyUserId = privyUserId.trim();
+  if (!cleanPrivyUserId) throw new Error("invalid_privy_user");
+
+  const normalizedPhone = phone ? normalizePhone(phone) : null;
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedWalletAddress = normalizeWalletAddress(walletAddress);
+  const cleanName = fullName?.trim();
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const nowIso = new Date().toISOString();
+
+    let user =
+      data.users.find((entry) => entry.privyUserId === cleanPrivyUserId) ??
+      null;
+
+    if (!user && normalizedPhone) {
+      user = data.users.find((entry) => entry.phone === normalizedPhone) ?? null;
+    }
+
+    if (!user && normalizedEmail) {
+      user =
+        data.users.find(
+          (entry) => entry.email?.toLowerCase() === normalizedEmail
+        ) ?? null;
+    }
+
+    if (!user && normalizedWalletAddress) {
+      user =
+        data.users.find(
+          (entry) =>
+            entry.walletAddress?.toLowerCase() === normalizedWalletAddress
+        ) ?? null;
+    }
+
+    if (!user) {
+      user = {
+        id: newId("usr"),
+        phone: normalizedPhone ?? fallbackPrivyPhone(cleanPrivyUserId),
+        createdAt: nowIso,
+        phoneVerifiedAt: nowIso,
+        privyUserId: cleanPrivyUserId,
+        privyLinkedAt: nowIso,
+        email: normalizedEmail ?? undefined,
+        walletAddress: normalizedWalletAddress ?? undefined,
+        fullName: cleanName || undefined,
+        geo: ip ? { ip } : undefined,
+      };
+      data.users.unshift(user);
+    } else {
+      user.privyUserId = cleanPrivyUserId;
+      user.privyLinkedAt = user.privyLinkedAt || nowIso;
+      user.phoneVerifiedAt = user.phoneVerifiedAt || nowIso;
+      user.geo = user.geo || (ip ? { ip } : undefined);
+      if (normalizedPhone && user.phone !== normalizedPhone) {
+        const currentUserId = user.id;
+        const phoneOwner = data.users.find(
+          (entry) => entry.id !== currentUserId && entry.phone === normalizedPhone
+        );
+        if (!phoneOwner) user.phone = normalizedPhone;
+      }
+      if (normalizedEmail) user.email = normalizedEmail;
+      if (normalizedWalletAddress) user.walletAddress = normalizedWalletAddress;
+      if (cleanName && !user.fullName) user.fullName = cleanName;
     }
 
     await writeDataUnsafe(data);
@@ -971,6 +1764,91 @@ export async function getPaymentDestinationByHandle(handle: string) {
   });
 }
 
+function addTransactionNotificationsUnsafe({
+  data,
+  claim,
+  transaction,
+  previousStatus,
+}: {
+  data: AdminData;
+  claim: ClaimRecord;
+  transaction: TransactionRecord;
+  previousStatus?: TransactionRecord["status"];
+}) {
+  if (previousStatus === transaction.status) return;
+
+  const amountLabel = transaction.amount.toLocaleString();
+  if (transaction.status === "settled") {
+    addNotificationUnsafe(data, {
+      userId: claim.userId,
+      handle: claim.handle,
+      type: "payment_received",
+      title: "Payment received",
+      body: `${transaction.senderName || "A sender"} paid NGN ${amountLabel} to \u20A6${claim.handle}.`,
+      metadata: {
+        transactionId: transaction.id,
+        amount: transaction.amount,
+        channel: transaction.channel,
+      },
+    });
+  } else if (transaction.status === "failed") {
+    addNotificationUnsafe(data, {
+      userId: claim.userId,
+      handle: claim.handle,
+      type: "payment_failed",
+      title: "Payment failed",
+      body: `A NGN ${amountLabel} payment to \u20A6${claim.handle} failed.`,
+      priority: "high",
+      metadata: {
+        transactionId: transaction.id,
+        amount: transaction.amount,
+        channel: transaction.channel,
+      },
+    });
+  } else if (transaction.status === "disputed") {
+    addNotificationUnsafe(data, {
+      userId: claim.userId,
+      handle: claim.handle,
+      type: "payment_disputed",
+      title: "Payment disputed",
+      body: `A NGN ${amountLabel} payment to \u20A6${claim.handle} has a dispute signal.`,
+      priority: "high",
+      metadata: {
+        transactionId: transaction.id,
+        amount: transaction.amount,
+        channel: transaction.channel,
+      },
+    });
+    addNotificationUnsafe(data, {
+      handle: claim.handle,
+      type: "suspicious_activity",
+      title: "Dispute review needed",
+      body: `Review disputed payment ${transaction.id} for \u20A6${claim.handle}.`,
+      priority: "high",
+      metadata: {
+        transactionId: transaction.id,
+        amount: transaction.amount,
+      },
+    });
+  }
+
+  const highValueThreshold = Number(process.env.NT_HIGH_VALUE_REVIEW_AMOUNT ?? "500000");
+  if (transaction.amount >= highValueThreshold || transaction.status === "pending") {
+    addNotificationUnsafe(data, {
+      handle: claim.handle,
+      type: "admin_review_required",
+      title: "Payment review signal",
+      body: `${transaction.status === "pending" ? "Pending" : "High-value"} payment of NGN ${amountLabel} for \u20A6${claim.handle}.`,
+      priority: transaction.amount >= highValueThreshold ? "high" : "normal",
+      metadata: {
+        transactionId: transaction.id,
+        amount: transaction.amount,
+        status: transaction.status,
+      },
+    });
+  }
+}
+
 export async function recordTransaction({
   handle,
   amount,
@@ -999,6 +1877,7 @@ export async function recordTransaction({
     ? normalizeHandle(counterpartyHandle)
     : undefined;
   const normalizedAmount = Math.round(amount);
+  const normalizedReference = reference?.trim() || undefined;
 
   if (!normalizedHandle) throw new Error("missing_handle");
   if (!isValidHandle(normalizedHandle)) throw new Error("invalid_handle");
@@ -1012,6 +1891,44 @@ export async function recordTransaction({
     if (!claim) throw new Error("handle_not_found");
 
     const nowIso = new Date().toISOString();
+    const existingTransaction = normalizedReference
+      ? data.transactions.find(
+          (entry) =>
+            entry.handle === normalizedHandle && entry.reference === normalizedReference
+        )
+      : null;
+
+    if (existingTransaction) {
+      const previousStatus = existingTransaction.status;
+      existingTransaction.amount = normalizedAmount;
+      existingTransaction.status = status;
+      existingTransaction.channel = channel;
+      existingTransaction.counterpartyHandle = normalizedCounterparty;
+      existingTransaction.note = note?.trim() || existingTransaction.note;
+      existingTransaction.senderName =
+        senderName?.trim() || existingTransaction.senderName;
+      existingTransaction.senderPhone =
+        senderPhone?.trim() || existingTransaction.senderPhone;
+      existingTransaction.settledAt =
+        status === "settled" ? existingTransaction.settledAt ?? nowIso : undefined;
+      existingTransaction.disputedAt =
+        status === "disputed" ? existingTransaction.disputedAt ?? nowIso : undefined;
+      existingTransaction.metadata = {
+        ...existingTransaction.metadata,
+        ...metadata,
+      };
+
+      addTransactionNotificationsUnsafe({
+        data,
+        claim,
+        transaction: existingTransaction,
+        previousStatus,
+      });
+
+      await writeDataUnsafe(data);
+      return existingTransaction;
+    }
+
     const transaction: TransactionRecord = {
       id: newId("txn"),
       handle: normalizedHandle,
@@ -1021,7 +1938,7 @@ export async function recordTransaction({
       currency: "NGN",
       channel,
       status,
-      reference: reference?.trim() || undefined,
+      reference: normalizedReference,
       note: note?.trim() || undefined,
       senderName: senderName?.trim() || undefined,
       senderPhone: senderPhone?.trim() || undefined,
@@ -1035,6 +1952,8 @@ export async function recordTransaction({
     if (data.transactions.length > 20_000) {
       data.transactions = data.transactions.slice(0, 20_000);
     }
+
+    addTransactionNotificationsUnsafe({ data, claim, transaction });
 
     await writeDataUnsafe(data);
     return transaction;
@@ -1090,6 +2009,28 @@ export async function getHandleReputation(handle: string) {
   });
 }
 
+export async function getCreditProfileForHandle(handle: string) {
+  const normalized = normalizeHandle(handle);
+  if (!normalized) return null;
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const claim = data.claims.find((entry) => entry.handle === normalized) ?? null;
+    return buildCreditProfile(data, claim);
+  });
+}
+
+export async function getPublicHandleProfile(handle: string) {
+  const normalized = normalizeHandle(handle);
+  if (!normalized) return null;
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const claim = data.claims.find((entry) => entry.handle === normalized) ?? null;
+    return buildPublicHandleProfile(data, claim);
+  });
+}
+
 export async function getHandleReputations(handles: string[]) {
   const normalizedHandles = Array.from(
     new Set(handles.map((handle) => normalizeHandle(handle)).filter(Boolean))
@@ -1115,6 +2056,12 @@ export async function getMarketplaceStats(): Promise<MarketplaceStats> {
     const underReviewListings = data.marketplaceListings.filter(
       (listing) => listing.status === "under_review"
     ).length;
+    const pendingTransfers = data.marketplaceTransfers.filter(
+      (transfer) => transfer.status === "pending_review"
+    ).length;
+    const approvedTransfers = data.marketplaceTransfers.filter(
+      (transfer) => transfer.status === "approved"
+    ).length;
     const pendingOffers = data.marketplaceOffers.filter(
       (offer) => offer.status === "pending"
     );
@@ -1137,6 +2084,8 @@ export async function getMarketplaceStats(): Promise<MarketplaceStats> {
     return {
       liveListings: liveListings.length,
       underReviewListings,
+      pendingTransfers,
+      approvedTransfers,
       totalOffers: data.marketplaceOffers.length,
       pendingOffers: pendingOffers.length,
       averageAskAmount,
@@ -1214,12 +2163,236 @@ export async function getMarketplaceDashboardForUser(userId?: string) {
         ) ?? null
       : null;
     const listingDetail = listing ? buildMarketplaceListingDetail(data, listing) : null;
+    const user = userId ? data.users.find((entry) => entry.id === userId) ?? null : null;
+    const transfers = userId
+      ? data.marketplaceTransfers
+          .filter(
+            (transfer) =>
+              transfer.sellerUserId === userId ||
+              transfer.buyerUserId === userId ||
+              transfer.buyerPhone === user?.phone
+          )
+          .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+          .map((transfer) => buildMarketplaceTransferDetail(data, transfer))
+          .filter(Boolean) as MarketplaceTransferDetail[]
+      : [];
 
     return {
       eligibility: buildMarketplaceEligibility(data, userId),
       claim,
       bankAccount,
       listing: listingDetail,
+      creditProfile: buildCreditProfile(data, claim),
+      transfers,
+      notifications: userId
+        ? data.notifications
+            .filter((notification) =>
+              notificationAudienceMatches(notification, userId, claim?.handle)
+            )
+            .slice(0, 8)
+        : [],
+    };
+  });
+}
+
+export async function applyReferralCodeForUser({
+  userId,
+  referralCode,
+  source = "link",
+}: {
+  userId: string;
+  referralCode: string;
+  source?: ReferralSource;
+}) {
+  const normalizedHandle = normalizeHandle(referralCode);
+  const normalizedCode = normalizeReferralCode(referralCode);
+  const referralIdentifier =
+    normalizedHandle && isValidHandle(normalizedHandle)
+      ? normalizedHandle
+      : normalizedCode;
+
+  if (!referralIdentifier) {
+    return { applied: false as const, reason: "invalid_code" as const };
+  }
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const user = data.users.find((entry) => entry.id === userId) ?? null;
+    if (!user) throw new Error("user_not_found");
+
+    if (user.referredByUserId) {
+      return { applied: false as const, reason: "already_referred" as const };
+    }
+
+    const referrer = findUserByReferralIdentifier(data, referralIdentifier);
+    if (!referrer) {
+      return { applied: false as const, reason: "unknown_code" as const };
+    }
+    if (referrer.id === userId) {
+      return { applied: false as const, reason: "self_referral" as const };
+    }
+
+    const nowIso = new Date().toISOString();
+    user.referredByUserId = referrer.id;
+    user.referredAt = nowIso;
+
+    const existing = data.referrals.find((entry) => entry.referredUserId === userId);
+    const record: ReferralRecord = existing ?? {
+      id: newId("ref"),
+      referrerUserId: referrer.id,
+      referredUserId: userId,
+      referralCode: referralIdentifier,
+      source,
+      createdAt: nowIso,
+      signupPoints: REFERRAL_SIGNUP_POINTS,
+      conversionPoints: 0,
+    };
+    if (!existing) {
+      data.referrals.unshift(record);
+      const referrerClaim =
+        data.claims.find((entry) => entry.userId === referrer.id) ?? null;
+      addNotificationUnsafe(data, {
+        userId: referrer.id,
+        handle: referrerClaim?.handle,
+        type: "referral_signup",
+        title: `New referral: +${REFERRAL_SIGNUP_POINTS} points`,
+        body: "Someone signed up with your username referral link.",
+        metadata: {
+          referralId: record.id,
+          referredUserId: userId,
+          referralCode: referralIdentifier,
+          points: REFERRAL_SIGNUP_POINTS,
+          totalReferralPoints: referralTotalPoints(record),
+        },
+      });
+    }
+
+    await writeDataUnsafe(data);
+    return { applied: true as const, reason: "applied" as const, referral: record };
+  });
+}
+
+export async function getReferralDashboardForUser(userId: string) {
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const user = data.users.find((entry) => entry.id === userId) ?? null;
+    if (!user) throw new Error("user_not_found");
+
+    const userClaim = data.claims.find((entry) => entry.userId === userId) ?? null;
+    const referralHandle = userClaim?.handle ?? null;
+    const referralUrl = referralHandle
+      ? absoluteOrRelativeUrl(`/r/${referralHandle}`)
+      : "";
+
+    const referrals = data.referrals
+      .filter((entry) => entry.referrerUserId === userId)
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+    const convertedReferrals = referrals.filter((entry) => Boolean(entry.convertedAt))
+      .length;
+    const referralPoints = referrals.reduce(
+      (sum, entry) => sum + referralTotalPoints(entry),
+      0
+    );
+    const pendingConversionPoints =
+      referrals.filter((entry) => !entry.convertedAt).length *
+      REFERRAL_CONVERSION_POINTS;
+
+    const recent = referrals.slice(0, 8).map((entry) => {
+      const referredUser =
+        data.users.find((u) => u.id === entry.referredUserId) ?? null;
+      const referredClaim =
+        data.claims.find((c) => c.userId === entry.referredUserId) ?? null;
+      return {
+        id: entry.id,
+        createdAt: entry.createdAt,
+        convertedAt: entry.convertedAt,
+        points: referralTotalPoints(entry),
+        signupPoints: entry.signupPoints ?? 0,
+        conversionPoints: entry.conversionPoints ?? 0,
+        referredName: referredUser?.fullName ?? null,
+        referredHandle: referredClaim?.handle ?? null,
+      };
+    });
+
+    return {
+      referralCode: referralHandle ?? "",
+      referralHandle,
+      referralUrl,
+      requiresHandle: !referralHandle,
+      totalReferrals: referrals.length,
+      convertedReferrals,
+      referralPoints,
+      pendingConversionPoints,
+      signupPointsPerReferral: REFERRAL_SIGNUP_POINTS,
+      conversionPointsPerReferral: REFERRAL_CONVERSION_POINTS,
+      recent,
+    };
+  });
+}
+
+export async function listReferrals({
+  limit = 25,
+  offset = 0,
+  q,
+}: {
+  limit?: number;
+  offset?: number;
+  q?: string;
+}) {
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const query = q ? q.trim().toLowerCase() : "";
+
+    const filtered = query
+      ? data.referrals.filter((referral) => {
+          const referrer = data.users.find((u) => u.id === referral.referrerUserId);
+          const referred = data.users.find((u) => u.id === referral.referredUserId);
+          const referrerClaim = referrer
+            ? data.claims.find((c) => c.userId === referrer.id)
+            : null;
+          const referredClaim = referred
+            ? data.claims.find((c) => c.userId === referred.id)
+            : null;
+          return (
+            referral.referralCode.toLowerCase().includes(query) ||
+            (referrer?.phone ?? "").toLowerCase().includes(query) ||
+            (referrer?.fullName ?? "").toLowerCase().includes(query) ||
+            (referred?.phone ?? "").toLowerCase().includes(query) ||
+            (referred?.fullName ?? "").toLowerCase().includes(query) ||
+            (referrerClaim?.handle ?? "").includes(query) ||
+            (referredClaim?.handle ?? "").includes(query)
+          );
+        })
+      : data.referrals;
+
+    const items = filtered
+      .slice()
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+      .map((referral) => {
+        const referrer = data.users.find((u) => u.id === referral.referrerUserId) ?? null;
+        const referred = data.users.find((u) => u.id === referral.referredUserId) ?? null;
+        const referrerClaim = referrer
+          ? data.claims.find((c) => c.userId === referrer.id) ?? null
+          : null;
+        const referredClaim = referred
+          ? data.claims.find((c) => c.userId === referred.id) ?? null
+          : null;
+
+        return {
+          ...referral,
+          points: referralTotalPoints(referral),
+          signupPoints: referral.signupPoints ?? 0,
+          conversionPoints: referral.conversionPoints ?? 0,
+          referrer,
+          referred,
+          referrerHandle: referrerClaim?.handle ?? null,
+          referredHandle: referredClaim?.handle ?? null,
+        };
+      });
+
+    return {
+      total: items.length,
+      items: items.slice(offset, offset + limit),
     };
   });
 }
@@ -1438,6 +2611,18 @@ export async function submitMarketplaceOffer({
       existingPendingOffer.amount = normalizedAmount;
       existingPendingOffer.note = note?.trim() || undefined;
       existingPendingOffer.updatedAt = nowIso;
+      addNotificationUnsafe(data, {
+        userId: listing.sellerUserId,
+        handle: listing.handle,
+        type: "marketplace_offer_submitted",
+        title: "Offer updated",
+        body: `${buyerName.trim()} updated an offer on \u20A6${listing.handle} to NGN ${normalizedAmount.toLocaleString()}.`,
+        metadata: {
+          listingId: listing.id,
+          offerId: existingPendingOffer.id,
+          amount: normalizedAmount,
+        },
+      });
       await writeDataUnsafe(data);
       return {
         listing: buildMarketplaceListingDetail(data, listing),
@@ -1460,6 +2645,18 @@ export async function submitMarketplaceOffer({
     };
 
     data.marketplaceOffers.unshift(offer);
+    addNotificationUnsafe(data, {
+      userId: listing.sellerUserId,
+      handle: listing.handle,
+      type: "marketplace_offer_submitted",
+      title: "New marketplace offer",
+      body: `${offer.buyerName} offered NGN ${offer.amount.toLocaleString()} for \u20A6${listing.handle}.`,
+      metadata: {
+        listingId: listing.id,
+        offerId: offer.id,
+        amount: offer.amount,
+      },
+    });
     await writeDataUnsafe(data);
 
     return {
@@ -1490,6 +2687,7 @@ export async function respondToMarketplaceOffer({
     if (offer.status !== "pending") throw new Error("offer_not_pending");
 
     const nowIso = new Date().toISOString();
+    let transfer: MarketplaceTransferRecord | null = null;
     if (action === "accept") {
       offer.status = "accepted";
       offer.updatedAt = nowIso;
@@ -1497,6 +2695,33 @@ export async function respondToMarketplaceOffer({
       listing.status = "under_review";
       listing.reviewStartedAt = nowIso;
       listing.updatedAt = nowIso;
+      transfer = ensureMarketplaceTransferForOffer(data, listing, offer, nowIso);
+      addNotificationUnsafe(data, {
+        userId: offer.buyerUserId,
+        handle: listing.handle,
+        type: "marketplace_offer_accepted",
+        title: "Offer accepted",
+        body: `Your NGN ${offer.amount.toLocaleString()} offer for \u20A6${listing.handle} was accepted and moved to transfer review.`,
+        metadata: {
+          listingId: listing.id,
+          offerId: offer.id,
+          transferId: transfer.id,
+          buyerPhone: offer.buyerPhone,
+        },
+      });
+      addNotificationUnsafe(data, {
+        handle: listing.handle,
+        type: "admin_review_required",
+        title: "Transfer review opened",
+        body: `Review accepted offer for \u20A6${listing.handle} before ownership changes.`,
+        priority: "high",
+        metadata: {
+          listingId: listing.id,
+          offerId: offer.id,
+          transferId: transfer.id,
+          amount: offer.amount,
+        },
+      });
 
       for (const otherOffer of data.marketplaceOffers) {
         if (
@@ -1507,19 +2732,220 @@ export async function respondToMarketplaceOffer({
           otherOffer.status = "rejected";
           otherOffer.updatedAt = nowIso;
           otherOffer.respondedAt = nowIso;
+          addNotificationUnsafe(data, {
+            userId: otherOffer.buyerUserId,
+            handle: listing.handle,
+            type: "marketplace_offer_rejected",
+            title: "Offer closed",
+            body: `Another offer was accepted for \u20A6${listing.handle}, so your pending offer was closed.`,
+            metadata: {
+              listingId: listing.id,
+              offerId: otherOffer.id,
+              buyerPhone: otherOffer.buyerPhone,
+            },
+          });
         }
       }
     } else {
       offer.status = "rejected";
       offer.updatedAt = nowIso;
       offer.respondedAt = nowIso;
+      addNotificationUnsafe(data, {
+        userId: offer.buyerUserId,
+        handle: listing.handle,
+        type: "marketplace_offer_rejected",
+        title: "Offer rejected",
+        body: `Your offer for \u20A6${listing.handle} was rejected.`,
+        metadata: {
+          listingId: listing.id,
+          offerId: offer.id,
+          buyerPhone: offer.buyerPhone,
+        },
+      });
     }
 
     await writeDataUnsafe(data);
     return {
       listing: buildMarketplaceListingDetail(data, listing),
       offer,
+      transfer: transfer ? buildMarketplaceTransferDetail(data, transfer) : null,
     };
+  });
+}
+
+export async function listMarketplaceTransfers({
+  limit = 25,
+  offset = 0,
+  status,
+  userId,
+}: {
+  limit?: number;
+  offset?: number;
+  status?: MarketplaceTransferStatus | MarketplaceTransferStatus[];
+  userId?: string;
+}) {
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const statuses = Array.isArray(status)
+      ? new Set(status)
+      : status
+        ? new Set([status])
+        : null;
+    const user = userId ? data.users.find((entry) => entry.id === userId) ?? null : null;
+    const filtered = data.marketplaceTransfers
+      .filter((transfer) => {
+        if (statuses && !statuses.has(transfer.status)) return false;
+        if (!userId) return true;
+        return (
+          transfer.sellerUserId === userId ||
+          transfer.buyerUserId === userId ||
+          transfer.buyerPhone === user?.phone
+        );
+      })
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+    const items = filtered
+      .map((transfer) => buildMarketplaceTransferDetail(data, transfer))
+      .filter(Boolean) as MarketplaceTransferDetail[];
+
+    return {
+      total: items.length,
+      items: items.slice(offset, offset + limit),
+    };
+  });
+}
+
+export async function reviewMarketplaceTransfer({
+  transferId,
+  action,
+  reviewNote,
+}: {
+  transferId: string;
+  action: "approve" | "reject";
+  reviewNote?: string;
+}) {
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const transfer = data.marketplaceTransfers.find((entry) => entry.id === transferId);
+    if (!transfer) throw new Error("transfer_not_found");
+    if (transfer.status !== "pending_review") throw new Error("transfer_not_pending");
+
+    const listing = data.marketplaceListings.find(
+      (entry) => entry.id === transfer.listingId
+    );
+    if (!listing) throw new Error("listing_not_found");
+    if (listing.sellerUserId !== transfer.sellerUserId) {
+      throw new Error("seller_ownership_mismatch");
+    }
+
+    const offer = data.marketplaceOffers.find((entry) => entry.id === transfer.offerId);
+    if (!offer) throw new Error("offer_not_found");
+    if (offer.listingId !== listing.id) throw new Error("offer_listing_mismatch");
+
+    const nowIso = new Date().toISOString();
+    transfer.updatedAt = nowIso;
+    transfer.reviewedAt = nowIso;
+    transfer.reviewNote = reviewNote?.trim() || undefined;
+
+    if (action === "approve") {
+      const claim = data.claims.find((entry) => entry.handle === transfer.handle);
+      if (!claim) throw new Error("claim_not_found");
+      if (claim.userId !== transfer.sellerUserId) {
+        throw new Error("seller_ownership_mismatch");
+      }
+
+      const buyer =
+        (transfer.buyerUserId
+          ? data.users.find((entry) => entry.id === transfer.buyerUserId) ?? null
+          : null) ?? findUserByPhone(data, transfer.buyerPhone);
+      if (!buyer) throw new Error("buyer_verification_required");
+      const buyerBankAccount = latestBankAccountForUser(data, buyer.id);
+      if (!buyerBankAccount) throw new Error("buyer_bank_link_required");
+
+      const buyerExistingClaim =
+        data.claims.find((entry) => entry.userId === buyer.id) ?? null;
+      if (buyerExistingClaim && buyerExistingClaim.handle !== transfer.handle) {
+        throw new Error("buyer_already_has_handle");
+      }
+
+      transfer.status = "approved";
+      transfer.buyerUserId = buyer.id;
+      transfer.transferredAt = nowIso;
+      listing.status = "sold";
+      listing.updatedAt = nowIso;
+      listing.reviewStartedAt = undefined;
+      offer.status = "accepted";
+      offer.updatedAt = nowIso;
+      offer.respondedAt = offer.respondedAt ?? nowIso;
+
+      claim.userId = buyer.id;
+      claim.phone = buyer.phone;
+      claim.displayName = (buyer.fullName || transfer.buyerName).trim();
+      claim.bank = buyerBankAccount.bankName;
+      claim.verification = buyer.bvnLinkedAt ? "verified" : "pending";
+      claim.verifiedAt = buyer.bvnLinkedAt ? nowIso : undefined;
+      claim.claimedAt = nowIso;
+      addNotificationUnsafe(data, {
+        userId: transfer.sellerUserId,
+        handle: transfer.handle,
+        type: "marketplace_transfer_approved",
+        title: "Transfer approved",
+        body: `Transfer of \u20A6${transfer.handle} to ${transfer.buyerName} was approved.`,
+        metadata: {
+          transferId: transfer.id,
+          listingId: listing.id,
+          amount: transfer.amount,
+        },
+      });
+      addNotificationUnsafe(data, {
+        userId: buyer.id,
+        handle: transfer.handle,
+        type: "marketplace_transfer_approved",
+        title: "Handle transfer approved",
+        body: `\u20A6${transfer.handle} is now assigned to ${transfer.buyerName}.`,
+        metadata: {
+          transferId: transfer.id,
+          listingId: listing.id,
+          buyerPhone: transfer.buyerPhone,
+        },
+      });
+    } else {
+      transfer.status = "rejected";
+      listing.status = "active";
+      listing.updatedAt = nowIso;
+      listing.reviewStartedAt = undefined;
+      offer.status = "rejected";
+      offer.updatedAt = nowIso;
+      offer.respondedAt = nowIso;
+      addNotificationUnsafe(data, {
+        userId: transfer.sellerUserId,
+        handle: transfer.handle,
+        type: "marketplace_transfer_rejected",
+        title: "Transfer rejected",
+        body: `Transfer review for \u20A6${transfer.handle} was rejected. The listing is active again.`,
+        priority: "high",
+        metadata: {
+          transferId: transfer.id,
+          listingId: listing.id,
+          amount: transfer.amount,
+        },
+      });
+      addNotificationUnsafe(data, {
+        userId: offer.buyerUserId,
+        handle: transfer.handle,
+        type: "marketplace_transfer_rejected",
+        title: "Transfer rejected",
+        body: `Transfer review for \u20A6${transfer.handle} was rejected.`,
+        priority: "high",
+        metadata: {
+          transferId: transfer.id,
+          listingId: listing.id,
+          buyerPhone: transfer.buyerPhone,
+        },
+      });
+    }
+
+    await writeDataUnsafe(data);
+    return buildMarketplaceTransferDetail(data, transfer);
   });
 }
 
@@ -1572,6 +2998,39 @@ export async function claimHandleForUser({
     };
 
     data.claims.unshift(record);
+
+    const referral = data.referrals.find((entry) => entry.referredUserId === userId);
+    if (referral && !referral.convertedAt) {
+      referral.convertedAt = claimedAt;
+      referral.signupPoints =
+        typeof referral.signupPoints === "number" && referral.signupPoints > 0
+          ? referral.signupPoints
+          : REFERRAL_SIGNUP_POINTS;
+      referral.conversionPoints =
+        typeof referral.conversionPoints === "number" &&
+        referral.conversionPoints > 0
+          ? referral.conversionPoints
+          : REFERRAL_CONVERSION_POINTS;
+
+      const referrerClaim =
+        data.claims.find((entry) => entry.userId === referral.referrerUserId) ??
+        null;
+      addNotificationUnsafe(data, {
+        userId: referral.referrerUserId,
+        handle: referrerClaim?.handle,
+        type: "referral_converted",
+        title: `Referral converted: +${REFERRAL_CONVERSION_POINTS} points`,
+        body: "Your referral claimed a NairaTag handle. The conversion bonus was added.",
+        metadata: {
+          referralId: referral.id,
+          referredUserId: userId,
+          referredHandle: normalized,
+          referralCode: referral.referralCode,
+          points: REFERRAL_CONVERSION_POINTS,
+          totalReferralPoints: referralTotalPoints(referral),
+        },
+      });
+    }
     await writeDataUnsafe(data);
     return record;
   });
@@ -1605,6 +3064,17 @@ export async function linkBvnForUser({
       claim.verifiedAt = claim.verifiedAt || nowIso;
       if (user.fullName) claim.displayName = user.fullName;
     }
+
+    addNotificationUnsafe(data, {
+      userId,
+      handle: claim?.handle,
+      type: "bvn_linked",
+      title: "BVN linked",
+      body: "Identity verification is linked to your NairaTag account.",
+      metadata: {
+        bvnLast4: clean.slice(-4),
+      },
+    });
 
     await writeDataUnsafe(data);
     return { user, claim: claim ?? null };
@@ -1686,6 +3156,19 @@ export async function linkBankAccountForUser({
         claim.displayName = bankAccount.accountName;
       }
     }
+
+    addNotificationUnsafe(data, {
+      userId,
+      handle: claim?.handle,
+      type: "bank_linked",
+      title: "Bank account linked",
+      body: `${normalizedBankName} payout destination is now saved.`,
+      metadata: {
+        bankAccountId: bankAccount.id,
+        bankName: normalizedBankName,
+        accountNumberLast4: bankAccount.accountNumberLast4,
+      },
+    });
 
     await writeDataUnsafe(data);
     return { user, claim: claim ?? null, bankAccount };

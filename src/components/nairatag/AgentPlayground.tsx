@@ -12,6 +12,10 @@ import {
   useTransition,
 } from "react";
 
+import {
+  PrivySessionButton,
+  type PrivySessionUser,
+} from "@/components/auth/PrivySessionButton";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Badge, CheckIcon, NairaTermBadge, cn } from "./ui";
 
@@ -146,6 +150,15 @@ async function readJson<T>(res: Response): Promise<T | null> {
   } catch {
     return null;
   }
+}
+
+function isResolveResponse(value: unknown): value is ResolveResponse {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "status" in value &&
+      typeof (value as { status?: unknown }).status === "string"
+  );
 }
 
 function humanizeStep(step: AgentStep) {
@@ -619,6 +632,13 @@ export function AgentPlayground() {
       return;
     }
 
+    if (!isResolveResponse(data)) {
+      const reason = "error" in data ? data.error : "Unexpected resolve response.";
+      setError(reason ?? "Unexpected resolve response.");
+      await appendAssistant(reason ?? "Unexpected resolve response.");
+      return;
+    }
+
     if (data.status === "claimed") {
       setClaimedHandle(data.handle);
       setVerification(data.verification);
@@ -678,6 +698,54 @@ export function AgentPlayground() {
     );
   }
 
+  async function claimActiveHandle(authMethod: "otp" | "privy" = "otp") {
+    if (!claimedHandle) {
+      await appendAssistant("Send a handle first, then sign in to claim it.");
+      return;
+    }
+
+    const claimRes = await fetch("/api/handles/claim", {
+      method: "POST",
+      headers: {
+        "Cache-Control": "no-store",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ handle: claimedHandle }),
+    });
+
+    const claimData = await readJson<ClaimResponse | ErrorResponse>(claimRes);
+    if (!claimRes.ok) {
+      const message =
+        claimData && "error" in claimData ? claimData.error : "Could not claim handle.";
+      setError(message ?? "Could not claim handle.");
+
+      if (claimRes.status === 409 && message === "user_already_has_handle") {
+        setStep("done");
+        await appendAssistant("This signed-in account already has a handle.");
+        return;
+      }
+
+      if (claimRes.status === 409) {
+        setStep("await_handle");
+        await appendAssistant(
+          `That handle was taken before we finished.\n\nTry another one like ${NAIRA}fioso.`
+        );
+        return;
+      }
+
+      await appendAssistant(`Handle claim failed. ${message ?? ""}`.trim());
+      return;
+    }
+
+    const claimPayload = claimData && "claim" in claimData ? claimData.claim : null;
+    setVerification(claimPayload?.verification ?? "pending");
+    setDevOtp(null);
+    setStep("await_bvn");
+    await appendAssistant(
+      `${authMethod === "privy" ? "Privy sign-in verified. " : "Success. "}You claimed ${NAIRA}${claimedHandle}.\n\nSend your BVN (11 digits) to add a verified badge, or type "skip".`
+    );
+  }
+
   async function handleOtpStep(raw: string) {
     const otp = extractOtp(raw);
     if (!otp) {
@@ -707,38 +775,28 @@ export function AgentPlayground() {
       return;
     }
 
-    const claimRes = await fetch("/api/handles/claim", {
-      method: "POST",
-      headers: {
-        "Cache-Control": "no-store",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ handle: claimedHandle }),
-    });
+    await claimActiveHandle("otp");
+  }
 
-    const claimData = await readJson<ClaimResponse | ErrorResponse>(claimRes);
-    if (!claimRes.ok) {
-      const message =
-        claimData && "error" in claimData ? claimData.error : "Could not claim handle.";
-      setError(message ?? "Could not claim handle.");
-      if (claimRes.status === 409) {
-        setStep("await_handle");
-        await appendAssistant(
-          `That handle was taken before we finished.\n\nTry another one like ${NAIRA}fioso.`
-        );
-        return;
-      }
+  async function handlePrivySessionReady(user: PrivySessionUser) {
+    const visibleIdentity =
+      user.phone && !user.phone.startsWith("privy:")
+        ? user.phone
+        : user.email || user.walletAddress || "Privy";
+    setPhone(visibleIdentity);
+    setDevOtp(null);
 
-      await appendAssistant(`Handle claim failed. ${message ?? ""}`.trim());
+    if (!claimedHandle || step === "await_handle") {
+      await appendAssistant("Privy sign-in is ready. Send a handle to claim it.");
       return;
     }
 
-    const claimPayload = claimData && "claim" in claimData ? claimData.claim : null;
-    setVerification(claimPayload?.verification ?? "pending");
-    setStep("await_bvn");
-    await appendAssistant(
-      `Success. You claimed ${NAIRA}${claimedHandle}.\n\nSend your BVN (11 digits) to add a verified badge, or type "skip".`
-    );
+    if (step === "await_phone" || step === "await_otp") {
+      await claimActiveHandle("privy");
+      return;
+    }
+
+    await appendAssistant("Privy sign-in is ready for this session.");
   }
 
   async function handleBvnStep(raw: string) {
@@ -1104,6 +1162,7 @@ export function AgentPlayground() {
                           </div>
                         </div>
 
+                        <PrivySessionButton onSessionReady={handlePrivySessionReady} />
                       </div>
 
                       <div className="mt-2.5 rounded-[18px] border border-zinc-200/75 bg-white px-3 py-2.5 shadow-inner shadow-zinc-100/80 dark:border-zinc-800/80 dark:bg-zinc-950 dark:shadow-black/20">

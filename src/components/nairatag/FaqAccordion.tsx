@@ -15,7 +15,7 @@ export type FaqItem = {
 function toneClasses(tone: Tone) {
   switch (tone) {
     case "blue":
-      return "bg-sky-200/80 text-zinc-950 dark:bg-sky-950/30 dark:text-zinc-50";
+      return "bg-emerald-100/90 text-zinc-950 dark:bg-emerald-950/25 dark:text-zinc-50";
     case "orange":
       return "bg-orange-200/80 text-zinc-950 dark:bg-orange-950/30 dark:text-zinc-50";
     case "black":

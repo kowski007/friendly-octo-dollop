@@ -118,6 +118,18 @@ export function MarketplaceView({
 
               <Card className="p-6">
                 <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                  Transfer review
+                </div>
+                <div className="mt-3 text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                  {stats.pendingTransfers.toLocaleString()}
+                </div>
+                <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+                  Accepted offers waiting for final review.
+                </div>
+              </Card>
+
+              <Card className="p-6">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
                   Average ask
                 </div>
                 <div className="mt-3 text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
@@ -233,6 +245,9 @@ export function MarketplaceView({
                       <div className="mt-5 flex flex-wrap gap-3">
                         <ButtonLink href={`/marketplace/${entry.listing.handle}`}>
                           View listing
+                        </ButtonLink>
+                        <ButtonLink href={`/h/${entry.listing.handle}`} variant="secondary">
+                          Public profile
                         </ButtonLink>
                         <ButtonLink href={`/pay/${entry.listing.handle}`} variant="secondary">
                           Open pay page

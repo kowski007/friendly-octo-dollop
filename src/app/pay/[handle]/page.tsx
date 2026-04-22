@@ -1,4 +1,5 @@
 import {
+  getCreditProfileForHandle,
   getHandleReputation,
   getPaymentDestinationByHandle,
 } from "@/lib/adminStore";
@@ -18,9 +19,10 @@ export default async function PayHandlePage({
   const { handle } = await params;
   const query = await searchParams;
   const cleanHandle = handle.replace(/^\u20A6/u, "");
-  const [payment, reputation] = await Promise.all([
+  const [payment, reputation, creditProfile] = await Promise.all([
     getPaymentDestinationByHandle(cleanHandle),
     getHandleReputation(cleanHandle),
+    getCreditProfileForHandle(cleanHandle),
   ]);
   const requestedAmount = formatAmount(query.amount);
   const note = query.note?.trim() || undefined;
@@ -34,6 +36,7 @@ export default async function PayHandlePage({
       handle={cleanHandle}
       payment={payment}
       reputation={reputation}
+      creditProfile={creditProfile}
       requestedAmount={requestedAmount}
       note={note}
       shareUrl={shareUrl}

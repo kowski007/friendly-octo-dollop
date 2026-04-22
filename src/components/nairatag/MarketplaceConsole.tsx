@@ -6,8 +6,11 @@ import { useRouter } from "next/navigation";
 import type {
   BankAccountRecord,
   ClaimRecord,
+  CreditProfile,
   MarketplaceEligibility,
   MarketplaceListingDetail,
+  MarketplaceTransferDetail,
+  NotificationRecord,
 } from "@/lib/adminTypes";
 import { Badge, ButtonLink, Card, NairaTermBadge } from "./ui";
 
@@ -18,6 +21,9 @@ type DashboardResponse =
       claim: ClaimRecord | null;
       bankAccount: BankAccountRecord | null;
       listing: MarketplaceListingDetail | null;
+      creditProfile: CreditProfile | null;
+      transfers: MarketplaceTransferDetail[];
+      notifications: NotificationRecord[];
     }
   | { error: string };
 
@@ -49,6 +55,19 @@ function eligibilityMessage(eligibility: MarketplaceEligibility) {
     default:
       return "Sign in to open a marketplace listing.";
   }
+}
+
+function creditTone(profile: CreditProfile | null) {
+  if (!profile) return "neutral";
+  if (profile.riskBand === "low") return "verify";
+  if (profile.riskBand === "medium") return "orange";
+  return "neutral";
+}
+
+function notificationTone(priority: NotificationRecord["priority"]) {
+  if (priority === "high") return "orange";
+  if (priority === "low") return "neutral";
+  return "verify";
 }
 
 export function MarketplaceConsole() {
@@ -245,7 +264,7 @@ export function MarketplaceConsole() {
         </div>
       ) : dashboard && "ok" in dashboard ? (
         <div className="mt-6 space-y-5">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-4">
             <div className="rounded-[1.5rem] border border-zinc-200/70 bg-zinc-50/80 p-4 dark:border-zinc-800/80 dark:bg-zinc-900/40">
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
                 Handle
@@ -279,7 +298,75 @@ export function MarketplaceConsole() {
                 Sellers must have a payout destination before listing.
               </div>
             </div>
+            <div className="rounded-[1.5rem] border border-zinc-200/70 bg-zinc-50/80 p-4 dark:border-zinc-800/80 dark:bg-zinc-900/40">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                Credit profile
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                  {dashboard.creditProfile ? dashboard.creditProfile.score : "Not ready"}
+                </span>
+                {dashboard.creditProfile ? (
+                  <Badge tone={creditTone(dashboard.creditProfile)}>
+                    {dashboard.creditProfile.riskBand}
+                  </Badge>
+                ) : null}
+              </div>
+              <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+                {dashboard.creditProfile
+                  ? `${formatCurrency(dashboard.creditProfile.recommendedLimit)} suggested limit`
+                  : "Claim and payment history will create the score."}
+              </div>
+            </div>
           </div>
+
+          <Card className="rounded-[2rem] p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                  In-app notifications
+                </div>
+                <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                  Payment, marketplace, verification, and review alerts.
+                </div>
+              </div>
+              <Badge tone="neutral">
+                {dashboard.notifications.filter((item) => item.status === "unread").length} unread
+              </Badge>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {dashboard.notifications.length === 0 ? (
+                <div className="rounded-[1.5rem] border border-dashed border-zinc-300/70 px-4 py-5 text-sm text-zinc-600 dark:border-zinc-700/70 dark:text-zinc-300">
+                  No alerts yet. Payment and marketplace events will appear here.
+                </div>
+              ) : (
+                dashboard.notifications.slice(0, 5).map((notification) => (
+                  <div
+                    key={notification.id}
+                    className="rounded-[1.5rem] border border-zinc-200/70 bg-zinc-50/80 p-4 dark:border-zinc-800/80 dark:bg-zinc-900/35"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                          {notification.title}
+                        </div>
+                        <div className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                          {notification.body}
+                        </div>
+                      </div>
+                      <Badge tone={notificationTone(notification.priority)}>
+                        {notification.status}
+                      </Badge>
+                    </div>
+                    <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                      {new Date(notification.createdAt).toLocaleString()}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
 
           {feedback ? (
             <div className="rounded-[1.5rem] border border-emerald-200/70 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200">
@@ -347,6 +434,25 @@ export function MarketplaceConsole() {
                     </div>
                   </div>
                 </div>
+
+                {dashboard.listing.transfer ? (
+                  <div className="mt-5 rounded-[1.5rem] border border-orange-200/70 bg-orange-50/80 p-4 dark:border-orange-900/60 dark:bg-orange-950/20">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                          Transfer review open
+                        </div>
+                        <div className="mt-1 text-sm text-zinc-700 dark:text-zinc-200">
+                          {dashboard.listing.transfer.buyerName} accepted at{" "}
+                          {formatCurrency(dashboard.listing.transfer.amount)}.
+                        </div>
+                      </div>
+                      <Badge tone="orange">
+                        {dashboard.listing.transfer.status.replace("_", " ")}
+                      </Badge>
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="mt-5 grid gap-4 sm:grid-cols-2">
                   <label className="space-y-2 text-sm">
@@ -426,6 +532,12 @@ export function MarketplaceConsole() {
                       Open public listing
                     </ButtonLink>
                   ) : null}
+                  <ButtonLink
+                    href={`/h/${dashboard.listing.listing.handle}`}
+                    variant="secondary"
+                  >
+                    Public profile
+                  </ButtonLink>
                 </div>
               </Card>
 

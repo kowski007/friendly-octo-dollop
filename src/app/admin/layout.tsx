@@ -51,6 +51,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               <NavLink href="/admin">Dashboard</NavLink>
               <NavLink href="/admin/users">Users</NavLink>
               <NavLink href="/admin/claims">Claims</NavLink>
+              <NavLink href="/admin/transfers">Transfers</NavLink>
+              <NavLink href="/admin/referrals">Referrals</NavLink>
               <NavLink href="/admin/api">API usage</NavLink>
             </nav>
             <ThemeToggle className="px-3 py-2" />

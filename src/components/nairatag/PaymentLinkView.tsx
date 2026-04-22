@@ -3,10 +3,12 @@ import Link from "next/link";
 import type {
   BankAccountRecord,
   ClaimRecord,
+  CreditProfile,
   HandleReputation,
 } from "@/lib/adminTypes";
 import { AppPageHeader } from "./AppPageHeader";
 import { CopyButton } from "./CopyButton";
+import { PaymentSimulator } from "./PaymentSimulator";
 import {
   Badge,
   ButtonLink,
@@ -110,10 +112,18 @@ function trustTone(score: number) {
   return "neutral";
 }
 
+function creditTone(profile: CreditProfile | null) {
+  if (!profile) return "neutral";
+  if (profile.riskBand === "low") return "verify";
+  if (profile.riskBand === "medium") return "orange";
+  return "neutral";
+}
+
 export function PaymentLinkView({
   handle,
   payment,
   reputation,
+  creditProfile,
   requestedAmount,
   note,
   shareUrl,
@@ -124,6 +134,7 @@ export function PaymentLinkView({
     bankAccount: PublicBankAccount | null;
   } | null;
   reputation: HandleReputation | null;
+  creditProfile: CreditProfile | null;
   requestedAmount: number | null;
   note?: string;
   shareUrl: string;
@@ -284,14 +295,17 @@ export function PaymentLinkView({
                           <div className="mt-2 text-xl font-semibold tracking-[0.18em] text-zinc-950 dark:text-zinc-50">
                             {bankAccount?.accountNumber ?? "Not published yet"}
                           </div>
-                          <div className="mt-3 flex flex-wrap gap-3">
-                            {bankAccount?.accountNumber ? (
-                              <CopyButton value={bankAccount.accountNumber} label="Copy account no." />
-                            ) : null}
-                            <CopyButton value={shareUrl} label="Copy payment link" copiedLabel="Link copied" />
-                          </div>
-                        </div>
+                      <div className="mt-3 flex flex-wrap gap-3">
+                        {bankAccount?.accountNumber ? (
+                          <CopyButton value={bankAccount.accountNumber} label="Copy account no." />
+                        ) : null}
+                        <CopyButton value={shareUrl} label="Copy payment link" copiedLabel="Link copied" />
+                        <ButtonLink href={`/h/${claim.handle}`} variant="secondary">
+                          Public profile
+                        </ButtonLink>
                       </div>
+                    </div>
+                  </div>
                     </Card>
 
                     <Card className="rounded-[2rem] p-6">
@@ -362,6 +376,47 @@ export function PaymentLinkView({
                         )}
                       </div>
 
+                      {creditProfile ? (
+                        <div className="mt-6 rounded-[1.75rem] border border-zinc-200/70 bg-white/70 p-5 dark:border-zinc-800/70 dark:bg-zinc-950/35">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                                Credit profile
+                              </div>
+                              <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                                Phase 2 scoring from ownership, settlement, and verification signals.
+                              </div>
+                            </div>
+                            <Badge tone={creditTone(creditProfile)}>
+                              {creditProfile.score}
+                            </Badge>
+                          </div>
+
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-[1.25rem] border border-zinc-200/70 bg-zinc-50/80 p-4 dark:border-zinc-800/80 dark:bg-zinc-900/40">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                                Risk band
+                              </div>
+                              <div className="mt-2 text-xl font-semibold capitalize text-zinc-950 dark:text-zinc-50">
+                                {creditProfile.riskBand}
+                              </div>
+                            </div>
+                            <div className="rounded-[1.25rem] border border-zinc-200/70 bg-zinc-50/80 p-4 dark:border-zinc-800/80 dark:bg-zinc-900/40">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                                Suggested limit
+                              </div>
+                              <div className="mt-2 text-xl font-semibold text-zinc-950 dark:text-zinc-50">
+                                {formatCompactCurrency(creditProfile.recommendedLimit)}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                            {creditProfile.drivers.slice(0, 2).join(" · ")}
+                          </div>
+                        </div>
+                      ) : null}
+
                       <div className="mt-6 border-t border-zinc-200/70 pt-6 dark:border-zinc-800/80">
                         <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
                           Quick send presets
@@ -415,6 +470,14 @@ export function PaymentLinkView({
             </Card>
 
             <div className="space-y-5">
+              {claim ? (
+                <PaymentSimulator
+                  handle={claim.handle}
+                  defaultAmount={requestedAmount}
+                  defaultNote={note}
+                />
+              ) : null}
+
               <Card className="p-6">
                 <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
                   Payment link format

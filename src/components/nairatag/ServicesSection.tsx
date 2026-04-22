@@ -1,6 +1,4 @@
-import type { ReactNode } from "react";
-
-import { Badge, ButtonLink, Container, NairaTermBadge, cn } from "./ui";
+import { Badge, ButtonLink, Container, cn } from "./ui";
 
 function Naira({ className }: { className?: string }) {
   return (
@@ -10,101 +8,97 @@ function Naira({ className }: { className?: string }) {
   );
 }
 
-function ArrowBtn({ dir }: { dir: "left" | "right" }) {
-  return (
-    <button
-      type="button"
-      aria-label={dir === "left" ? "Previous" : "Next"}
-      className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-200/70 bg-white/70 text-zinc-700 shadow-sm backdrop-blur transition hover:bg-white dark:border-zinc-800/70 dark:bg-zinc-950/30 dark:text-zinc-200 dark:hover:bg-zinc-950/45"
-    >
-      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
-        {dir === "left" ? (
-          <path
-            d="M15 6l-6 6 6 6"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        ) : (
-          <path
-            d="M9 6l6 6-6 6"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        )}
-      </svg>
-    </button>
-  );
-}
-
 function MiniMetric({ value, label }: { value: string; label: string }) {
   return (
-    <div className="text-center">
+    <div>
       <div className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-4xl">
         {value}
       </div>
-      <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-300">
+      <div className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
         {label}
       </div>
     </div>
   );
 }
 
-function ServiceCard({
+function ServicePanel({
   title,
-  description,
-  bullets,
-  tone = "neutral",
+  caption,
+  tone = "light",
 }: {
   title: string;
-  description: string;
-  bullets: ReactNode[];
-  tone?: "neutral" | "highlight";
+  caption: string;
+  tone?: "light" | "orange";
 }) {
-  const isHighlight = tone === "highlight";
+  const orange = tone === "orange";
+
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-3xl border p-6 shadow-sm backdrop-blur",
-        isHighlight
-          ? "border-orange-200/60 bg-nt-orange text-white dark:border-orange-900/50"
-          : "border-zinc-200/70 bg-white/70 text-zinc-950 dark:border-zinc-800/70 dark:bg-zinc-950/30 dark:text-zinc-50"
+        "relative min-h-[220px] overflow-hidden rounded-[2rem] p-5 shadow-sm",
+        orange
+          ? "bg-orange-500 text-white"
+          : "bg-white/80 text-zinc-950 dark:bg-zinc-950/35 dark:text-zinc-50"
       )}
     >
-      {isHighlight ? (
-        <>
-          <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/20 blur-2xl" />
-          <div className="pointer-events-none absolute -left-16 -bottom-16 h-56 w-56 rounded-full bg-black/15 blur-2xl" />
-        </>
-      ) : null}
-
-      <div className="relative">
-        <div className="text-lg font-semibold tracking-tight">{title}</div>
-        <div
+      <div className="flex items-center justify-between">
+        <span
           className={cn(
-            "mt-2 text-sm leading-7",
-            isHighlight ? "text-white/90" : "text-zinc-600 dark:text-zinc-300"
+            "inline-flex h-9 w-9 items-center justify-center rounded-2xl text-sm font-semibold",
+            orange ? "bg-white/15 text-white" : "bg-orange-50 text-orange-800 dark:bg-orange-950/30 dark:text-orange-100"
           )}
         >
-          {description}
-        </div>
+          <Naira />
+        </span>
+        <span
+          className={cn(
+            "rounded-full px-3 py-1 text-xs font-semibold",
+            orange ? "bg-white/15 text-white" : "bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300"
+          )}
+        >
+          Live
+        </span>
+      </div>
 
-        <div className="mt-5 space-y-2 text-sm">
-          {bullets.map((b, idx) => (
-            <div key={idx} className="flex items-start gap-2">
-              <span
-                className={cn(
-                  "mt-1.5 inline-flex h-2 w-2 rounded-full",
-                  isHighlight ? "bg-white" : "bg-nt-orange"
-                )}
-                aria-hidden="true"
-              />
-              <span className={cn(isHighlight ? "text-white" : "")}>{b}</span>
-            </div>
-          ))}
+      <div className="mt-12">
+        <div className="text-2xl font-semibold tracking-tight">{title}</div>
+        <div className={cn("mt-2 text-sm leading-6", orange ? "text-white/85" : "text-zinc-600 dark:text-zinc-300")}>
+          {caption}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ApprovalMock() {
+  return (
+    <div className="rounded-[2rem] bg-zinc-50 p-5 dark:bg-zinc-950/55">
+      <div className="flex items-center justify-between">
+        <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+          Payment request
+        </div>
+        <Badge tone="orange">Needs approval</Badge>
+      </div>
+      <div className="mt-5 rounded-2xl bg-white p-4 shadow-sm dark:bg-zinc-950">
+        <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+          Send NGN 48,000 to <Naira />kemi_stores
+        </div>
+        <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+          Kemi Stores Ltd - Access Bank
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            className="rounded-xl bg-zinc-950 px-3 py-2 text-xs font-semibold text-white dark:bg-white dark:text-zinc-950"
+          >
+            Approve
+          </button>
+          <button
+            type="button"
+            className="rounded-xl bg-zinc-100 px-3 py-2 text-xs font-semibold text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+          >
+            Review
+          </button>
         </div>
       </div>
     </div>
@@ -113,88 +107,76 @@ function ServiceCard({
 
 export function ServicesSection() {
   return (
-    <section id="services" className="py-16 sm:py-24">
+    <section id="services" className="py-10 sm:py-16">
       <Container>
-        <div className="rounded-[36px] border border-zinc-200/70 bg-zinc-100/60 p-6 shadow-sm backdrop-blur dark:border-zinc-800/70 dark:bg-zinc-950/20 sm:p-10">
-          <div className="flex items-start justify-between gap-6">
-            <div>
-              <Badge>Services</Badge>
-              <h2 className="mt-4 max-w-xl font-display text-4xl font-semibold leading-[1.02] tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-5xl">
-                Identity-first payments, for consumers and fintechs.
-              </h2>
-              <p className="mt-4 max-w-2xl text-base leading-7 text-zinc-700 dark:text-zinc-200">
-                NairaTag can power send flows, merchant payments, and payouts by
-                resolving handles to real recipient identity previews.
-              </p>
+        <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
+          <div>
+            <Badge tone="orange">Services</Badge>
+            <h2 className="mt-4 max-w-2xl font-display text-4xl font-semibold leading-[1.02] tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-5xl">
+              Services that sit around the transfer, not on top of it.
+            </h2>
+          </div>
+          <p className="max-w-md text-base leading-7 text-zinc-700 dark:text-zinc-200">
+            Consumer handles, payment links, marketplace trust, and API
+            resolution all share the same verified identity layer.
+          </p>
+        </div>
+
+        <div className="mt-8 rounded-[2rem] bg-zinc-100/70 p-4 shadow-sm backdrop-blur dark:bg-zinc-950/20 sm:p-5">
+          <div className="grid gap-4 lg:grid-cols-3">
+            <ServicePanel
+              title="Add and manage handles"
+              caption="Claim names, link banks, and share pay profiles in one flow."
+            />
+            <ServicePanel
+              title="Set approvals and trust"
+              caption="Verified previews reduce mistakes before money leaves."
+              tone="orange"
+            />
+            <ServicePanel
+              title="Pay how vendors want"
+              caption="Use links, marketplace offers, QR, or API-powered send flows."
+            />
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-12">
+            <div className="rounded-[2rem] bg-white/85 p-5 shadow-sm dark:bg-zinc-950/35 lg:col-span-5">
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
+                Active handle
+              </div>
+              <div className="mt-5 flex items-end justify-between gap-4">
+                <div>
+                  <div className="text-5xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                    <Naira />
+                    shop
+                  </div>
+                  <div className="mt-2 text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                    Shop by Kemi - Business
+                  </div>
+                </div>
+                <Badge tone="verify">Verified</Badge>
+              </div>
             </div>
-
-            <div className="hidden items-center gap-2 sm:flex">
-              <ArrowBtn dir="left" />
-              <ArrowBtn dir="right" />
+            <div className="lg:col-span-7">
+              <ApprovalMock />
             </div>
           </div>
+        </div>
 
-          <div className="mt-10 grid gap-5 lg:grid-cols-3">
-            <ServiceCard
-              title="Consumer handles"
-              description="A simple name people can share, type, and remember."
-              bullets={[
-                <>
-                  Claim a{" "}
-                  <NairaTermBadge
-                    term="handle"
-                    tone="orange"
-                    className="relative -top-0.5"
-                  />
-                </>,
-                "Link your bank account",
-                <>
-                  Share your{" "}
-                  <NairaTermBadge
-                    term="handle"
-                    tone="orange"
-                    className="relative -top-0.5"
-                  />{" "}
-                  or QR
-                </>,
-              ]}
-            />
-            <ServiceCard
-              title="Verification layer"
-              description="Clear badges and identity signals shown before money moves."
-              bullets={[
-                "BVN checks and identity signals",
-                "Account name matching",
-                "Business vs personal badges",
-              ]}
-              tone="highlight"
-            />
-            <ServiceCard
-              title="Fintech integration"
-              description="Drop handle resolution into existing products and rails."
-              bullets={[
-                "Resolve handles via API",
-                "Use in send screens and payouts",
-                "Partner-friendly approach",
-              ]}
-            />
-          </div>
+        <div className="mt-8 grid gap-6 sm:grid-cols-4">
+          <MiniMetric value="50%" label="Less typing" />
+          <MiniMetric value="30%" label="Cleaner lookup" />
+          <MiniMetric value="28%" label="Fewer mistakes" />
+          <MiniMetric value="70%" label="More confidence" />
+        </div>
 
-          <div className="mt-10 grid gap-6 border-t border-zinc-200/70 pt-10 dark:border-zinc-800/70 sm:grid-cols-4">
-            <MiniMetric value="10 digits" label="Account numbers" />
-            <MiniMetric value="1 handle" label="NairaTag identity" />
-            <MiniMetric value="2–20" label="Handle length" />
-            <MiniMetric value="3 steps" label="Claim, link, send" />
-          </div>
-
-          <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-            <ButtonLink href="#demo">
-              Try the live demo <Naira className="font-semibold" />
-            </ButtonLink>
-            <ButtonLink href="#faq" variant="secondary">
-              Read FAQs
-            </ButtonLink>
-          </div>
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+          <ButtonLink href="#demo">
+            Try the live demo <Naira className="ml-1" />
+          </ButtonLink>
+          <ButtonLink href="#faq" variant="secondary">
+            Read FAQs
+          </ButtonLink>
         </div>
       </Container>
     </section>

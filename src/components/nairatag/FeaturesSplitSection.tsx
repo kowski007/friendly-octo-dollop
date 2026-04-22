@@ -1,14 +1,6 @@
 import type { ReactNode } from "react";
 
-import {
-  Badge,
-  ButtonLink,
-  Card,
-  CheckIcon,
-  Container,
-  NairaTermBadge,
-  cn,
-} from "./ui";
+import { Badge, ButtonLink, CheckIcon, Container, NairaTermBadge, cn } from "./ui";
 
 function Naira({ className }: { className?: string }) {
   return (
@@ -18,175 +10,96 @@ function Naira({ className }: { className?: string }) {
   );
 }
 
-function DotIcon({
-  className,
-  tone = "zinc",
-}: {
-  className?: string;
-  tone?: "zinc" | "orange" | "emerald";
-}) {
-  const toneClasses =
-    tone === "orange"
-      ? "bg-orange-500 text-white"
-      : tone === "emerald"
-        ? "bg-emerald-600 text-white"
-        : "bg-zinc-950 text-white dark:bg-white dark:text-zinc-950";
-
+function SmallSignal({ label, value }: { label: string; value: string }) {
   return (
-    <span
-      className={cn(
-        "mt-1 inline-flex h-7 w-7 items-center justify-center rounded-xl",
-        toneClasses,
-        className
-      )}
-      aria-hidden="true"
-    >
-      <span className="h-2 w-2 rounded-full bg-current" />
-    </span>
+    <div className="rounded-2xl bg-white/80 p-4 shadow-sm dark:bg-zinc-950/50">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
+        {label}
+      </div>
+      <div className="mt-2 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+        {value}
+      </div>
+    </div>
   );
 }
 
-function FeatureBullet({
-  title,
-  description,
-  tone = "zinc",
-}: {
-  title: string;
-  description: string;
-  tone?: "zinc" | "orange" | "emerald";
-}) {
+function ResolveScene() {
   return (
-    <div className="flex gap-3">
-      <DotIcon tone={tone} />
-      <div>
-        <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-          {title}
+    <div className="relative overflow-hidden rounded-[2rem] bg-zinc-100/70 p-5 shadow-sm dark:bg-zinc-950/25 sm:p-6">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="rounded-[1.6rem] bg-orange-50 p-5 dark:bg-orange-950/25">
+          <div className="text-xs font-semibold text-orange-900/70 dark:text-orange-100/75">
+            Search
+          </div>
+          <div className="mt-6 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+            <Naira />
+            mama_ijebu
+          </div>
+          <div className="mt-5 rounded-full bg-white px-4 py-2 text-sm font-semibold text-emerald-700 shadow-sm dark:bg-zinc-950 dark:text-emerald-300">
+            Available and verified
+          </div>
         </div>
-        <div className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-          {description}
+
+        <div className="space-y-4">
+          <SmallSignal label="Name" value="Iya Basira" />
+          <SmallSignal label="Bank" value="UBA - 0934" />
+          <SmallSignal label="Safety" value="No recent disputes" />
+        </div>
+      </div>
+      <div className="mt-4 rounded-[1.6rem] bg-zinc-950 p-5 text-white dark:bg-white dark:text-zinc-950">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-xs font-semibold opacity-60">Transfer preview</div>
+            <div className="mt-2 text-xl font-semibold">Confirm before send</div>
+          </div>
+          <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500 text-white">
+            <CheckIcon className="h-5 w-5" />
+          </span>
         </div>
       </div>
     </div>
   );
 }
 
-function UiResolveMock() {
+function TrustScene() {
+  const rows = [
+    ["BVN", "Linked"],
+    ["Bank", "Name matched"],
+    ["Profile", "Public"],
+    ["Marketplace", "Eligible"],
+  ];
+
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-zinc-200/70 bg-zinc-100/60 p-6 shadow-sm dark:border-zinc-800/70 dark:bg-zinc-950/25">
-      <div className="absolute inset-0 bg-gradient-to-b from-white/70 to-transparent dark:from-white/5" />
-      <div className="relative">
-        <div className="flex items-center justify-between">
-          <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
-            Recipient preview
-          </div>
-          <div className="rounded-full border border-zinc-200/70 bg-white/70 px-3 py-1 text-xs font-semibold text-zinc-700 shadow-sm backdrop-blur dark:border-zinc-800/70 dark:bg-zinc-950/40 dark:text-zinc-200">
-            Overview
-          </div>
+    <div className="rounded-[2rem] bg-white/80 p-5 shadow-sm backdrop-blur dark:bg-zinc-950/35 sm:p-6">
+      <div className="flex items-center justify-between">
+        <Badge tone="verify">Trust card</Badge>
+        <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+          Score
         </div>
-
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl border border-zinc-200/70 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/40">
-            <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-              Handle
-            </div>
-            <div className="mt-2 text-lg font-semibold text-zinc-950 dark:text-zinc-50">
-              <Naira />
-              victor{" "}
-              <span className="ml-2 text-emerald-700 dark:text-emerald-300">
-                ✓
-              </span>
-            </div>
-            <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-              Victor Adeyemi
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-zinc-200/70 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/40">
-            <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-              Bank destination
-            </div>
-            <div className="mt-2 text-lg font-semibold text-zinc-950 dark:text-zinc-50">
-              GTBank
-            </div>
-            <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-              Account name matched
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-5 rounded-2xl border border-orange-200/70 bg-orange-50/70 p-5 shadow-sm backdrop-blur dark:border-orange-900/60 dark:bg-orange-950/20">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-xs font-semibold text-orange-900/80 dark:text-orange-100/80">
-                Send flow
-              </div>
-              <div className="mt-2 truncate text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                “Confirm recipient before sending”
-              </div>
-            </div>
-            <span className="shrink-0 rounded-full bg-zinc-950 px-3 py-1 text-xs font-semibold text-white dark:bg-white dark:text-zinc-950">
-              Continue
-            </span>
-          </div>
-        </div>
-
-        <div className="pointer-events-none absolute -right-6 -bottom-10 h-44 w-44 rounded-full bg-orange-500/15 blur-2xl dark:bg-orange-500/20" />
-        <div className="pointer-events-none absolute -left-10 -top-10 h-44 w-44 rounded-full bg-emerald-500/12 blur-2xl dark:bg-emerald-500/18" />
       </div>
-    </div>
-  );
-}
-
-function UiVerifyMock() {
-  return (
-    <div className="relative overflow-hidden rounded-3xl border border-zinc-200/70 bg-zinc-100/60 p-6 shadow-sm dark:border-zinc-800/70 dark:bg-zinc-950/25">
-      <div className="absolute inset-0 bg-gradient-to-b from-white/70 to-transparent dark:from-white/5" />
-      <div className="relative">
-        <div className="flex items-center justify-between">
-          <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
-            Verification layer
+      <div className="mt-6 grid gap-5 sm:grid-cols-[0.8fr_1.2fr] sm:items-center">
+        <div className="rounded-[1.6rem] bg-orange-500 p-5 text-white">
+          <div className="text-xs font-semibold text-white/70">Trust score</div>
+          <div className="mt-4 text-6xl font-semibold tracking-tight">86</div>
+          <div className="mt-2 text-sm font-semibold text-white/80">
+            Strong recipient confidence
           </div>
-          <Badge tone="verify">
-            <CheckIcon className="h-3.5 w-3.5" />
-            Verified
-          </Badge>
         </div>
-
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          <Card className="p-5">
-            <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-              Personal handle
-            </div>
-            <div className="mt-2 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-              <Naira />
-              mama_ijebu{" "}
-              <span className="ml-2 text-emerald-700 dark:text-emerald-300">
-                ✓ Verified
+        <div className="space-y-3">
+          {rows.map(([label, value]) => (
+            <div
+              key={label}
+              className="flex items-center justify-between rounded-2xl bg-zinc-50 px-4 py-3 text-sm dark:bg-zinc-900/60"
+            >
+              <span className="font-semibold text-zinc-500 dark:text-zinc-400">
+                {label}
+              </span>
+              <span className="font-semibold text-zinc-950 dark:text-zinc-50">
+                {value}
               </span>
             </div>
-            <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-              Iya Basira · UBA
-            </div>
-          </Card>
-
-          <Card className="p-5">
-            <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-              Business handle
-            </div>
-            <div className="mt-2 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-              <Naira />
-              shop{" "}
-              <span className="ml-2 text-emerald-700 dark:text-emerald-300">
-                ✓✓ Business
-              </span>
-            </div>
-            <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-              Shop by Kemi · Access Bank
-            </div>
-          </Card>
+          ))}
         </div>
-
-        <div className="pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full bg-emerald-500/14 blur-2xl dark:bg-emerald-500/18" />
       </div>
     </div>
   );
@@ -194,56 +107,38 @@ function UiVerifyMock() {
 
 function SplitRow({
   eyebrow,
-  eyebrowTone = "neutral",
   title,
   description,
-  bullets,
-  bulletTone = "zinc",
   ctaLabel,
   ctaHref,
-  mock,
+  visual,
   reverse = false,
 }: {
   eyebrow: string;
-  eyebrowTone?: "neutral" | "verify" | "orange";
   title: ReactNode;
   description: string;
-  bullets: Array<{ title: string; description: string }>;
-  bulletTone?: "zinc" | "orange" | "emerald";
   ctaLabel: string;
   ctaHref: string;
-  mock: ReactNode;
+  visual: ReactNode;
   reverse?: boolean;
 }) {
   return (
-    <div className="grid gap-10 lg:grid-cols-12 lg:items-center">
+    <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
       <div className={cn("lg:col-span-5", reverse && "lg:col-start-8")}>
-        <Badge tone={eyebrowTone}>{eyebrow}</Badge>
+        <Badge tone={reverse ? "verify" : "orange"}>{eyebrow}</Badge>
         <h3 className="mt-4 font-display text-4xl font-semibold leading-[1.06] tracking-tight text-zinc-950 dark:text-zinc-50">
           {title}
         </h3>
-        <p className="mt-4 text-base leading-7 text-zinc-700 dark:text-zinc-200">
+        <p className="mt-4 max-w-xl text-base leading-7 text-zinc-700 dark:text-zinc-200">
           {description}
         </p>
-
-        <div className="mt-7 grid gap-5 sm:grid-cols-2">
-          {bullets.map((b) => (
-            <FeatureBullet
-              key={b.title}
-              title={b.title}
-              description={b.description}
-              tone={bulletTone}
-            />
-          ))}
-        </div>
-
-        <div className="mt-7">
+        <div className="mt-6">
           <ButtonLink href={ctaHref}>{ctaLabel}</ButtonLink>
         </div>
       </div>
 
       <div className={cn("lg:col-span-7", reverse && "lg:col-start-1")}>
-        {mock}
+        {visual}
       </div>
     </div>
   );
@@ -251,12 +146,11 @@ function SplitRow({
 
 export function FeaturesSplitSection() {
   return (
-    <section id="features" className="py-16 sm:py-24">
+    <section id="features" className="py-10 sm:py-16">
       <Container>
-        <div className="space-y-14 sm:space-y-20">
+        <div className="space-y-10 sm:space-y-14">
           <SplitRow
-            eyebrow="Core features"
-            eyebrowTone="orange"
+            eyebrow="Core product"
             title={
               <>
                 Resolve a{" "}
@@ -265,61 +159,22 @@ export function FeaturesSplitSection() {
                   tone="orange"
                   className="relative -top-1 px-3.5 py-1.5 text-base sm:px-4 sm:py-2 sm:text-lg"
                 />{" "}
-                before you send.
+                before money moves.
               </>
             }
-            description="Instead of guessing who a 10-digit number belongs to, show a human-readable identity preview first."
-            bullets={[
-              {
-                title: "Instant preview",
-                description: "Show name + bank before transfer confirmation.",
-              },
-              {
-                title: "Fewer mistakes",
-                description: "Reduce wrong sends with identity-first flows.",
-              },
-              {
-                title: "Better sharing",
-                description: "Handles are easy to remember and easy to type.",
-              },
-              {
-                title: "Works everywhere",
-                description: "Use in send screens, invoices, and payouts.",
-              },
-            ]}
-            bulletTone="orange"
+            description="The platform turns a name into a recipient preview: handle, legal-ish name signal, bank destination, and verification state."
             ctaLabel="See services"
             ctaHref="#services"
-            mock={<UiResolveMock />}
+            visual={<ResolveScene />}
           />
 
           <SplitRow
             eyebrow="Trust layer"
-            eyebrowTone="verify"
-            title="Verification people actually understand."
-            description="Add clear badges and verification signals to payments so users can spot the right recipient instantly."
-            bullets={[
-              {
-                title: "BVN checks",
-                description: "Tie handles to real identities, not just strings.",
-              },
-              {
-                title: "Name matching",
-                description: "Match recipient names to bank destinations.",
-              },
-              {
-                title: "Business handles",
-                description: "Separate personal and merchant identities clearly.",
-              },
-              {
-                title: "Fraud signals",
-                description: "Surface safety signals before money moves.",
-              },
-            ]}
-            bulletTone="emerald"
+            title="A visual trust score for payment identity."
+            description="Verification badges, bank matching, public profile signals, and marketplace history can sit together in one decision screen."
             ctaLabel="Try the live demo"
             ctaHref="#demo"
-            mock={<UiVerifyMock />}
+            visual={<TrustScene />}
             reverse
           />
         </div>

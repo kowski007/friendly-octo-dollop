@@ -1,14 +1,4 @@
-import type { ReactNode } from "react";
-
-import {
-  Badge,
-  ButtonLink,
-  Card,
-  CheckIcon,
-  Container,
-  NairaTermBadge,
-  cn,
-} from "./ui";
+import { Badge, ButtonLink, CheckIcon, Container, NairaTermBadge, cn } from "./ui";
 
 function Naira({ className }: { className?: string }) {
   return (
@@ -18,150 +8,178 @@ function Naira({ className }: { className?: string }) {
   );
 }
 
-function StepCard({
+function PhoneFrame() {
+  return (
+    <div className="relative mx-auto w-full max-w-[330px] rounded-[2rem] bg-white p-3 shadow-[0_24px_64px_rgba(15,23,42,0.12)] dark:bg-zinc-950">
+      <div className="rounded-[1.5rem] bg-zinc-50 p-4 dark:bg-zinc-900/80">
+        <div className="flex items-center justify-between">
+          <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+            Send money
+          </div>
+          <Badge tone="orange">Preview</Badge>
+        </div>
+
+        <div className="mt-5 rounded-2xl bg-orange-50 p-4 dark:bg-orange-950/25">
+          <div className="text-xs font-semibold text-orange-900/70 dark:text-orange-100/75">
+            Recipient
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                <Naira />
+                victor
+              </div>
+              <div className="mt-1 text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                Victor Adeyemi
+              </div>
+            </div>
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-600 text-white">
+              <CheckIcon className="h-5 w-5" />
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div className="rounded-2xl bg-white p-3 dark:bg-zinc-950/70">
+            <div className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+              Bank
+            </div>
+            <div className="mt-1 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+              GTBank
+            </div>
+          </div>
+          <div className="rounded-2xl bg-white p-3 dark:bg-zinc-950/70">
+            <div className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+              Trust
+            </div>
+            <div className="mt-1 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+              Verified
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="mt-4 h-11 w-full rounded-2xl bg-zinc-950 text-sm font-semibold text-white dark:bg-white dark:text-zinc-950"
+        >
+          Confirm recipient
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MiniStep({
   index,
   title,
-  description,
-  featured = false,
-  children,
+  detail,
 }: {
   index: string;
-  title: ReactNode;
-  description: string;
-  featured?: boolean;
-  children?: ReactNode;
+  title: string;
+  detail: string;
 }) {
   return (
-    <Card
-      className={cn(
-        "relative overflow-hidden p-6",
-        featured &&
-          "border-orange-200/70 bg-orange-50/60 dark:border-orange-900/50 dark:bg-orange-950/20"
-      )}
-    >
-      <div className="absolute -top-8 -right-6 select-none text-[72px] font-semibold tracking-tight text-zinc-950/6 dark:text-white/10">
-        {index}
+    <div className="rounded-3xl bg-white/75 p-5 shadow-sm backdrop-blur dark:bg-zinc-950/35">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-500">
+          {index}
+        </span>
+        <span className="h-2 w-2 rounded-full bg-orange-500" />
       </div>
-      <div className="relative">
-        <div className="flex items-center justify-between gap-3">
-          <Badge tone={featured ? "orange" : "neutral"}>Step {index}</Badge>
-          {featured ? (
-            <Badge tone="verify">
-              <CheckIcon className="h-3.5 w-3.5" />
-              Verified
-            </Badge>
-          ) : null}
-        </div>
-        <div className="mt-4 text-lg font-semibold text-zinc-950 dark:text-zinc-50">
-          {title}
-        </div>
-        <div className="mt-2 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
-          {description}
-        </div>
-        {children ? <div className="mt-4">{children}</div> : null}
+      <div className="mt-5 text-base font-semibold text-zinc-950 dark:text-zinc-50">
+        {title}
       </div>
-    </Card>
+      <div className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+        {detail}
+      </div>
+    </div>
+  );
+}
+
+function ReceiptCard() {
+  return (
+    <div className="rounded-3xl bg-white p-5 shadow-sm dark:bg-zinc-950">
+      <div className="flex items-center justify-between">
+        <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+          Bank linked
+        </div>
+        <Badge tone="verify">Matched</Badge>
+      </div>
+      <div className="mt-5 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+        GTBank
+      </div>
+      <div className="mt-2 flex items-center justify-between rounded-2xl bg-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
+        <span>Victor Adeyemi</span>
+        <span>1802</span>
+      </div>
+    </div>
   );
 }
 
 export function HowItWorksSection() {
   return (
-    <section id="how" className="py-16 sm:py-24">
+    <section id="how" className="py-10 sm:py-16">
       <Container>
-        <div className="grid gap-10 lg:grid-cols-12 lg:items-start">
+        <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
           <div className="lg:col-span-5">
-            <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200/70 bg-white/70 px-3 py-1 text-xs font-semibold text-zinc-700 shadow-sm backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/30 dark:text-zinc-200">
-              How it works
-            </div>
-            <h2 className="mt-4 font-display text-4xl font-semibold leading-[1.03] tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-5xl">
-              Your{" "}
+            <Badge tone="orange">How it works</Badge>
+            <h2 className="mt-4 max-w-xl font-display text-4xl font-semibold leading-[1.03] tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-5xl">
+              Turn a{" "}
               <NairaTermBadge
                 term="handle"
                 tone="orange"
                 className="relative -top-1 px-3.5 py-1.5 text-base sm:px-4 sm:py-2 sm:text-lg"
               />{" "}
-              becomes your payment identity.
+              into a verified payment identity.
             </h2>
-            <p className="mt-4 max-w-xl text-base leading-7 text-zinc-700 dark:text-zinc-200">
-              Claim a name you’ll actually remember, link your bank once, then
-              send and receive with confidence because the recipient identity is
-              shown first.
+            <p className="mt-4 max-w-lg text-base leading-7 text-zinc-700 dark:text-zinc-200">
+              The flow is intentionally short: claim the name, link the bank, then
+              show a clear recipient preview before money moves.
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-              <ButtonLink href="#demo">See the live demo</ButtonLink>
+              <ButtonLink href="#demo">See live demo</ButtonLink>
               <ButtonLink href="#features" variant="secondary">
-                Explore platform features
+                Explore features
               </ButtonLink>
             </div>
           </div>
 
           <div className="lg:col-span-7">
-            <div className="grid gap-5 sm:grid-cols-2">
-              <StepCard
-                index="01"
-                title={
-                  <>
-                    Claim your{" "}
-                    <NairaTermBadge term="handle" tone="orange" size="md" />
-                  </>
-                }
-                description="Pick a simple name. It’s easier to share than an account number."
-              >
-                <div className="rounded-2xl border border-zinc-200/70 bg-white/70 px-4 py-3 text-sm font-semibold text-zinc-950 dark:border-zinc-800/80 dark:bg-zinc-950/25 dark:text-zinc-50">
-                  <Naira />
-                  mikki{" "}
-                  <span className="ml-2 rounded-full bg-orange-50 px-2 py-1 text-xs font-semibold text-orange-900 dark:bg-orange-950/30 dark:text-orange-100">
-                    Available
-                  </span>
-                </div>
-              </StepCard>
+            <div className="grid gap-4 lg:grid-cols-5">
+              <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-orange-100 via-white to-emerald-50 p-5 shadow-sm dark:from-orange-950/25 dark:via-zinc-950 dark:to-emerald-950/20 lg:col-span-3 lg:row-span-2">
+                <PhoneFrame />
+              </div>
 
-              <StepCard
-                index="02"
-                title="Link your bank account"
-                description="Connect once. Your handle points to a verified bank destination."
-                featured
-              >
-                <div className="rounded-2xl border border-orange-200/60 bg-white/60 px-4 py-3 text-sm font-semibold text-zinc-950 dark:border-orange-900/50 dark:bg-zinc-950/20 dark:text-zinc-50">
-                  GTBank{" "}
-                  <span className="text-zinc-500 dark:text-zinc-400">••••</span>{" "}
-                  1802
-                </div>
-              </StepCard>
+              <div className="grid gap-4 lg:col-span-2">
+                <MiniStep
+                  index="01"
+                  title="Claim the name"
+                  detail="Choose something memorable like victor or mama_ijebu."
+                />
+                <ReceiptCard />
+              </div>
 
-              <StepCard
-                index="03"
-                title="Verify identity signals"
-                description="Show names, banks, and badges before sending to reduce mistakes."
-              >
-                <div className="flex flex-wrap gap-2">
-                  <Badge tone="verify">BVN checks</Badge>
-                  <Badge tone="verify">Account name match</Badge>
-                  <Badge tone="verify">Business badge</Badge>
-                </div>
-              </StepCard>
-
-              <StepCard
-                index="04"
-                title="Send and receive by name"
-                description="Use handles in send flows, invoices, and payouts across apps."
-              >
-                <div className="rounded-2xl border border-zinc-200/70 bg-white/70 p-4 dark:border-zinc-800/80 dark:bg-zinc-950/25">
-                  <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-                    Recipient preview
+              <div className="grid gap-4 sm:grid-cols-3 lg:col-span-5">
+                <MiniStep
+                  index="02"
+                  title="Verify identity"
+                  detail="Add bank, BVN, and business signals."
+                />
+                <MiniStep
+                  index="03"
+                  title="Share everywhere"
+                  detail="Use the handle in links, QR, marketplace, and send flows."
+                />
+                <div className="rounded-3xl bg-zinc-950 p-5 text-white shadow-sm dark:bg-white dark:text-zinc-950">
+                  <div className="text-xs font-semibold opacity-70">Result</div>
+                  <div className="mt-5 text-3xl font-semibold tracking-tight">
+                    1 name
                   </div>
-                  <div className="mt-2 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                    <Naira />
-                    mama_ijebu{" "}
-                    <span className="ml-2 text-emerald-700 dark:text-emerald-300">
-                      ✓ Verified
-                    </span>
-                  </div>
-                  <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-                    Iya Basira (Mama Ijebu) · UBA
+                  <div className="mt-2 text-sm leading-6 opacity-80">
+                    A cleaner replacement for account-number guessing.
                   </div>
                 </div>
-              </StepCard>
+              </div>
             </div>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import { ButtonLink, Container, NairaTermBadge, cn } from "./ui";
+import { ButtonLink, Container, cn } from "./ui";
+import { AuthModalButton } from "@/components/auth/AuthModalButton";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 function Naira({ className }: { className?: string }) {
@@ -25,20 +26,125 @@ function LogoMark() {
   );
 }
 
-const links = [
-  { href: "#how", label: "How it works" },
-  { href: "#features", label: "Features" },
-  { href: "#services", label: "Services" },
-  { href: "#about", label: "About" },
-  { href: "#faq", label: "FAQ" },
-  { href: "#developers", label: "Developers" },
+type NavItem = {
+  href: string;
+  label: string;
+};
+
+const navGroups: Array<{ label: string; items: NavItem[] }> = [
+  {
+    label: "Product",
+    items: [
+      { href: "#how", label: "How it works" },
+      { href: "#features", label: "Features" },
+      { href: "#services", label: "Services" },
+    ],
+  },
+  {
+    label: "Tools",
+    items: [
+      { href: "/pay", label: "Pay links" },
+      { href: "/marketplace", label: "Marketplace" },
+      { href: "/map", label: "Live map" },
+      { href: "/referrals", label: "Referrals" },
+    ],
+  },
+  {
+    label: "Resources",
+    items: [
+      { href: "#about", label: "About" },
+      { href: "#faq", label: "FAQ" },
+      { href: "#developers", label: "Developers" },
+    ],
+  },
 ];
 
-const routeLinks = [
-  { href: "/pay", label: "Pay links" },
-  { href: "/marketplace", label: "Marketplace" },
-  { href: "/map", label: "Live map" },
-];
+function NavMenuItem({ item }: { item: NavItem }) {
+  const className =
+    "block rounded-xl px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 dark:hover:text-white";
+
+  if (item.href.startsWith("#")) {
+    return (
+      <a href={item.href} className={className}>
+        {item.label}
+      </a>
+    );
+  }
+
+  return (
+    <Link href={item.href} className={className}>
+      {item.label}
+    </Link>
+  );
+}
+
+function NavGroup({
+  group,
+  align = "left",
+}: {
+  group: (typeof navGroups)[number];
+  align?: "left" | "right";
+}) {
+  return (
+    <details className="group relative">
+      <summary className="flex cursor-pointer list-none items-center gap-1 rounded-full px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950 group-open:bg-zinc-100 group-open:text-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/70 dark:hover:text-white dark:group-open:bg-zinc-900/70 dark:group-open:text-white [&::-webkit-details-marker]:hidden">
+        {group.label}
+        <span className="text-[10px] text-zinc-400 transition group-open:rotate-180">v</span>
+      </summary>
+      <div
+        className={cn(
+          "absolute top-full z-50 mt-2 w-48 rounded-2xl border border-zinc-200/80 bg-white/95 p-1.5 shadow-xl shadow-zinc-950/10 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/95 dark:shadow-black/30",
+          align === "right" ? "right-0" : "left-0"
+        )}
+      >
+        {group.items.map((item) => (
+          <NavMenuItem key={item.href} item={item} />
+        ))}
+      </div>
+    </details>
+  );
+}
+
+function MobileMenu() {
+  return (
+    <details className="group relative md:hidden">
+      <summary className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-full border border-zinc-200/70 bg-white/80 text-zinc-900 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800/80 dark:bg-zinc-950/60 dark:text-zinc-50 dark:hover:bg-zinc-900 [&::-webkit-details-marker]:hidden">
+        <span className="sr-only">Open menu</span>
+        <span className="flex w-4 flex-col gap-1">
+          <span className="h-0.5 rounded-full bg-current transition group-open:translate-y-1.5 group-open:rotate-45" />
+          <span className="h-0.5 rounded-full bg-current transition group-open:opacity-0" />
+          <span className="h-0.5 rounded-full bg-current transition group-open:-translate-y-1.5 group-open:-rotate-45" />
+        </span>
+      </summary>
+
+      <div className="absolute right-0 top-full z-50 mt-3 w-[min(calc(100vw-2.5rem),22rem)] rounded-[1.5rem] border border-zinc-200/80 bg-white/96 p-3 shadow-xl shadow-zinc-950/10 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/96 dark:shadow-black/30">
+        <div className="grid gap-3">
+          {navGroups.map((group) => (
+            <div key={group.label}>
+              <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400 dark:text-zinc-500">
+                {group.label}
+              </div>
+              <div className="grid gap-1">
+                {group.items.map((item) => (
+                  <NavMenuItem key={item.href} item={item} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-3 grid gap-2 border-t border-zinc-200/70 pt-3 dark:border-zinc-800/80">
+          <AuthModalButton afterAuthHref="#demo" variant="secondary" className="w-full">
+            Check availability
+          </AuthModalButton>
+          <ButtonLink href="#claim" className="w-full">
+            Claim your name
+          </ButtonLink>
+        </div>
+      </div>
+    </details>
+  );
+}
 
 export function HeaderNav() {
   return (
@@ -53,39 +159,30 @@ export function HeaderNav() {
 
         <nav
           aria-label="Primary"
-          className="hidden items-center gap-7 text-sm font-medium text-zinc-700 dark:text-zinc-200 md:flex"
+          className="hidden items-center gap-1 text-sm font-medium text-zinc-700 dark:text-zinc-200 md:flex"
         >
-          {links.map((l) => (
-            <a
-              key={l.href}
-              href={l.href}
-              className="transition hover:text-zinc-950 dark:hover:text-white"
-            >
-              {l.label}
-            </a>
-          ))}
-          {routeLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="transition hover:text-zinc-950 dark:hover:text-white"
-            >
-              {link.label}
-            </Link>
+          {navGroups.map((group, index) => (
+            <NavGroup
+              key={group.label}
+              group={group}
+              align={index === navGroups.length - 1 ? "right" : "left"}
+            />
           ))}
         </nav>
 
         <div className="flex items-center gap-3">
           <ThemeToggle className="px-3 py-2" />
-          <a
-            href="#demo"
-            className="hidden rounded-full px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900/40 sm:inline-flex"
+          <AuthModalButton
+            afterAuthHref="#demo"
+            variant="plain"
+            className="hidden md:inline-flex"
           >
             Check availability
-          </a>
-          <ButtonLink href="#claim" className="px-4 py-2.5">
-            Claim your <NairaTermBadge term="name" tone="inverted" />
+          </AuthModalButton>
+          <ButtonLink href="#claim" className="hidden px-4 py-2.5 md:inline-flex">
+            Claim your name
           </ButtonLink>
+          <MobileMenu />
         </div>
       </Container>
     </header>

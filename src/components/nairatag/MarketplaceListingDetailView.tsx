@@ -21,6 +21,12 @@ function formatCompactCurrency(amount: number) {
   }).format(amount);
 }
 
+function creditTone(riskBand?: "low" | "medium" | "high") {
+  if (riskBand === "low") return "verify";
+  if (riskBand === "medium") return "orange";
+  return "neutral";
+}
+
 export function MarketplaceListingDetailView({
   detail,
 }: {
@@ -75,6 +81,11 @@ export function MarketplaceListingDetailView({
                 <Badge tone="neutral">
                   {detail.listing.commissionBps / 100}% marketplace commission
                 </Badge>
+                {detail.transfer ? (
+                  <Badge tone={detail.transfer.status === "pending_review" ? "orange" : "verify"}>
+                    transfer {detail.transfer.status.replace("_", " ")}
+                  </Badge>
+                ) : null}
               </div>
 
               <div className="mt-5 grid gap-4 md:grid-cols-3">
@@ -130,6 +141,50 @@ export function MarketplaceListingDetailView({
                 </div>
               </div>
 
+              {detail.creditProfile ? (
+                <div className="mt-5 rounded-[1.5rem] border border-zinc-200/70 bg-zinc-50/80 p-5 dark:border-zinc-800/80 dark:bg-zinc-900/40">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                        Phase 2 credit profile
+                      </div>
+                      <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                        Score {detail.creditProfile.score} · {detail.creditProfile.repaymentConfidence}% repayment confidence
+                      </div>
+                    </div>
+                    <Badge tone={creditTone(detail.creditProfile.riskBand)}>
+                      {detail.creditProfile.riskBand} risk
+                    </Badge>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                        Limit
+                      </div>
+                      <div className="mt-1 text-lg font-semibold text-zinc-950 dark:text-zinc-50">
+                        {formatCompactCurrency(detail.creditProfile.recommendedLimit)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                        Active
+                      </div>
+                      <div className="mt-1 text-lg font-semibold text-zinc-950 dark:text-zinc-50">
+                        {detail.creditProfile.activeMonths} mo
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                        Settled
+                      </div>
+                      <div className="mt-1 text-lg font-semibold text-zinc-950 dark:text-zinc-50">
+                        {detail.creditProfile.settledTransactionCount}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
               {detail.listing.sellerNote ? (
                 <div className="mt-5 rounded-[1.5rem] border border-zinc-200/70 bg-zinc-50/80 p-5 text-sm leading-7 text-zinc-600 dark:border-zinc-800/80 dark:bg-zinc-900/40 dark:text-zinc-300">
                   {detail.listing.sellerNote}
@@ -139,6 +194,9 @@ export function MarketplaceListingDetailView({
               <div className="mt-5 flex flex-wrap gap-3">
                 <ButtonLink href={`/pay/${detail.listing.handle}`} variant="secondary">
                   Open pay page
+                </ButtonLink>
+                <ButtonLink href={`/h/${detail.listing.handle}`} variant="secondary">
+                  Public profile
                 </ButtonLink>
                 <ButtonLink href="/marketplace" variant="secondary">
                   Browse other listings
@@ -154,6 +212,29 @@ export function MarketplaceListingDetailView({
                 minOfferAmount={detail.listing.minOfferAmount}
                 disabled={detail.listing.status !== "active"}
               />
+
+              {detail.transfer ? (
+                <Card className="p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                        Transfer review
+                      </div>
+                      <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                        Accepted offer is tracked until review closes.
+                      </div>
+                    </div>
+                    <Badge tone={detail.transfer.status === "pending_review" ? "orange" : "verify"}>
+                      {detail.transfer.status.replace("_", " ")}
+                    </Badge>
+                  </div>
+                  <div className="mt-4 space-y-2 text-sm text-zinc-600 dark:text-zinc-300">
+                    <p>Buyer: {detail.transfer.buyerName}</p>
+                    <p>Offer: {formatCurrency(detail.transfer.amount)}</p>
+                    <p>Opened: {new Date(detail.transfer.createdAt).toLocaleString()}</p>
+                  </div>
+                </Card>
+              ) : null}
 
               <Card className="p-5">
                 <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
