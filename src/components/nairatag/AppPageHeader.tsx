@@ -1,8 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 
+import { AuthModalButton } from "@/components/auth/AuthModalButton";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Container, ButtonLink, cn } from "./ui";
 
@@ -29,35 +30,108 @@ function LogoMark() {
 }
 
 const toolLinks = [
-  { href: "/dashboard", label: "Dashboard" },
+  {
+    href: "/dashboard",
+    label: "Dashboard",
+    requiresAuth: true,
+    unauthenticatedLabel: "Get Started",
+  },
   { href: "/payments/payment-links", label: "Payment Links" },
   { href: "/send/crypto", label: "Send crypto" },
-  { href: "/notifications", label: "Notifications" },
-  { href: "/pay", label: "Pay links" },
+  { href: "/payments/payment-links", label: "Pay links" },
   { href: "/marketplace", label: "Marketplace" },
   { href: "/map", label: "Live map" },
   { href: "/referrals", label: "Referrals" },
 ];
 
 function ToolsMenu() {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const panelId = useId();
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
   return (
-    <details className="group relative">
-      <summary className="flex cursor-pointer list-none items-center gap-1 rounded-full px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950 group-open:bg-zinc-100 group-open:text-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/70 dark:hover:text-white dark:group-open:bg-zinc-900/70 dark:group-open:text-white [&::-webkit-details-marker]:hidden">
+    <div
+      ref={rootRef}
+      className="relative"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlurCapture={(event) => {
+        if (!rootRef.current?.contains(event.relatedTarget as Node | null)) {
+          setOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => setOpen(true)}
+        className={cn(
+          "flex items-center gap-1 rounded-full px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/70 dark:hover:text-white",
+          open &&
+            "bg-zinc-100 text-zinc-950 dark:bg-zinc-900/70 dark:text-white"
+        )}
+      >
         Tools
-        <span className="text-[10px] text-zinc-400 transition group-open:rotate-180">v</span>
-      </summary>
-      <div className="absolute left-0 top-full z-50 mt-2 w-48 rounded-2xl border border-zinc-200/80 bg-white/95 p-1.5 shadow-xl shadow-zinc-950/10 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/95 dark:shadow-black/30">
+        <span
+          className={cn(
+            "text-[10px] text-zinc-400 transition",
+            open && "rotate-180"
+          )}
+          aria-hidden="true"
+        >
+          v
+        </span>
+      </button>
+      <div
+        id={panelId}
+        className="absolute left-0 top-full z-50 mt-2 w-48 rounded-2xl border border-zinc-200/80 bg-white/95 p-1.5 shadow-xl shadow-zinc-950/10 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/95 dark:shadow-black/30"
+        hidden={!open}
+      >
         {toolLinks.map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className="block rounded-xl px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 dark:hover:text-white"
-          >
-            {link.label}
-          </Link>
+          <div key={link.href} onClick={() => setOpen(false)}>
+            {link.requiresAuth ? (
+              <AuthModalButton
+                afterAuthHref={link.href}
+                unauthenticatedChildren={link.unauthenticatedLabel}
+                variant="plain"
+                className="!flex !w-full !justify-start !rounded-xl !px-3 !py-2 text-sm font-semibold"
+              >
+                {link.label}
+              </AuthModalButton>
+            ) : (
+              <Link
+                href={link.href}
+                className="block rounded-xl px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 dark:hover:text-white"
+              >
+                {link.label}
+              </Link>
+            )}
+          </div>
         ))}
       </div>
-    </details>
+    </div>
   );
 }
 
@@ -91,33 +165,39 @@ export function AppPageHeader({
             Home
           </Link>
           <ToolsMenu />
-          <Link
-            href="/dashboard"
+          <AuthModalButton
+            afterAuthHref="/dashboard"
+            unauthenticatedChildren="Get Started"
+            variant="plain"
             className="rounded-full px-3 py-2 font-semibold transition hover:bg-zinc-100 hover:text-zinc-950 dark:hover:bg-zinc-900/70 dark:hover:text-white"
           >
             Dashboard
-          </Link>
+          </AuthModalButton>
           <Link
             href="/agent"
             className="rounded-full px-3 py-2 font-semibold transition hover:bg-zinc-100 hover:text-zinc-950 dark:hover:bg-zinc-900/70 dark:hover:text-white"
           >
             Agent
           </Link>
-          <Link
-            href="/admin"
-            className="rounded-full px-3 py-2 font-semibold transition hover:bg-zinc-100 hover:text-zinc-950 dark:hover:bg-zinc-900/70 dark:hover:text-white"
-          >
-            Admin
-          </Link>
         </nav>
 
         <div className="flex items-center gap-3">
-          <ThemeToggle className="px-3 py-2" />
-          {rightSlot ?? (
-            <ButtonLink href={ctaHref} className="px-4 py-2.5">
-              {ctaLabel}
-            </ButtonLink>
-          )}
+          <ThemeToggle />
+          {rightSlot ??
+            (ctaHref === "/dashboard" ? (
+              <AuthModalButton
+                afterAuthHref="/dashboard"
+                unauthenticatedChildren="Get Started"
+                variant="primary"
+                className="px-4 py-2.5"
+              >
+                {ctaLabel}
+              </AuthModalButton>
+            ) : (
+              <ButtonLink href={ctaHref} className="px-4 py-2.5">
+                {ctaLabel}
+              </ButtonLink>
+            ))}
         </div>
       </Container>
     </header>

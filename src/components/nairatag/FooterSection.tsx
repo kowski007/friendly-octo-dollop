@@ -18,7 +18,7 @@ const linkGroups: Array<{ label: string; links: FooterLink[] }> = [
   {
     label: "Tools",
     links: [
-      { label: "Pay links", href: "/pay" },
+      { label: "Pay links", href: "/payments/payment-links" },
       { label: "Marketplace", href: "/marketplace" },
       { label: "Live map", href: "/map" },
     ],

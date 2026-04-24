@@ -221,10 +221,10 @@ export function PaymentLinksProductPage() {
                 `/pay/femi`
               </Link>
               <Link
-                href="/pay"
+                href="/dashboard"
                 className="inline-flex h-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/15"
               >
-                Build a link
+                Open dashboard
               </Link>
             </div>
           </Container>

@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { ButtonLink, Container, cn } from "./ui";
 import { AuthModalButton } from "@/components/auth/AuthModalButton";
@@ -29,6 +32,8 @@ function LogoMark() {
 type NavItem = {
   href: string;
   label: string;
+  requiresAuth?: boolean;
+  unauthenticatedLabel?: string;
 };
 
 const navGroups: Array<{ label: string; items: NavItem[] }> = [
@@ -43,10 +48,14 @@ const navGroups: Array<{ label: string; items: NavItem[] }> = [
   {
     label: "Tools",
     items: [
-      { href: "/dashboard", label: "Dashboard" },
-      { href: "/notifications", label: "Notifications" },
+      {
+        href: "/dashboard",
+        label: "Dashboard",
+        requiresAuth: true,
+        unauthenticatedLabel: "Get Started",
+      },
       { href: "/payments/payment-links", label: "Payment Links" },
-      { href: "/pay", label: "Pay links" },
+      { href: "/payments/payment-links", label: "Pay links" },
       { href: "/marketplace", label: "Marketplace" },
       { href: "/map", label: "Live map" },
       { href: "/referrals", label: "Referrals" },
@@ -65,6 +74,19 @@ const navGroups: Array<{ label: string; items: NavItem[] }> = [
 function NavMenuItem({ item }: { item: NavItem }) {
   const className =
     "block rounded-xl px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 dark:hover:text-white";
+
+  if (item.requiresAuth) {
+    return (
+      <AuthModalButton
+        afterAuthHref={item.href}
+        unauthenticatedChildren={item.unauthenticatedLabel}
+        variant="plain"
+        className="!flex !w-full !justify-start !rounded-xl !px-3 !py-2 text-sm font-semibold"
+      >
+        {item.label}
+      </AuthModalButton>
+    );
+  }
 
   if (item.href.startsWith("#")) {
     return (
@@ -88,23 +110,80 @@ function NavGroup({
   group: (typeof navGroups)[number];
   align?: "left" | "right";
 }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const panelId = useId();
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
   return (
-    <details className="group relative">
-      <summary className="flex cursor-pointer list-none items-center gap-1 rounded-full px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950 group-open:bg-zinc-100 group-open:text-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/70 dark:hover:text-white dark:group-open:bg-zinc-900/70 dark:group-open:text-white [&::-webkit-details-marker]:hidden">
-        {group.label}
-        <span className="text-[10px] text-zinc-400 transition group-open:rotate-180">v</span>
-      </summary>
-      <div
+    <div
+      ref={rootRef}
+      className="relative"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlurCapture={(event) => {
+        if (!rootRef.current?.contains(event.relatedTarget as Node | null)) {
+          setOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => setOpen(true)}
         className={cn(
-          "absolute top-full z-50 mt-2 w-48 rounded-2xl border border-zinc-200/80 bg-white/95 p-1.5 shadow-xl shadow-zinc-950/10 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/95 dark:shadow-black/30",
-          align === "right" ? "right-0" : "left-0"
+          "flex items-center gap-1 rounded-full px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/70 dark:hover:text-white",
+          open &&
+            "bg-zinc-100 text-zinc-950 dark:bg-zinc-900/70 dark:text-white"
         )}
       >
+        {group.label}
+        <span
+          className={cn(
+            "text-[10px] text-zinc-400 transition",
+            open && "rotate-180"
+          )}
+          aria-hidden="true"
+        >
+          v
+        </span>
+      </button>
+      <div
+        id={panelId}
+        className={cn(
+          "absolute top-full z-50 mt-2 w-48 rounded-2xl border border-zinc-200/80 bg-white/95 p-1.5 shadow-xl shadow-zinc-950/10 backdrop-blur transition dark:border-zinc-800/80 dark:bg-zinc-950/95 dark:shadow-black/30",
+          align === "right" ? "right-0" : "left-0"
+        )}
+        hidden={!open}
+      >
         {group.items.map((item) => (
-          <NavMenuItem key={item.href} item={item} />
+          <div key={item.href} onClick={() => setOpen(false)}>
+            <NavMenuItem item={item} />
+          </div>
         ))}
       </div>
-    </details>
+    </div>
   );
 }
 
@@ -137,7 +216,12 @@ function MobileMenu() {
         </div>
 
         <div className="mt-3 grid gap-2 border-t border-zinc-200/70 pt-3 dark:border-zinc-800/80">
-          <AuthModalButton afterAuthHref="/dashboard" variant="secondary" className="w-full">
+          <AuthModalButton
+            afterAuthHref="/dashboard"
+            unauthenticatedChildren="Get Started"
+            variant="secondary"
+            className="w-full"
+          >
             Dashboard
           </AuthModalButton>
           <ButtonLink href="#claim" className="w-full">
@@ -174,9 +258,10 @@ export function HeaderNav() {
         </nav>
 
         <div className="flex items-center gap-3">
-          <ThemeToggle className="px-3 py-2" />
+          <ThemeToggle />
           <AuthModalButton
             afterAuthHref="/dashboard"
+            unauthenticatedChildren="Get Started"
             variant="plain"
             className="hidden md:inline-flex"
           >

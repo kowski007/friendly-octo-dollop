@@ -557,14 +557,12 @@ function WalletLinkPanel({
 function HeaderProfileMenu({
   user,
   claim,
-  notifications,
 }: {
   user: UserRecord;
   claim: ClaimRecord | null;
-  notifications: NotificationSummary;
 }) {
   const profilePath = claim ? `/h/${claim.handle}` : "/agent";
-  const payPath = claim ? `/pay/${claim.handle}` : "/pay";
+  const payPath = claim ? `/pay/${claim.handle}` : "/payments/payment-links";
   const label = claim ? `${NAIRA}${claim.handle}` : user.phone;
   const itemClass =
     "block rounded-xl px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 dark:hover:text-white";
@@ -589,25 +587,56 @@ function HeaderProfileMenu({
         >
           {claim ? "Pay page" : "Pay links"}
         </Link>
-        <Link
-          href="/pay"
-          className={itemClass}
-        >
-          Pay links
-        </Link>
-        <Link
-          href="/notifications"
-          className={itemClass}
-        >
-          {notifications.unread > 0
-            ? `Notifications (${notifications.unread})`
-            : "Notifications"}
-        </Link>
+          <Link
+            href="/payments/payment-links"
+            className={itemClass}
+          >
+            Pay links
+          </Link>
         <div className="border-t border-zinc-200/70 px-1 pt-1.5 dark:border-zinc-800/80">
           <SignOutButton className="w-full justify-center border-0 bg-transparent px-3 hover:bg-zinc-100 dark:hover:bg-zinc-900" />
         </div>
       </div>
     </details>
+  );
+}
+
+function NotificationBell({
+  unread,
+}: {
+  unread: number;
+}) {
+  return (
+    <Link
+      href="/notifications"
+      aria-label={
+        unread > 0
+          ? `Open notifications, ${unread} unread`
+          : "Open notifications"
+      }
+      className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-200/70 bg-white/85 text-zinc-900 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800/80 dark:bg-zinc-950/55 dark:text-zinc-50 dark:hover:bg-zinc-900/70"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        className="h-4.5 w-4.5"
+        fill="none"
+        aria-hidden="true"
+      >
+        <path
+          d="M8 18h8M10.5 21h3M6 18V11a6 6 0 1 1 12 0v7l1.5 1.5H4.5L6 18Z"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      {unread > 0 ? (
+        <>
+          <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-nt-orange" />
+          <span className="sr-only">{unread} unread notifications</span>
+        </>
+      ) : null}
+    </Link>
   );
 }
 
@@ -844,11 +873,13 @@ export function UserDashboardView({ data }: { data: UserDashboardData | null }) 
         ctaHref={claim ? profilePath : "/agent"}
         ctaLabel={claim ? "Public profile" : "Claim a handle"}
         rightSlot={
-          <HeaderProfileMenu
-            user={user}
-            claim={claim}
-            notifications={notifications}
-          />
+          <div className="flex items-center gap-2">
+            <NotificationBell unread={notifications.unread} />
+            <HeaderProfileMenu
+              user={user}
+              claim={claim}
+            />
+          </div>
         }
       />
 

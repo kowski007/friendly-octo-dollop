@@ -7,6 +7,7 @@ import { cn } from "@/components/nairatag/ui";
 
 type AuthModalButtonProps = {
   children: ReactNode;
+  unauthenticatedChildren?: ReactNode;
   className?: string;
   afterAuthHref?: string;
   variant?: "primary" | "secondary" | "plain";
@@ -38,6 +39,7 @@ function syncAnchor(href: string) {
 
 export function AuthModalButton({
   children,
+  unauthenticatedChildren,
   className,
   afterAuthHref = "#demo",
   variant = "secondary",
@@ -45,7 +47,7 @@ export function AuthModalButton({
   if (!process.env.NEXT_PUBLIC_PRIVY_APP_ID) {
     return (
       <a href={afterAuthHref} className={cn(baseClass, variantClass[variant], className)}>
-        {children}
+        {unauthenticatedChildren ?? children}
       </a>
     );
   }
@@ -54,6 +56,7 @@ export function AuthModalButton({
     <PrivyAuthButtonInner
       afterAuthHref={afterAuthHref}
       className={className}
+      unauthenticatedChildren={unauthenticatedChildren}
       variant={variant}
     >
       {children}
@@ -65,11 +68,13 @@ function PrivyAuthButtonInner({
   children,
   className,
   afterAuthHref,
+  unauthenticatedChildren,
   variant,
 }: {
   children: ReactNode;
   className?: string;
   afterAuthHref: string;
+  unauthenticatedChildren?: ReactNode;
   variant: NonNullable<AuthModalButtonProps["variant"]>;
 }) {
   const { ready, authenticated, login, getAccessToken } = usePrivy();
@@ -123,7 +128,11 @@ function PrivyAuthButtonInner({
       onClick={onClick}
       className={cn(baseClass, variantClass[variant], className)}
     >
-      {busy ? "Connecting..." : children}
+      {busy
+        ? "Connecting..."
+        : authenticated
+          ? children
+          : (unauthenticatedChildren ?? children)}
     </button>
   );
 }

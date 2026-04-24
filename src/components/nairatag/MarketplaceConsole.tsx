@@ -682,9 +682,9 @@ export function MarketplaceConsole() {
                 {!dashboard.claim ? (
                   <ButtonLink href="/agent">Claim a handle</ButtonLink>
                 ) : !dashboard.bankAccount ? (
-                  <ButtonLink href="/pay" variant="secondary">
-                    Finish payout setup
-                  </ButtonLink>
+                    <ButtonLink href="/dashboard" variant="secondary">
+                      Finish payout setup
+                    </ButtonLink>
                 ) : null}
               </div>
             </div>

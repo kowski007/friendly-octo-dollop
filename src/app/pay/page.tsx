@@ -1,7 +1,7 @@
-import { PaymentLinkBuilder } from "@/components/nairatag/PaymentLinkBuilder";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default function PayBuilderPage() {
-  return <PaymentLinkBuilder />;
+  redirect("/payments/payment-links");
 }
