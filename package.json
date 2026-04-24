@@ -9,13 +9,21 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@ensdomains/ens-avatar": "^2.0.3",
+    "@ensdomains/ens-contracts": "^0.0.19",
+    "@ensdomains/ensjs": "^2.1.0",
+    "@graphql-request/client": "^6.1.0",
     "@privy-io/node": "0.15.0",
     "@privy-io/react-auth": "3.22.1",
     "@types/pg": "^8.20.0",
+    "ethers": "^6.16.0",
+    "graphql": "^16.9.0",
+    "graphql-request": "^6.2.0",
     "next": "16.2.3",
     "pg": "^8.20.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "viem": "^2.21.0"
   },
   "devDependencies": {
     "@types/node": "^20",

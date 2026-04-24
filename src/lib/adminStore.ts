@@ -7,11 +7,20 @@ import {
   readAdminStateFromDatabase,
   writeAdminStateToDatabase,
 } from "./adminPersistence";
+import {
+  BASE_USDC,
+  type CryptoResolveError,
+  type CryptoResolveSuccess,
+} from "./cryptoConfig";
+import { resolveEnsExecutionTarget } from "./ens";
 import type {
   AdminMetrics,
   ApiLogRecord,
   BankAccountRecord,
   ClaimRecord,
+  CryptoAsset,
+  CryptoChain,
+  CryptoWalletRecord,
   CreditProfile,
   HandleReputation,
   MarketplaceEligibility,
@@ -43,6 +52,7 @@ export type AdminData = {
   users: UserRecord[];
   otps: OtpRecord[];
   bankAccounts: BankAccountRecord[];
+  cryptoWallets: CryptoWalletRecord[];
   transactions: TransactionRecord[];
   marketplaceListings: MarketplaceListingRecord[];
   marketplaceOffers: MarketplaceOfferRecord[];
@@ -68,6 +78,7 @@ function emptyData(): AdminData {
     users: [],
     otps: [],
     bankAccounts: [],
+    cryptoWallets: [],
     transactions: [],
     marketplaceListings: [],
     marketplaceOffers: [],
@@ -126,6 +137,9 @@ function normalizeData(parsed: Partial<AdminData> | null | undefined): AdminData
     otps: Array.isArray(parsed?.otps) ? (parsed!.otps as OtpRecord[]) : [],
     bankAccounts: Array.isArray(parsed?.bankAccounts)
       ? (parsed!.bankAccounts as BankAccountRecord[])
+      : [],
+    cryptoWallets: Array.isArray(parsed?.cryptoWallets)
+      ? (parsed!.cryptoWallets as CryptoWalletRecord[])
       : [],
     transactions: Array.isArray(parsed?.transactions)
       ? (parsed!.transactions as TransactionRecord[])
@@ -393,6 +407,19 @@ export function normalizeHandle(input: string) {
 
 export function isValidHandle(handle: string) {
   return /^[a-z0-9_]{2,20}$/.test(handle);
+}
+
+function normalizeAvatarUrl(input?: string) {
+  const raw = input?.trim();
+  if (!raw) return undefined;
+  if (raw.length > 400_000) throw new Error("avatar_too_large");
+
+  if (/^https?:\/\/\S+$/i.test(raw)) return raw;
+  if (/^data:image\/(png|jpe?g|webp|gif);base64,[a-z0-9+/=]+$/i.test(raw)) {
+    return raw;
+  }
+
+  throw new Error("invalid_avatar_url");
 }
 
 export type ResolveResult =
@@ -1070,6 +1097,7 @@ function buildPublicHandleProfile(
   return {
     handle: claim.handle,
     displayName: claim.displayName,
+    avatarUrl: user?.avatarUrl,
     bio: activeListing?.sellerNote,
     location: user?.geo?.city,
     memberSince: claim.claimedAt,
@@ -1390,6 +1418,14 @@ function normalizeWalletAddress(input: string | undefined) {
   const value = input?.trim();
   if (!value) return null;
   return value.toLowerCase();
+}
+
+function displayHandleFor(handle: string) {
+  return `\u20A6${handle}`;
+}
+
+function signatureAuditHash(signature: string) {
+  return crypto.createHash("sha256").update(signature.trim().toLowerCase()).digest("hex");
 }
 
 function fallbackPrivyPhone(privyUserId: string) {
@@ -1761,6 +1797,272 @@ export async function getPaymentDestinationByHandle(handle: string) {
           }
         : null,
     };
+  });
+}
+
+export async function getCryptoWalletForHandle({
+  handle,
+  chain = "base",
+}: {
+  handle: string;
+  chain?: CryptoChain;
+}) {
+  const normalized = normalizeHandle(handle);
+  if (!normalized) return null;
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    return (
+      data.cryptoWallets.find(
+        (entry) =>
+          entry.handle === normalized &&
+          entry.chain === chain &&
+          entry.isDefault &&
+          entry.walletVerified
+      ) ?? null
+    );
+  });
+}
+
+export type CryptoResolveResult =
+  | CryptoResolveSuccess
+  | {
+      status: CryptoResolveError["status"];
+      code:
+        | "INVALID_HANDLE"
+        | "UNSUPPORTED_CHAIN"
+        | "UNSUPPORTED_ASSET"
+        | "NO_CRYPTO_DESTINATION";
+      message: string;
+      handle?: string;
+      display_handle?: string;
+      chain?: CryptoChain;
+      asset?: CryptoAsset;
+    };
+
+export async function resolveCryptoDestination({
+  handle,
+  chain,
+  asset,
+}: {
+  handle: string;
+  chain: CryptoChain | null;
+  asset: CryptoAsset | null;
+}): Promise<CryptoResolveResult> {
+  const normalized = normalizeHandle(handle);
+  const normalizedIsHandle = Boolean(normalized && isValidHandle(normalized));
+  const maybeEnsName = handle.trim().includes(".");
+  const displayValue = normalizedIsHandle ? displayHandleFor(normalized) : handle.trim();
+
+  if (!normalizedIsHandle && !maybeEnsName) {
+    return {
+      status: "error",
+      code: "INVALID_HANDLE",
+      message: "Enter a valid NairaTag handle or ENS name.",
+    };
+  }
+
+  if (chain !== "base") {
+    return {
+      status: "error",
+      code: "UNSUPPORTED_CHAIN",
+      message: "Only Base is supported for crypto payments in V1.",
+      handle: normalized || handle.trim().toLowerCase(),
+      display_handle: displayValue,
+    };
+  }
+
+  if (asset !== "USDC") {
+    return {
+      status: "error",
+      code: "UNSUPPORTED_ASSET",
+      message: "Only USDC is supported for crypto payments in V1.",
+      handle: normalized || handle.trim().toLowerCase(),
+      display_handle: displayValue,
+      chain,
+    };
+  }
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    if (normalizedIsHandle) {
+      const wallet = data.cryptoWallets.find(
+        (entry) =>
+          entry.handle === normalized &&
+          entry.chain === chain &&
+          entry.isDefault &&
+          entry.walletVerified
+      );
+
+      if (wallet) {
+        return {
+          status: "success",
+          handle: normalized,
+          display_handle: displayHandleFor(normalized),
+          chain,
+          asset,
+          wallet_address: wallet.walletAddress,
+          wallet_verified: true,
+          resolution_source: "direct_wallet",
+          resolved_name: null,
+          resolver_address: null,
+          avatar: null,
+          token_contract: BASE_USDC.contractAddress,
+          decimals: BASE_USDC.decimals,
+        };
+      }
+    }
+
+    const ensResult = await resolveEnsExecutionTarget(handle).catch(() => null);
+    if (ensResult?.address) {
+      return {
+        status: "success",
+        handle: normalizedIsHandle ? normalized : ensResult.name,
+        display_handle: normalizedIsHandle
+          ? displayHandleFor(normalized)
+          : ensResult.displayName,
+        chain,
+        asset,
+        wallet_address: ensResult.address,
+        wallet_verified: true,
+        resolution_source: ensResult.source,
+        resolved_name: ensResult.executionName,
+        resolver_address: ensResult.resolver?.address ?? null,
+        avatar: ensResult.avatar?.url ?? null,
+        token_contract: BASE_USDC.contractAddress,
+        decimals: BASE_USDC.decimals,
+      };
+    }
+
+    return {
+      status: "error",
+      code: "NO_CRYPTO_DESTINATION",
+      message: normalizedIsHandle
+        ? "This handle has no direct wallet or ENS execution target yet."
+        : "This ENS name did not resolve to a Base execution address.",
+      handle: normalizedIsHandle ? normalized : handle.trim().toLowerCase(),
+      display_handle: displayValue,
+      chain,
+      asset,
+    };
+  });
+}
+
+export async function getCryptoWalletForUserHandle({
+  userId,
+  handle,
+  chain = "base",
+}: {
+  userId: string;
+  handle: string;
+  chain?: CryptoChain;
+}) {
+  const normalized = normalizeHandle(handle);
+  if (!normalized) return null;
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    return (
+      data.cryptoWallets.find(
+        (entry) =>
+          entry.userId === userId &&
+          entry.handle === normalized &&
+          entry.chain === chain &&
+          entry.isDefault
+      ) ?? null
+    );
+  });
+}
+
+export async function linkCryptoWalletForHandle({
+  userId,
+  handle,
+  walletAddress,
+  chain = "base",
+  signature,
+  nonce,
+}: {
+  userId: string;
+  handle: string;
+  walletAddress: string;
+  chain?: CryptoChain;
+  signature: string;
+  nonce: string;
+}) {
+  const normalizedHandle = normalizeHandle(handle);
+  const normalizedWalletAddress = normalizeWalletAddress(walletAddress);
+  const cleanNonce = nonce.trim();
+  if (!normalizedHandle) throw new Error("missing_handle");
+  if (!isValidHandle(normalizedHandle)) throw new Error("invalid_handle");
+  if (!normalizedWalletAddress) throw new Error("invalid_wallet_address");
+  if (!cleanNonce) throw new Error("missing_nonce");
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const claim = data.claims.find((entry) => entry.handle === normalizedHandle);
+    if (!claim) throw new Error("handle_not_found");
+    if (claim.userId !== userId) throw new Error("handle_not_owned");
+
+    const nonceUsed = data.cryptoWallets.some(
+      (entry) => entry.nonce === cleanNonce && entry.handle === normalizedHandle
+    );
+    if (nonceUsed) throw new Error("nonce_already_used");
+
+    const walletOwner = data.cryptoWallets.find(
+      (entry) =>
+        entry.walletAddress.toLowerCase() === normalizedWalletAddress &&
+        entry.userId !== userId
+    );
+    if (walletOwner) throw new Error("wallet_linked_to_another_user");
+
+    const nowIso = new Date().toISOString();
+    const existing = data.cryptoWallets.find(
+      (entry) =>
+        entry.userId === userId &&
+        entry.handle === normalizedHandle &&
+        entry.chain === chain &&
+        entry.isDefault
+    );
+
+    const record: CryptoWalletRecord = existing ?? {
+      id: newId("cw"),
+      userId,
+      handle: normalizedHandle,
+      displayHandle: displayHandleFor(normalizedHandle),
+      walletAddress: normalizedWalletAddress,
+      chain,
+      isDefault: true,
+      walletVerified: true,
+      signatureHash: signatureAuditHash(signature),
+      nonce: cleanNonce,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    record.displayHandle = displayHandleFor(normalizedHandle);
+    record.walletAddress = normalizedWalletAddress;
+    record.chain = chain;
+    record.isDefault = true;
+    record.walletVerified = true;
+    record.signatureHash = signatureAuditHash(signature);
+    record.nonce = cleanNonce;
+    record.updatedAt = nowIso;
+
+    for (const wallet of data.cryptoWallets) {
+      if (
+        wallet.id !== record.id &&
+        wallet.handle === normalizedHandle &&
+        wallet.chain === chain
+      ) {
+        wallet.isDefault = false;
+        wallet.updatedAt = nowIso;
+      }
+    }
+
+    if (!existing) data.cryptoWallets.unshift(record);
+
+    await writeDataUnsafe(data);
+    return record;
   });
 }
 
@@ -3078,6 +3380,91 @@ export async function linkBvnForUser({
 
     await writeDataUnsafe(data);
     return { user, claim: claim ?? null };
+  });
+}
+
+export async function updateUserProfileForUser({
+  userId,
+  fullName,
+  avatarUrl,
+  handle,
+}: {
+  userId: string;
+  fullName?: string;
+  avatarUrl?: string;
+  handle?: string;
+}) {
+  const cleanName = fullName?.trim();
+  if (cleanName !== undefined && cleanName.length > 0 && cleanName.length < 2) {
+    throw new Error("invalid_full_name");
+  }
+  if (cleanName && cleanName.length > 80) throw new Error("invalid_full_name");
+
+  const nextAvatarUrl = normalizeAvatarUrl(avatarUrl);
+  const requestedHandle =
+    handle === undefined || handle.trim() === "" ? undefined : normalizeHandle(handle);
+  if (requestedHandle && !isValidHandle(requestedHandle)) {
+    throw new Error("invalid_handle");
+  }
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const user = data.users.find((entry) => entry.id === userId);
+    if (!user) throw new Error("user_not_found");
+
+    const claim = data.claims.find((entry) => entry.userId === userId) ?? null;
+    const previousHandle = claim?.handle;
+
+    if (cleanName !== undefined) {
+      user.fullName = cleanName || undefined;
+      if (claim) {
+        claim.displayName = user.fullName || "Pending verification";
+      }
+    }
+
+    user.avatarUrl = nextAvatarUrl;
+
+    if (requestedHandle && requestedHandle !== previousHandle) {
+      if (!claim) throw new Error("missing_handle");
+      const existing = data.claims.find(
+        (entry) => entry.handle === requestedHandle && entry.id !== claim.id
+      );
+      if (existing) throw new Error("already_claimed");
+
+      claim.handle = requestedHandle;
+
+      if (previousHandle) {
+        for (const transaction of data.transactions) {
+          if (transaction.handle === previousHandle) transaction.handle = requestedHandle;
+          if (transaction.counterpartyHandle === previousHandle) {
+            transaction.counterpartyHandle = requestedHandle;
+          }
+        }
+        for (const notification of data.notifications) {
+          if (notification.handle === previousHandle) notification.handle = requestedHandle;
+        }
+        for (const listing of data.marketplaceListings) {
+          if (listing.handle === previousHandle) listing.handle = requestedHandle;
+        }
+        for (const offer of data.marketplaceOffers) {
+          if (offer.handle === previousHandle) offer.handle = requestedHandle;
+        }
+        for (const transfer of data.marketplaceTransfers) {
+          if (transfer.handle === previousHandle) transfer.handle = requestedHandle;
+        }
+        for (const referral of data.referrals) {
+          if (referral.referralCode === previousHandle) {
+            referral.referralCode = requestedHandle;
+          }
+        }
+      }
+    }
+
+    await writeDataUnsafe(data);
+    return {
+      user,
+      claim,
+    };
   });
 }
 

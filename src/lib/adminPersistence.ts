@@ -10,6 +10,7 @@ const NOTIFICATIONS_TABLE = "nt_notifications";
 const REFERRALS_TABLE = "nt_referrals";
 const OTPS_TABLE = "nt_phase0_otps";
 const BANK_ACCOUNTS_TABLE = "nt_phase0_bank_accounts";
+const CRYPTO_WALLETS_TABLE = "crypto_wallets";
 const TRANSACTIONS_TABLE = "nt_phase1_transactions";
 const MARKETPLACE_LISTINGS_TABLE = "nt_marketplace_listings";
 const MARKETPLACE_OFFERS_TABLE = "nt_marketplace_offers";
@@ -64,6 +65,7 @@ async function ensureSchema() {
       email text,
       wallet_address text,
       full_name text,
+      avatar_url text,
       bvn_last4 text,
       bvn_linked_at timestamptz,
       bank_linked_at timestamptz,
@@ -84,6 +86,9 @@ async function ensureSchema() {
   );
   await pool.query(
     `alter table ${USERS_TABLE} add column if not exists wallet_address text`
+  );
+  await pool.query(
+    `alter table ${USERS_TABLE} add column if not exists avatar_url text`
   );
   await pool.query(
     `alter table ${USERS_TABLE} add column if not exists referral_code text`
@@ -263,6 +268,34 @@ async function ensureSchema() {
     `create index if not exists ${BANK_ACCOUNTS_TABLE}_linked_at_idx on ${BANK_ACCOUNTS_TABLE}(linked_at desc)`
   );
   await pool.query(`
+    create table if not exists ${CRYPTO_WALLETS_TABLE} (
+      id text primary key,
+      user_id text not null,
+      handle text not null,
+      display_handle text not null,
+      wallet_address text not null,
+      chain text not null,
+      is_default boolean not null default true,
+      wallet_verified boolean not null default true,
+      signature_hash text not null,
+      nonce text not null,
+      created_at timestamptz not null,
+      updated_at timestamptz not null
+    )
+  `);
+  await pool.query(
+    `create unique index if not exists ${CRYPTO_WALLETS_TABLE}_default_handle_chain_idx on ${CRYPTO_WALLETS_TABLE}(handle, chain) where is_default`
+  );
+  await pool.query(
+    `create unique index if not exists ${CRYPTO_WALLETS_TABLE}_nonce_idx on ${CRYPTO_WALLETS_TABLE}(nonce)`
+  );
+  await pool.query(
+    `create index if not exists ${CRYPTO_WALLETS_TABLE}_user_idx on ${CRYPTO_WALLETS_TABLE}(user_id)`
+  );
+  await pool.query(
+    `create index if not exists ${CRYPTO_WALLETS_TABLE}_wallet_idx on ${CRYPTO_WALLETS_TABLE}(wallet_address)`
+  );
+  await pool.query(`
     create table if not exists ${TRANSACTIONS_TABLE} (
       id text primary key,
       handle text not null,
@@ -380,6 +413,7 @@ async function hasNormalizedData(client: PoolClient) {
     await countRows(client, REFERRALS_TABLE),
     await countRows(client, OTPS_TABLE),
     await countRows(client, BANK_ACCOUNTS_TABLE),
+    await countRows(client, CRYPTO_WALLETS_TABLE),
     await countRows(client, TRANSACTIONS_TABLE),
     await countRows(client, MARKETPLACE_LISTINGS_TABLE),
     await countRows(client, MARKETPLACE_OFFERS_TABLE),
@@ -398,6 +432,7 @@ function normalizeData(data: Partial<AdminData> | null | undefined): AdminData {
     referrals: Array.isArray(data?.referrals) ? data.referrals : [],
     otps: Array.isArray(data?.otps) ? data.otps : [],
     bankAccounts: Array.isArray(data?.bankAccounts) ? data.bankAccounts : [],
+    cryptoWallets: Array.isArray(data?.cryptoWallets) ? data.cryptoWallets : [],
     transactions: Array.isArray(data?.transactions) ? data.transactions : [],
     marketplaceListings: Array.isArray(data?.marketplaceListings)
       ? data.marketplaceListings
@@ -452,6 +487,7 @@ async function replaceSnapshot(client: PoolClient, data: AdminData) {
       "referred_by_user_id",
       "referred_at",
       "full_name",
+      "avatar_url",
       "bvn_last4",
       "bvn_linked_at",
       "bank_linked_at",
@@ -470,6 +506,7 @@ async function replaceSnapshot(client: PoolClient, data: AdminData) {
       user.referredByUserId ?? null,
       user.referredAt ?? null,
       user.fullName ?? null,
+      user.avatarUrl ?? null,
       user.bvnLast4 ?? null,
       user.bvnLinkedAt ?? null,
       user.bankLinkedAt ?? null,
@@ -664,6 +701,39 @@ async function replaceSnapshot(client: PoolClient, data: AdminData) {
 
   await replaceTable(
     client,
+    CRYPTO_WALLETS_TABLE,
+    [
+      "id",
+      "user_id",
+      "handle",
+      "display_handle",
+      "wallet_address",
+      "chain",
+      "is_default",
+      "wallet_verified",
+      "signature_hash",
+      "nonce",
+      "created_at",
+      "updated_at",
+    ],
+    data.cryptoWallets.map((wallet) => [
+      wallet.id,
+      wallet.userId,
+      wallet.handle,
+      wallet.displayHandle,
+      wallet.walletAddress,
+      wallet.chain,
+      wallet.isDefault,
+      wallet.walletVerified,
+      wallet.signatureHash,
+      wallet.nonce,
+      wallet.createdAt,
+      wallet.updatedAt,
+    ])
+  );
+
+  await replaceTable(
+    client,
     TRANSACTIONS_TABLE,
     [
       "id",
@@ -832,6 +902,7 @@ async function migrateLegacySnapshotIfNeeded(client: PoolClient) {
     legacy.users.length > 0 ||
     legacy.otps.length > 0 ||
     legacy.bankAccounts.length > 0 ||
+    legacy.cryptoWallets.length > 0 ||
     legacy.transactions.length > 0 ||
     legacy.marketplaceListings.length > 0 ||
     legacy.marketplaceOffers.length > 0 ||
@@ -856,6 +927,7 @@ function mapRowsToSnapshot(rows: {
     referred_by_user_id: string | null;
     referred_at: string | null;
     full_name: string | null;
+    avatar_url: string | null;
     bvn_last4: string | null;
     bvn_linked_at: string | null;
     bank_linked_at: string | null;
@@ -941,6 +1013,20 @@ function mapRowsToSnapshot(rows: {
     linked_at: string;
     verified_at: string | null;
     lookup_message: string | null;
+  }>;
+  cryptoWallets: Array<{
+    id: string;
+    user_id: string;
+    handle: string;
+    display_handle: string;
+    wallet_address: string;
+    chain: AdminData["cryptoWallets"][number]["chain"];
+    is_default: boolean;
+    wallet_verified: boolean;
+    signature_hash: string;
+    nonce: string;
+    created_at: string;
+    updated_at: string;
   }>;
   transactions: Array<{
     id: string;
@@ -1028,6 +1114,7 @@ function mapRowsToSnapshot(rows: {
       referredByUserId: user.referred_by_user_id ?? undefined,
       referredAt: toIso(user.referred_at),
       fullName: user.full_name ?? undefined,
+      avatarUrl: user.avatar_url ?? undefined,
       bvnLast4: user.bvn_last4 ?? undefined,
       bvnLinkedAt: toIso(user.bvn_linked_at),
       bankLinkedAt: toIso(user.bank_linked_at),
@@ -1122,6 +1209,20 @@ function mapRowsToSnapshot(rows: {
       linkedAt: toIso(bankAccount.linked_at) ?? new Date().toISOString(),
       verifiedAt: toIso(bankAccount.verified_at),
       lookupMessage: bankAccount.lookup_message ?? undefined,
+    })),
+    cryptoWallets: rows.cryptoWallets.map((wallet) => ({
+      id: wallet.id,
+      userId: wallet.user_id,
+      handle: wallet.handle,
+      displayHandle: wallet.display_handle,
+      walletAddress: wallet.wallet_address,
+      chain: wallet.chain,
+      isDefault: wallet.is_default,
+      walletVerified: wallet.wallet_verified,
+      signatureHash: wallet.signature_hash,
+      nonce: wallet.nonce,
+      createdAt: toIso(wallet.created_at) ?? new Date().toISOString(),
+      updatedAt: toIso(wallet.updated_at) ?? new Date().toISOString(),
     })),
     transactions: rows.transactions.map((transaction) => ({
       id: transaction.id,
@@ -1222,6 +1323,7 @@ export async function readAdminStateFromDatabase(): Promise<AdminData | null> {
       referred_by_user_id: string | null;
       referred_at: string | null;
       full_name: string | null;
+      avatar_url: string | null;
       bvn_last4: string | null;
       bvn_linked_at: string | null;
       bank_linked_at: string | null;
@@ -1308,6 +1410,20 @@ export async function readAdminStateFromDatabase(): Promise<AdminData | null> {
       verified_at: string | null;
       lookup_message: string | null;
     }>(`select * from ${BANK_ACCOUNTS_TABLE} order by linked_at desc`);
+    const cryptoWallets = await client.query<{
+      id: string;
+      user_id: string;
+      handle: string;
+      display_handle: string;
+      wallet_address: string;
+      chain: AdminData["cryptoWallets"][number]["chain"];
+      is_default: boolean;
+      wallet_verified: boolean;
+      signature_hash: string;
+      nonce: string;
+      created_at: string;
+      updated_at: string;
+    }>(`select * from ${CRYPTO_WALLETS_TABLE} order by updated_at desc`);
     const transactions = await client.query<{
       id: string;
       handle: string;
@@ -1382,6 +1498,7 @@ export async function readAdminStateFromDatabase(): Promise<AdminData | null> {
       referrals: referrals.rows,
       otps: otps.rows,
       bankAccounts: bankAccounts.rows,
+      cryptoWallets: cryptoWallets.rows,
       transactions: transactions.rows,
       marketplaceListings: marketplaceListings.rows,
       marketplaceOffers: marketplaceOffers.rows,

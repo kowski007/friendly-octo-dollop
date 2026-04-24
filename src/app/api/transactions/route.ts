@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import type { TransactionChannel, TransactionStatus } from "@/lib/adminTypes";
 import {
+  createNotification,
+  getClaimByHandle,
   getHandleReputation,
   listTransactions,
   logApiUsage,
@@ -95,6 +97,28 @@ export async function POST(req: NextRequest) {
       },
     });
     const reputation = await getHandleReputation(transaction.handle);
+
+    if (transaction.channel === "payment_link" && transaction.status === "pending") {
+      const claim = await getClaimByHandle(transaction.handle);
+      const senderLabel = transaction.senderName?.trim() || "A sender";
+
+      await createNotification({
+        userId: claim?.userId,
+        handle: transaction.handle,
+        type: "admin_review_required",
+        title: "Payment reported from PayLink",
+        body: `${senderLabel} reported a NGN ${transaction.amount.toLocaleString()} transfer to \u20A6${transaction.handle}.`,
+        priority: "high",
+        metadata: {
+          transactionId: transaction.id,
+          amount: transaction.amount,
+          channel: transaction.channel,
+          reference: transaction.reference ?? null,
+          senderName: transaction.senderName ?? null,
+          senderPhone: transaction.senderPhone ?? null,
+        },
+      });
+    }
 
     status = 201;
     const res = NextResponse.json(

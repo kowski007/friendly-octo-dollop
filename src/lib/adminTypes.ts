@@ -1,5 +1,7 @@
 export type Verification = "verified" | "business" | "pending";
 export type BankLinkStatus = "verified" | "pending_lookup";
+export type CryptoChain = "base";
+export type CryptoAsset = "USDC";
 export type TransactionStatus = "pending" | "settled" | "failed" | "disputed";
 export type TransactionChannel =
   | "payment_link"
@@ -104,6 +106,7 @@ export type UserRecord = {
   email?: string;
   walletAddress?: string;
   fullName?: string;
+  avatarUrl?: string;
   bvnLast4?: string;
   bvnLinkedAt?: string; // ISO
   bankLinkedAt?: string; // ISO
@@ -145,6 +148,21 @@ export type BankAccountRecord = {
   linkedAt: string; // ISO
   verifiedAt?: string; // ISO
   lookupMessage?: string;
+};
+
+export type CryptoWalletRecord = {
+  id: string;
+  userId: string;
+  handle: string;
+  displayHandle: string;
+  walletAddress: string;
+  chain: CryptoChain;
+  isDefault: boolean;
+  walletVerified: boolean;
+  signatureHash: string;
+  nonce: string;
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
 };
 
 export type OtpRecord = {
@@ -333,6 +351,7 @@ export type CreditProfile = {
 export type PublicHandleProfile = {
   handle: string;
   displayName: string;
+  avatarUrl?: string;
   bio?: string;
   location?: string;
   memberSince: string; // ISO

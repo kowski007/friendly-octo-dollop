@@ -37,6 +37,17 @@ function riskTone(riskLevel: PublicHandleProfile["reputation"]["riskLevel"]) {
   return "neutral";
 }
 
+function profileInitials(profile: PublicHandleProfile) {
+  return (
+    profile.displayName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || profile.handle.slice(0, 2).toUpperCase()
+  );
+}
+
 function qrBits(seed: string) {
   const bits: boolean[] = [];
   let state = 0;
@@ -165,7 +176,22 @@ export function PublicHandleProfileView({
               </div>
 
               <div className="mt-8 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-                <div>
+                <div className="flex min-w-0 items-start gap-4">
+                  <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-zinc-950 text-white shadow-sm dark:bg-white dark:text-zinc-950">
+                    {profile.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={profile.avatarUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="grid h-full w-full place-items-center text-lg font-semibold">
+                        {profileInitials(profile)}
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0">
                   <div className="text-5xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-6xl">
                     {handleLabel}
                   </div>
@@ -175,6 +201,7 @@ export function PublicHandleProfileView({
                   <p className="mt-3 max-w-xl text-base leading-7 text-zinc-600 dark:text-zinc-300">
                     {profile.bio ?? "Verified NairaTag payment identity."}
                   </p>
+                  </div>
                 </div>
 
                 <QrPreview value={profile.qrPayload} />

@@ -43,6 +43,9 @@ const navGroups: Array<{ label: string; items: NavItem[] }> = [
   {
     label: "Tools",
     items: [
+      { href: "/dashboard", label: "Dashboard" },
+      { href: "/notifications", label: "Notifications" },
+      { href: "/payments/payment-links", label: "Payment Links" },
       { href: "/pay", label: "Pay links" },
       { href: "/marketplace", label: "Marketplace" },
       { href: "/map", label: "Live map" },
@@ -134,8 +137,8 @@ function MobileMenu() {
         </div>
 
         <div className="mt-3 grid gap-2 border-t border-zinc-200/70 pt-3 dark:border-zinc-800/80">
-          <AuthModalButton afterAuthHref="#demo" variant="secondary" className="w-full">
-            Check availability
+          <AuthModalButton afterAuthHref="/dashboard" variant="secondary" className="w-full">
+            Dashboard
           </AuthModalButton>
           <ButtonLink href="#claim" className="w-full">
             Claim your name
@@ -173,11 +176,11 @@ export function HeaderNav() {
         <div className="flex items-center gap-3">
           <ThemeToggle className="px-3 py-2" />
           <AuthModalButton
-            afterAuthHref="#demo"
+            afterAuthHref="/dashboard"
             variant="plain"
             className="hidden md:inline-flex"
           >
-            Check availability
+            Dashboard
           </AuthModalButton>
           <ButtonLink href="#claim" className="hidden px-4 py-2.5 md:inline-flex">
             Claim your name
