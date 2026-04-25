@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { useToast } from "./ToastProvider";
 import { cn } from "./ui";
 
 export function CopyButton({
@@ -16,14 +17,25 @@ export function CopyButton({
   copiedLabel?: string;
 }) {
   const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
 
   async function handleCopy() {
     try {
       await navigator.clipboard.writeText(value);
       setCopied(true);
+      toast({
+        title: copiedLabel,
+        description: "Copied to your clipboard.",
+        tone: "success",
+      });
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
       setCopied(false);
+      toast({
+        title: "Copy failed",
+        description: "Your browser blocked clipboard access.",
+        tone: "error",
+      });
     }
   }
 

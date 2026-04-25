@@ -48,6 +48,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 .next-dev.err.log
+.next-dev.log
 .next-dev.out.log
 .local-logs/
 

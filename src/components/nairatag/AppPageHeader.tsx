@@ -38,7 +38,6 @@ const toolLinks = [
   },
   { href: "/payments/payment-links", label: "Payment Links" },
   { href: "/send/crypto", label: "Send crypto" },
-  { href: "/payments/payment-links", label: "Pay links" },
   { href: "/marketplace", label: "Marketplace" },
   { href: "/map", label: "Live map" },
   { href: "/referrals", label: "Referrals" },
@@ -110,7 +109,7 @@ function ToolsMenu() {
         hidden={!open}
       >
         {toolLinks.map((link) => (
-          <div key={link.href} onClick={() => setOpen(false)}>
+          <div key={`${link.href}:${link.label}`} onClick={() => setOpen(false)}>
             {link.requiresAuth ? (
               <AuthModalButton
                 afterAuthHref={link.href}
@@ -181,8 +180,8 @@ export function AppPageHeader({
           </Link>
         </nav>
 
-        <div className="flex items-center gap-3">
-          <ThemeToggle />
+        <div className="flex items-center gap-2.5">
+          <ThemeToggle size="dense" />
           {rightSlot ??
             (ctaHref === "/dashboard" ? (
               <AuthModalButton

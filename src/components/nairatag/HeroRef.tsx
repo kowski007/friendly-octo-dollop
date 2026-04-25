@@ -84,7 +84,7 @@ function FloatingPill({
       <div
         className={cn(
           "inline-flex items-center rounded-md px-3 py-1 text-sm font-semibold shadow-sm",
-          compact && "px-2.5 py-1 text-xs",
+          compact && "rounded-[10px] px-2 py-[3px] text-[11px] leading-none",
           toneClasses(tone)
         )}
       >
@@ -109,91 +109,93 @@ export function HeroRef() {
 
       <div className="relative mx-auto w-full max-w-6xl px-5 pb-10 pt-10 sm:px-8 sm:pb-16 sm:pt-14">
         <div className="relative mx-auto max-w-5xl text-center">
-          <h1 className="relative z-10 mx-auto max-w-[21rem] font-display text-[54px] font-semibold leading-[0.92] tracking-tight text-zinc-950 dark:text-zinc-50 sm:max-w-none sm:text-[96px]">
-            Send money
-            <br />
-            to a name
-          </h1>
+          <div className="relative mx-auto max-w-[22rem] px-2 pb-8 pt-1 sm:max-w-none sm:px-0 sm:pb-0 sm:pt-0">
+            <h1 className="relative z-10 mx-auto max-w-[21rem] font-display text-[54px] font-semibold leading-[0.92] tracking-tight text-zinc-950 dark:text-zinc-50 sm:max-w-none sm:text-[96px]">
+              Send money
+              <br />
+              to a name
+            </h1>
 
-          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-[-14px] z-0 h-[155px] sm:hidden">
-            <FloatingPill
-              label={"\u20A6victor"}
-              tone="violet"
-              compact
-              className="nt-drift left-[2%] top-0"
-              cursorClassName="scale-75 rotate-[-18deg]"
-              style={
-                {
-                  ["--nt-delay" as never]: "-0.6s",
-                  ["--nt-in-delay" as never]: "30ms",
-                  ["--nt-dur" as never]: "9.5s",
-                  ["--nt-dx" as never]: "5px",
-                  ["--nt-dy" as never]: "5px",
-                } as CSSProperties
-              }
-            />
-            <FloatingPill
-              label={"\u20A6fioso"}
-              tone="rose"
-              compact
-              className="nt-drift right-[3%] top-[4px]"
-              cursorClassName="scale-75 rotate-[10deg]"
-              style={
-                {
-                  ["--nt-delay" as never]: "-1.2s",
-                  ["--nt-in-delay" as never]: "100ms",
-                  ["--nt-dur" as never]: "10.5s",
-                  ["--nt-dx" as never]: "6px",
-                  ["--nt-dy" as never]: "4px",
-                } as CSSProperties
-              }
-            />
-            <FloatingPill
-              label={"\u20A6mama_ijebu"}
-              tone="orange"
-              compact
-              className="nt-float left-[-2%] top-[70px]"
-              cursorClassName="scale-75"
-              style={
-                {
-                  ["--nt-delay" as never]: "-1.8s",
-                  ["--nt-in-delay" as never]: "160ms",
-                  ["--nt-dur" as never]: "7s",
-                  ["--nt-amp" as never]: "5px",
-                } as CSSProperties
-              }
-            />
-            <FloatingPill
-              label={"\u20A6mikki"}
-              tone="emerald"
-              compact
-              className="nt-drift right-[-1%] top-[82px]"
-              cursorClassName="scale-75 rotate-[14deg]"
-              style={
-                {
-                  ["--nt-delay" as never]: "-2.4s",
-                  ["--nt-in-delay" as never]: "220ms",
-                  ["--nt-dur" as never]: "11s",
-                  ["--nt-dx" as never]: "5px",
-                  ["--nt-dy" as never]: "6px",
-                } as CSSProperties
-              }
-            />
-            <FloatingPill
-              label={"\u20A6shop"}
-              tone="sky"
-              compact
-              className="nt-float left-[40%] top-[128px]"
-              cursorClassName="scale-75 rotate-[-10deg]"
-              style={
-                {
-                  ["--nt-delay" as never]: "-0.2s",
-                  ["--nt-in-delay" as never]: "280ms",
-                  ["--nt-dur" as never]: "7.6s",
-                  ["--nt-amp" as never]: "5px",
-                } as CSSProperties
-              }
-            />
+            <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[168px] sm:hidden">
+              <FloatingPill
+                label={"\u20A6victor"}
+                tone="violet"
+                compact
+                className="nt-drift left-[2px] top-[8px]"
+                cursorClassName="scale-[0.68] rotate-[-18deg]"
+                style={
+                  {
+                    ["--nt-delay" as never]: "-0.6s",
+                    ["--nt-in-delay" as never]: "30ms",
+                    ["--nt-dur" as never]: "9.5s",
+                    ["--nt-dx" as never]: "4px",
+                    ["--nt-dy" as never]: "4px",
+                  } as CSSProperties
+                }
+              />
+              <FloatingPill
+                label={"\u20A6fioso"}
+                tone="rose"
+                compact
+                className="nt-drift right-[4px] top-[2px]"
+                cursorClassName="scale-[0.68] rotate-[10deg]"
+                style={
+                  {
+                    ["--nt-delay" as never]: "-1.2s",
+                    ["--nt-in-delay" as never]: "100ms",
+                    ["--nt-dur" as never]: "10.5s",
+                    ["--nt-dx" as never]: "5px",
+                    ["--nt-dy" as never]: "4px",
+                  } as CSSProperties
+                }
+              />
+              <FloatingPill
+                label={"\u20A6mama_ijebu"}
+                tone="orange"
+                compact
+                className="nt-float left-[-8px] top-[96px]"
+                cursorClassName="scale-[0.68]"
+                style={
+                  {
+                    ["--nt-delay" as never]: "-1.8s",
+                    ["--nt-in-delay" as never]: "160ms",
+                    ["--nt-dur" as never]: "7s",
+                    ["--nt-amp" as never]: "4px",
+                  } as CSSProperties
+                }
+              />
+              <FloatingPill
+                label={"\u20A6mikki"}
+                tone="emerald"
+                compact
+                className="nt-drift right-[-6px] top-[108px]"
+                cursorClassName="scale-[0.68] rotate-[14deg]"
+                style={
+                  {
+                    ["--nt-delay" as never]: "-2.4s",
+                    ["--nt-in-delay" as never]: "220ms",
+                    ["--nt-dur" as never]: "11s",
+                    ["--nt-dx" as never]: "4px",
+                    ["--nt-dy" as never]: "5px",
+                  } as CSSProperties
+                }
+              />
+              <FloatingPill
+                label={"\u20A6shop"}
+                tone="sky"
+                compact
+                className="nt-float left-[36%] top-[146px]"
+                cursorClassName="scale-[0.68] rotate-[-10deg]"
+                style={
+                  {
+                    ["--nt-delay" as never]: "-0.2s",
+                    ["--nt-in-delay" as never]: "280ms",
+                    ["--nt-dur" as never]: "7.6s",
+                    ["--nt-amp" as never]: "4px",
+                  } as CSSProperties
+                }
+              />
+            </div>
           </div>
 
           <div className="pointer-events-none absolute inset-0 hidden sm:block">

@@ -2,9 +2,17 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type ChangeEvent, type FormEvent, useState, useTransition } from "react";
+import {
+  type ChangeEvent,
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+  useState,
+  useTransition,
+} from "react";
 
 import { AuthModalButton } from "@/components/auth/AuthModalButton";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import type {
   BankAccountRecord,
   ClaimRecord,
@@ -18,6 +26,7 @@ import type {
 } from "@/lib/adminTypes";
 import { AppPageHeader } from "./AppPageHeader";
 import { CopyButton } from "./CopyButton";
+import { useToast } from "./ToastProvider";
 import { Badge, CheckIcon, Container, cn } from "./ui";
 
 const NAIRA = "\u20A6";
@@ -151,9 +160,14 @@ function Avatar({
 }: {
   user: UserRecord;
   claim: ClaimRecord | null;
-  size?: "md" | "sm";
+  size?: "md" | "sm" | "xs";
 }) {
-  const sizeClass = size === "sm" ? "h-11 w-11 rounded-xl text-sm" : "h-14 w-14 rounded-2xl text-base";
+  const sizeClass =
+    size === "xs"
+      ? "h-9 w-9 rounded-full text-xs"
+      : size === "sm"
+        ? "h-11 w-11 rounded-xl text-sm"
+        : "h-14 w-14 rounded-2xl text-base";
 
   return (
     <div
@@ -218,14 +232,14 @@ function Panel({
   return (
     <section
       className={cn(
-        "rounded-2xl border border-zinc-200/75 bg-white/80 shadow-sm dark:border-zinc-800/80 dark:bg-zinc-950/35",
+        "rounded-xl border border-zinc-200/75 bg-white/80 shadow-sm dark:border-zinc-800/80 dark:bg-zinc-950/35",
         className
       )}
     >
       {title || action ? (
-        <div className="flex min-h-11 items-center justify-between gap-3 border-b border-zinc-200/60 px-4 py-2.5 dark:border-zinc-800/70">
+        <div className="flex min-h-10 items-center justify-between gap-3 border-b border-zinc-200/60 px-3.5 py-2 dark:border-zinc-800/70">
           {title ? (
-            <h2 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+            <h2 className="text-[13px] font-semibold text-zinc-950 dark:text-zinc-50">
               {title}
             </h2>
           ) : (
@@ -234,7 +248,7 @@ function Panel({
           {action}
         </div>
       ) : null}
-      <div className="p-4">{children}</div>
+      <div className="p-3.5">{children}</div>
     </section>
   );
 }
@@ -265,13 +279,36 @@ function ActionLink({
 
 function DataRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3 border-b border-zinc-200/60 py-2.5 last:border-b-0 dark:border-zinc-800/70">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">
+    <div className="grid grid-cols-[4.75rem_minmax(0,1fr)] gap-2.5 border-b border-zinc-200/60 py-2 last:border-b-0 dark:border-zinc-800/70">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">
         {label}
       </div>
-      <div className="min-w-0 break-words text-right text-xs font-semibold text-zinc-950 dark:text-zinc-50">
+      <div className="min-w-0 break-words text-right text-[13px] font-semibold text-zinc-950 dark:text-zinc-50">
         {value}
       </div>
+    </div>
+  );
+}
+
+function StatIcon({
+  children,
+  tone = "neutral",
+}: {
+  children?: ReactNode;
+  tone?: "neutral" | "verify" | "orange";
+}) {
+  return (
+    <div
+      className={cn(
+        "grid h-8 w-8 shrink-0 place-items-center rounded-lg border",
+        tone === "verify"
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200"
+          : tone === "orange"
+            ? "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900/60 dark:bg-orange-950/30 dark:text-orange-200"
+            : "border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+      )}
+    >
+      {children ?? <span className="h-1.5 w-1.5 rounded-full bg-current" />}
     </div>
   );
 }
@@ -281,33 +318,26 @@ function Metric({
   value,
   detail,
   tone = "neutral",
+  icon,
 }: {
   label: string;
   value: string;
   detail: string;
   tone?: "neutral" | "verify" | "orange";
+  icon?: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-zinc-200/70 bg-white/80 p-3 dark:border-zinc-800/80 dark:bg-zinc-950/35">
-      <div className="flex items-center justify-between gap-2">
-        <div className="truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">
+    <div className="flex min-h-[3.5rem] items-center gap-2.5 rounded-xl border border-zinc-200/70 bg-white/80 px-3 py-2 dark:border-zinc-800/80 dark:bg-zinc-950/35">
+      <StatIcon tone={tone}>{icon}</StatIcon>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">
           {label}
         </div>
-        <span
-          className={cn(
-            "h-1.5 w-1.5 shrink-0 rounded-full",
-            tone === "verify"
-              ? "bg-emerald-500"
-              : tone === "orange"
-                ? "bg-orange-500"
-                : "bg-zinc-400"
-          )}
-        />
+        <div className="mt-0.5 truncate text-sm font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+          {value}
+        </div>
       </div>
-      <div className="mt-2 truncate text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-        {value}
-      </div>
-      <div className="mt-1 truncate text-xs text-zinc-600 dark:text-zinc-300">
+      <div className="max-w-[6.25rem] text-right text-[11px] leading-4 text-zinc-600 dark:text-zinc-300">
         {detail}
       </div>
     </div>
@@ -554,47 +584,223 @@ function WalletLinkPanel({
   );
 }
 
+function ProfileMenuIcon({
+  children,
+  tone = "neutral",
+}: {
+  children: ReactNode;
+  tone?: "neutral" | "orange" | "verify";
+}) {
+  return (
+    <div
+      className={cn(
+        "grid h-6 w-6 shrink-0 place-items-center rounded-md",
+        tone === "orange"
+          ? "bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-200"
+          : tone === "verify"
+            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200"
+            : "bg-zinc-100 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ProfileMenuRow({
+  href,
+  icon,
+  label,
+  trailing,
+  showChevron = false,
+  className,
+}: {
+  href: string;
+  icon: ReactNode;
+  label: string;
+  trailing?: ReactNode;
+  showChevron?: boolean;
+  className?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "flex h-9 items-center gap-2 rounded-[0.8rem] px-2 text-[13px] font-semibold text-zinc-950 transition hover:bg-zinc-100 dark:text-zinc-50 dark:hover:bg-zinc-900/70",
+        className
+      )}
+    >
+      {icon}
+      <div className="min-w-0 flex-1 truncate">{label}</div>
+      <div className="flex items-center gap-1.5 text-zinc-400 dark:text-zinc-500">
+        {trailing}
+        {showChevron ? (
+          <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
+            <path
+              d="m9 6 6 6-6 6"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        ) : null}
+      </div>
+    </Link>
+  );
+}
+
 function HeaderProfileMenu({
   user,
   claim,
+  unread,
 }: {
   user: UserRecord;
   claim: ClaimRecord | null;
+  unread: number;
 }) {
   const profilePath = claim ? `/h/${claim.handle}` : "/agent";
   const payPath = claim ? `/pay/${claim.handle}` : "/payments/payment-links";
   const label = claim ? `${NAIRA}${claim.handle}` : user.phone;
-  const itemClass =
-    "block rounded-xl px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 dark:hover:text-white";
+  const contact = user.email || user.phone;
+  const verificationLabel = claim ? claim.verification : "setup";
 
   return (
     <details className="group relative">
-      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-full border border-zinc-200/70 bg-white/85 px-2 py-1.5 text-sm font-semibold text-zinc-900 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800/80 dark:bg-zinc-950/55 dark:text-zinc-50 dark:hover:bg-zinc-900/70 [&::-webkit-details-marker]:hidden">
-        <Avatar user={user} claim={claim} size="sm" />
+      <summary className="flex cursor-pointer list-none items-center gap-1 rounded-full border border-zinc-200/70 bg-white/85 px-1.5 py-0.5 text-sm font-semibold text-zinc-900 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800/80 dark:bg-zinc-950/55 dark:text-zinc-50 dark:hover:bg-zinc-900/70 [&::-webkit-details-marker]:hidden">
+        <Avatar user={user} claim={claim} size="xs" />
         <span className="hidden max-w-[9rem] truncate sm:inline">{label}</span>
-        <span className="text-[10px] text-zinc-400 transition group-open:rotate-180">v</span>
+        <span className="hidden text-[10px] text-zinc-400 transition group-open:rotate-180 sm:inline-block">
+          v
+        </span>
       </summary>
-      <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-2xl border border-zinc-200/80 bg-white/95 p-1.5 shadow-xl shadow-zinc-950/10 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/95 dark:shadow-black/30">
-        <Link
-          href={profilePath}
-          className={itemClass}
-        >
-          {claim ? "Profile" : "Claim handle"}
-        </Link>
-        <Link
-          href={payPath}
-          className={itemClass}
-        >
-          {claim ? "Pay page" : "Pay links"}
-        </Link>
-          <Link
-            href="/payments/payment-links"
-            className={itemClass}
-          >
-            Pay links
-          </Link>
-        <div className="border-t border-zinc-200/70 px-1 pt-1.5 dark:border-zinc-800/80">
-          <SignOutButton className="w-full justify-center border-0 bg-transparent px-3 hover:bg-zinc-100 dark:hover:bg-zinc-900" />
+      <div className="absolute right-0 top-full z-50 mt-2 w-[14.4rem] rounded-[1.15rem] border border-zinc-200 bg-white p-1 shadow-[0_18px_40px_rgba(15,23,42,0.14)] ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-950 dark:ring-white/10 dark:shadow-[0_20px_46px_rgba(0,0,0,0.34)]">
+        <div className="rounded-[0.95rem] border border-zinc-200/85 bg-white px-2 py-2 dark:border-zinc-800/85 dark:bg-zinc-950">
+          <div className="flex items-center gap-2">
+            <Avatar user={user} claim={claim} size="xs" />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[13px] font-semibold text-zinc-950 dark:text-zinc-50">
+                {label}
+              </div>
+              <div className="truncate text-[10px] text-zinc-600 dark:text-zinc-300">
+                {contact}
+              </div>
+            </div>
+            <Badge
+              tone={claim ? "verify" : "orange"}
+              className="shrink-0 px-1.5 py-0.5 text-[9px]"
+            >
+              {verificationLabel}
+            </Badge>
+          </div>
+        </div>
+
+        <div className="mt-1 rounded-[0.95rem] border border-zinc-200/85 bg-zinc-50 p-1 dark:border-zinc-800/85 dark:bg-zinc-900/55">
+          <ProfileMenuRow
+            href={profilePath}
+            icon={
+              <ProfileMenuIcon tone={claim ? "verify" : "orange"}>
+                <svg viewBox="0 0 24 24" fill="none" className="h-3 w-3" aria-hidden="true">
+                  <path
+                    d="M4 12c2.7-4.2 5.7-6.3 8-6.3s5.3 2.1 8 6.3c-2.7 4.2-5.7 6.3-8 6.3S6.7 16.2 4 12Z"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <circle cx="12" cy="12" r="2.5" stroke="currentColor" strokeWidth="1.8" />
+                </svg>
+              </ProfileMenuIcon>
+            }
+            label={claim ? "Public profile" : "Claim handle"}
+          />
+          <ProfileMenuRow
+            href="/settings"
+            icon={
+              <ProfileMenuIcon>
+                <svg viewBox="0 0 24 24" fill="none" className="h-3 w-3" aria-hidden="true">
+                  <path
+                    d="M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Zm7.2 3-.9-.5.1-1a1 1 0 0 0-.6-1l-1-.4-.3-1a1 1 0 0 0-1-.6l-1 .1-.5-.9a1 1 0 0 0-1-.5l-1 .2-.7-.7a1 1 0 0 0-1.3 0l-.7.7-1-.2a1 1 0 0 0-1 .5l-.5.9-1-.1a1 1 0 0 0-1 .6l-.3 1-1 .4a1 1 0 0 0-.6 1l.1 1-.9.5a1 1 0 0 0-.5 1l.2 1-.7.7a1 1 0 0 0 0 1.3l.7.7-.2 1a1 1 0 0 0 .5 1l.9.5-.1 1a1 1 0 0 0 .6 1l1 .4.3 1a1 1 0 0 0 1 .6l1-.1.5.9a1 1 0 0 0 1 .5l1-.2.7.7a1 1 0 0 0 1.3 0l.7-.7 1 .2a1 1 0 0 0 1-.5l.5-.9 1 .1a1 1 0 0 0 1-.6l.3-1 1-.4a1 1 0 0 0 .6-1l-.1-1 .9-.5a1 1 0 0 0 .5-1l-.2-1 .7-.7a1 1 0 0 0 0-1.3l-.7-.7.2-1a1 1 0 0 0-.5-1Z"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </ProfileMenuIcon>
+            }
+            label="Settings"
+            className="bg-white shadow-[inset_0_0_0_1px_rgba(228,228,231,0.9)] dark:bg-zinc-950/90 dark:shadow-[inset_0_0_0_1px_rgba(63,63,70,0.95)]"
+          />
+          <ProfileMenuRow
+            href="/notifications"
+            icon={
+              <ProfileMenuIcon tone={unread > 0 ? "orange" : "neutral"}>
+                <svg viewBox="0 0 24 24" fill="none" className="h-3 w-3" aria-hidden="true">
+                  <path
+                    d="M8 18h8M10.5 21h3M6 18V11a6 6 0 1 1 12 0v7l1.5 1.5H4.5L6 18Z"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </ProfileMenuIcon>
+            }
+            label="Notifications"
+            trailing={
+              unread > 0 ? (
+                <span className="rounded-full bg-nt-orange px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                  {unread}
+                </span>
+              ) : null
+            }
+          />
+          <ProfileMenuRow
+            href={payPath}
+            icon={
+              <ProfileMenuIcon tone="verify">
+                <svg viewBox="0 0 24 24" fill="none" className="h-3 w-3" aria-hidden="true">
+                  <path
+                    d="M4 8.5h16M6 5h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm9.5 8H18"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </ProfileMenuIcon>
+            }
+            label={claim ? "Pay page" : "Payment links"}
+          />
+          <div className="mx-1 border-t border-zinc-200/80 dark:border-zinc-800/80" />
+          <div className="flex h-9 items-center gap-2 rounded-[0.8rem] px-2 text-[13px] font-semibold text-zinc-950 dark:text-zinc-50">
+            <ProfileMenuIcon>
+              <svg viewBox="0 0 24 24" fill="none" className="h-3 w-3" aria-hidden="true">
+                <path
+                  d="M12 3v2.5m0 13V21m7.5-9H21M3 12h2.5M17.3 6.7l1.8-1.8M4.9 19.1l1.8-1.8M6.7 6.7 4.9 4.9M19.1 19.1l-1.8-1.8M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </ProfileMenuIcon>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                Appearance
+              </div>
+            </div>
+            <ThemeToggle
+              size="compact"
+              className="border-zinc-200 bg-zinc-50 text-zinc-700 shadow-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            />
+          </div>
+        </div>
+
+        <div className="mt-1 rounded-[0.95rem] border border-zinc-200/85 bg-white p-1 dark:border-zinc-800/85 dark:bg-zinc-950">
+          <div className="px-1">
+            <SignOutButton className="w-full justify-start rounded-[0.8rem] border-0 bg-transparent px-2 text-[13px] text-rose-700 hover:bg-rose-50 dark:text-rose-200 dark:hover:bg-rose-950/24" />
+          </div>
         </div>
       </div>
     </details>
@@ -614,11 +820,11 @@ function NotificationBell({
           ? `Open notifications, ${unread} unread`
           : "Open notifications"
       }
-      className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-200/70 bg-white/85 text-zinc-900 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800/80 dark:bg-zinc-950/55 dark:text-zinc-50 dark:hover:bg-zinc-900/70"
+      className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200/70 bg-white/85 text-zinc-900 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800/80 dark:bg-zinc-950/55 dark:text-zinc-50 dark:hover:bg-zinc-900/70"
     >
       <svg
         viewBox="0 0 24 24"
-        className="h-4.5 w-4.5"
+        className="h-4 w-4"
         fill="none"
         aria-hidden="true"
       >
@@ -632,7 +838,7 @@ function NotificationBell({
       </svg>
       {unread > 0 ? (
         <>
-          <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-nt-orange" />
+          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-nt-orange" />
           <span className="sr-only">{unread} unread notifications</span>
         </>
       ) : null}
@@ -687,24 +893,56 @@ function fileToAvatarDataUrl(file: File) {
   });
 }
 
-function ProfileEditor({
+function ProfileEditorModal({
   user,
   claim,
+  open,
+  onClose,
 }: {
   user: UserRecord;
   claim: ClaimRecord | null;
+  open: boolean;
+  onClose: () => void;
 }) {
   const router = useRouter();
-  const [fullName, setFullName] = useState(
+  const { toast } = useToast();
+  const nextFullName =
     claim?.displayName && !/^pending verification$/i.test(claim.displayName)
       ? claim.displayName
-      : user.fullName ?? ""
-  );
+      : user.fullName ?? "";
+  const [fullName, setFullName] = useState(nextFullName);
   const [handle, setHandle] = useState(claim?.handle ?? "");
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl ?? "");
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (!open) return;
+
+    setFullName(nextFullName);
+    setHandle(claim?.handle ?? "");
+    setAvatarUrl(user.avatarUrl ?? "");
+    setStatus(null);
+    setError(null);
+  }, [open, nextFullName, claim?.handle, user.avatarUrl]);
+
+  useEffect(() => {
+    if (!open || typeof document === "undefined") return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open, onClose]);
 
   async function selectAvatarFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -747,6 +985,12 @@ function ProfileEditor({
           throw new Error(body?.error || "profile_update_failed");
         }
         setStatus("Saved");
+        toast({
+          title: "Profile updated",
+          description: "Your dashboard profile is up to date.",
+          tone: "success",
+        });
+        onClose();
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "profile_update_failed");
@@ -754,106 +998,153 @@ function ProfileEditor({
     });
   }
 
+  if (!open) return null;
+
   return (
-    <Panel title="Edit profile">
-      <form onSubmit={saveProfile} className="space-y-3">
-        <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">
-            Username
-          </span>
-          <div className="mt-1 flex rounded-xl border border-zinc-200/80 bg-white/80 text-sm dark:border-zinc-800/80 dark:bg-zinc-950/40">
-            <span className="grid w-9 place-items-center border-r border-zinc-200/70 text-zinc-500 dark:border-zinc-800/70">
-              {NAIRA}
+    <div
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-zinc-950/38 px-4 py-6 backdrop-blur-sm"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        className="w-full max-w-lg rounded-[1.4rem] border border-zinc-200/85 bg-white p-4 shadow-[0_30px_70px_rgba(15,23,42,0.18)] ring-1 ring-black/5 dark:border-zinc-800/85 dark:bg-zinc-950 dark:ring-white/10 dark:shadow-[0_32px_72px_rgba(0,0,0,0.45)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-zinc-200/70 pb-3 dark:border-zinc-800/70">
+          <div>
+            <div className="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+              Edit profile
+            </div>
+            <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+              Update your public name, handle, and profile image.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
+            aria-label="Close edit profile modal"
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+              <path
+                d="m15 9-6 6m0-6 6 6"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <form onSubmit={saveProfile} className="mt-4 space-y-3">
+          <label className="block">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">
+              Username
+            </span>
+            <div className="mt-1 flex rounded-xl border border-zinc-200/80 bg-white/80 text-sm dark:border-zinc-800/80 dark:bg-zinc-950/40">
+              <span className="grid w-9 place-items-center border-r border-zinc-200/70 text-zinc-500 dark:border-zinc-800/70">
+                {NAIRA}
+              </span>
+              <input
+                value={handle}
+                onChange={(event) =>
+                  setHandle(event.target.value.replace(/[^\w]/g, "").toLowerCase())
+                }
+                maxLength={20}
+                placeholder="your_handle"
+                disabled={!claim || isPending}
+                className="min-w-0 flex-1 bg-transparent px-3 py-2 text-xs font-semibold text-zinc-950 outline-none placeholder:text-zinc-400 disabled:opacity-60 dark:text-zinc-50"
+              />
+            </div>
+          </label>
+
+          <label className="block">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">
+              Public name
             </span>
             <input
-              value={handle}
-              onChange={(event) =>
-                setHandle(event.target.value.replace(/[^\w]/g, "").toLowerCase())
-              }
-              maxLength={20}
-              placeholder="your_handle"
-              disabled={!claim || isPending}
-              className="min-w-0 flex-1 bg-transparent px-3 py-2 text-xs font-semibold text-zinc-950 outline-none placeholder:text-zinc-400 disabled:opacity-60 dark:text-zinc-50"
-            />
-          </div>
-        </label>
-
-        <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">
-            Public name
-          </span>
-          <input
-            value={fullName}
-            onChange={(event) => setFullName(event.target.value)}
-            maxLength={80}
-            placeholder="Your name"
-            disabled={isPending}
-            className="mt-1 h-9 w-full rounded-xl border border-zinc-200/80 bg-white/80 px-3 text-xs font-semibold text-zinc-950 outline-none placeholder:text-zinc-400 disabled:opacity-60 dark:border-zinc-800/80 dark:bg-zinc-950/40 dark:text-zinc-50"
-          />
-        </label>
-
-        <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">
-            Profile image
-          </span>
-          <div className="mt-1 flex items-center gap-2">
-            <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-xl bg-zinc-950 text-xs font-semibold text-white dark:bg-white dark:text-zinc-950">
-              {avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
-              ) : (
-                initials(user, claim)
-              )}
-            </div>
-            <input
-              value={avatarUrl}
-              onChange={(event) => setAvatarUrl(event.target.value)}
-              placeholder="Image URL or upload"
+              value={fullName}
+              onChange={(event) => setFullName(event.target.value)}
+              maxLength={80}
+              placeholder="Your name"
               disabled={isPending}
-              className="h-9 min-w-0 flex-1 rounded-xl border border-zinc-200/80 bg-white/80 px-3 text-xs font-semibold text-zinc-950 outline-none placeholder:text-zinc-400 disabled:opacity-60 dark:border-zinc-800/80 dark:bg-zinc-950/40 dark:text-zinc-50"
+              className="mt-1 h-9 w-full rounded-xl border border-zinc-200/80 bg-white/80 px-3 text-xs font-semibold text-zinc-950 outline-none placeholder:text-zinc-400 disabled:opacity-60 dark:border-zinc-800/80 dark:bg-zinc-950/40 dark:text-zinc-50"
             />
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <label className="inline-flex h-8 cursor-pointer items-center justify-center rounded-lg border border-zinc-300/70 bg-white/75 px-2.5 text-[11px] font-semibold text-zinc-950 transition hover:bg-white dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50">
-              Upload
-              <input
-                type="file"
-                accept="image/*"
-                onChange={selectAvatarFile}
-                disabled={isPending}
-                className="sr-only"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => setAvatarUrl("")}
-              disabled={isPending || !avatarUrl}
-              className="h-8 rounded-lg border border-zinc-300/70 bg-white/75 px-2.5 text-[11px] font-semibold text-zinc-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50"
-            >
-              Remove
-            </button>
-          </div>
-        </label>
+          </label>
 
-        <div className="flex items-center justify-between gap-3">
-          <button
-            type="submit"
-            disabled={isPending}
-            className="h-9 rounded-xl bg-nt-orange px-3 text-xs font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isPending ? "Saving" : "Save profile"}
-          </button>
-          <div className="min-w-0 text-right text-[11px] font-medium">
-            {status ? <span className="text-emerald-600 dark:text-emerald-300">{status}</span> : null}
-            {error ? <span className="text-orange-700 dark:text-orange-300">{error}</span> : null}
+          <label className="block">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">
+              Profile image
+            </span>
+            <div className="mt-1 flex items-center gap-2">
+              <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-xl bg-zinc-950 text-xs font-semibold text-white dark:bg-white dark:text-zinc-950">
+                {avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  initials(user, claim)
+                )}
+              </div>
+              <input
+                value={avatarUrl}
+                onChange={(event) => setAvatarUrl(event.target.value)}
+                placeholder="Image URL or upload"
+                disabled={isPending}
+                className="h-9 min-w-0 flex-1 rounded-xl border border-zinc-200/80 bg-white/80 px-3 text-xs font-semibold text-zinc-950 outline-none placeholder:text-zinc-400 disabled:opacity-60 dark:border-zinc-800/80 dark:bg-zinc-950/40 dark:text-zinc-50"
+              />
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <label className="inline-flex h-8 cursor-pointer items-center justify-center rounded-lg border border-zinc-300/70 bg-white/75 px-2.5 text-[11px] font-semibold text-zinc-950 transition hover:bg-white dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50">
+                Upload
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={selectAvatarFile}
+                  disabled={isPending}
+                  className="sr-only"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => setAvatarUrl("")}
+                disabled={isPending || !avatarUrl}
+                className="h-8 rounded-lg border border-zinc-300/70 bg-white/75 px-2.5 text-[11px] font-semibold text-zinc-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50"
+              >
+                Remove
+              </button>
+            </div>
+          </label>
+
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <div className="min-w-0 text-[11px] font-medium">
+              {status ? <span className="text-emerald-600 dark:text-emerald-300">{status}</span> : null}
+              {error ? <span className="text-orange-700 dark:text-orange-300">{error}</span> : null}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="h-9 rounded-xl border border-zinc-300/70 bg-white/75 px-3 text-xs font-semibold text-zinc-950 transition hover:bg-white dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isPending}
+                className="h-9 rounded-xl bg-nt-orange px-3 text-xs font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isPending ? "Saving" : "Save profile"}
+              </button>
+            </div>
           </div>
-        </div>
-      </form>
-    </Panel>
+        </form>
+      </div>
+    </div>
   );
 }
 
 export function UserDashboardView({ data }: { data: UserDashboardData | null }) {
+  const [isProfileEditorOpen, setProfileEditorOpen] = useState(false);
   if (!data) return <SignInState />;
 
   const { user, claim, bankAccount, cryptoWallet, notifications, referrals, marketplace } = data;
@@ -878,6 +1169,7 @@ export function UserDashboardView({ data }: { data: UserDashboardData | null }) 
             <HeaderProfileMenu
               user={user}
               claim={claim}
+              unread={notifications.unread}
             />
           </div>
         }
@@ -886,14 +1178,30 @@ export function UserDashboardView({ data }: { data: UserDashboardData | null }) 
       <main className="py-5 sm:py-6">
         <Container className="max-w-7xl space-y-4">
           <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)] xl:grid-cols-[19rem_minmax(0,1fr)]">
-            <aside className="space-y-4">
+            <aside className="static space-y-4 self-start">
               <section className="overflow-hidden rounded-2xl border border-zinc-200/75 bg-white/85 shadow-sm dark:border-zinc-800/80 dark:bg-zinc-950/35">
                 <div className="h-14 bg-gradient-to-r from-orange-500 via-orange-200 to-emerald-200 dark:from-orange-600 dark:via-orange-950 dark:to-emerald-950" />
                 <div className="p-4 pt-0">
                   <div className="-mt-7 flex items-end gap-3">
-                    <div className="rounded-2xl border-4 border-white dark:border-zinc-950">
+                    <button
+                      type="button"
+                      onClick={() => setProfileEditorOpen(true)}
+                      className="relative rounded-2xl border-4 border-white transition hover:-translate-y-0.5 dark:border-zinc-950"
+                      aria-label="Open edit profile modal"
+                    >
                       <Avatar user={user} claim={claim} />
-                    </div>
+                      <span className="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full border border-white bg-nt-orange text-white shadow-sm dark:border-zinc-950">
+                        <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
+                          <path
+                            d="m8 16 6.8-6.8 2 2L10 18H8v-2Zm8.2-7.2 1-1a1.4 1.4 0 1 0-2-2l-1 1 2 2Z"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </span>
+                    </button>
                     <div className="min-w-0 pb-1">
                       <div className="truncate text-xs text-zinc-500 dark:text-zinc-400">
                         {displayName}
@@ -942,8 +1250,6 @@ export function UserDashboardView({ data }: { data: UserDashboardData | null }) 
 
               <WalletLinkPanel claim={claim} cryptoWallet={cryptoWallet} />
 
-              <ProfileEditor user={user} claim={claim} />
-
               <Panel title="Setup">
                 <SetupLine
                   done={Boolean(user.phoneVerifiedAt)}
@@ -974,36 +1280,90 @@ export function UserDashboardView({ data }: { data: UserDashboardData | null }) 
             </aside>
 
             <section className="min-w-0 space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
                 <Metric
                   label="Handle"
                   value={handleLabel}
                   detail={claim ? `Claimed ${formatDate(claim.claimedAt)}` : "None yet"}
                   tone={claim ? "verify" : "orange"}
+                  icon={
+                    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+                      <path
+                        d="M8 5v14M16 5v14M5 9h14M5 15h14"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  }
                 />
                 <Metric
                   label="Payout"
                   value={bankAccount ? bankAccount.bankName : "Not linked"}
                   detail={bankAccount ? bankAccount.status.replace("_", " ") : "Required"}
                   tone={bankAccount ? "verify" : "orange"}
+                  icon={
+                    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+                      <path
+                        d="M4 8.5h16M6 5h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm9.5 8H18"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  }
                 />
                 <Metric
                   label="Crypto"
                   value={cryptoWallet ? "Base linked" : "Not linked"}
                   detail={cryptoWallet ? maskWallet(cryptoWallet.walletAddress) : "Wallet required"}
                   tone={cryptoWallet ? "verify" : "orange"}
+                  icon={
+                    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+                      <path
+                        d="M12 3v18m0-18 6 6m-6-6-6 6m6 12 6-6m-6 6-6-6"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  }
                 />
                 <Metric
                   label="Referrals"
                   value={String(referrals?.referralPoints ?? 0)}
                   detail={`${referrals?.totalReferrals ?? 0} signup(s)`}
                   tone={(referrals?.totalReferrals ?? 0) > 0 ? "verify" : "neutral"}
+                  icon={
+                    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+                      <path
+                        d="M7.5 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm9 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-9 8v-1a4 4 0 0 1 4-4h1a4 4 0 0 1 4 4v1M4 19v-.5A3.5 3.5 0 0 1 7.5 15M20 19v-.5A3.5 3.5 0 0 0 16.5 15"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  }
                 />
                 <Metric
                   label="Marketplace"
                   value={listing ? listing.listing.status.replace("_", " ") : eligibilityText(marketplaceEligibility)}
                   detail={listing ? `${listing.offers.length} offer(s)` : "No listing"}
                   tone={marketplaceEligibility?.eligible || listing ? "verify" : "orange"}
+                  icon={
+                    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+                      <path
+                        d="M5 8.5h14l-1 10.5H6L5 8.5ZM9 8.5V7a3 3 0 1 1 6 0v1.5"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  }
                 />
               </div>
 
@@ -1015,40 +1375,73 @@ export function UserDashboardView({ data }: { data: UserDashboardData | null }) 
                   </Badge>
                 }
               >
-                <div className="grid gap-3 sm:grid-cols-[10rem_10rem_10rem_minmax(0,1fr)]">
+                <div className="grid gap-2 lg:grid-cols-[repeat(3,minmax(0,1fr))_minmax(0,1.2fr)]">
                   <Metric
                     label="Score"
                     value={creditProfile ? String(creditProfile.score) : "-"}
                     detail="Credit"
                     tone={creditTone(creditProfile)}
+                    icon={
+                      <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+                        <path
+                          d="M4 18h16M7 15l2.5-3 3 2 4-5 1.5 2"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    }
                   />
                   <Metric
                     label="Trust"
                     value={creditProfile ? String(creditProfile.trustScore) : "-"}
                     detail="Score"
                     tone={creditProfile ? "verify" : "neutral"}
+                    icon={
+                      <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+                        <path
+                          d="M12 4 6 6.5V12c0 4.2 2.6 6.9 6 8 3.4-1.1 6-3.8 6-8V6.5L12 4Z"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    }
                   />
                   <Metric
                     label="Limit"
                     value={creditProfile ? formatCurrency(creditProfile.recommendedLimit) : "-"}
                     detail="Suggested"
                     tone={creditProfile ? "verify" : "neutral"}
+                    icon={
+                      <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+                        <path
+                          d="M12 4v16M8.5 7.5c0-1.4 1.6-2.5 3.5-2.5s3.5 1.1 3.5 2.5S13.9 10 12 10s-3.5 1.1-3.5 2.5S10.1 15 12 15s3.5 1.1 3.5 2.5"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    }
                   />
-                  <div className="min-w-0 rounded-2xl border border-zinc-200/70 bg-zinc-50/80 p-3 dark:border-zinc-800/80 dark:bg-zinc-900/35">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">
+                  <div className="min-w-0 rounded-xl border border-zinc-200/70 bg-zinc-50/80 px-3 py-2.5 dark:border-zinc-800/80 dark:bg-zinc-900/35">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">
                       Drivers
                     </div>
-                    <div className="mt-2 space-y-1">
+                    <div className="mt-2 flex flex-wrap gap-1.5">
                       {(creditProfile?.drivers.length
                         ? creditProfile.drivers.slice(0, 3)
                         : ["No credit profile yet."]
                       ).map((driver) => (
-                        <div
+                        <span
                           key={driver}
-                          className="truncate text-xs text-zinc-700 dark:text-zinc-200"
+                          className="inline-flex max-w-full items-center rounded-full border border-zinc-200 bg-white px-2 py-1 text-[11px] font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950/60 dark:text-zinc-200"
                         >
                           {driver}
-                        </div>
+                        </span>
                       ))}
                     </div>
                   </div>
@@ -1073,20 +1466,41 @@ export function UserDashboardView({ data }: { data: UserDashboardData | null }) 
                       value={String(referrals?.referralPoints ?? 0)}
                       detail="Earned"
                       tone={(referrals?.referralPoints ?? 0) > 0 ? "verify" : "neutral"}
+                      icon={
+                        <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+                          <path
+                            d="M12 4 14.2 8.5 19 9.2l-3.5 3.4.8 4.8-4.3-2.3-4.3 2.3.8-4.8L5 9.2l4.8-.7L12 4Z"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      }
                     />
                     <Metric
                       label="Converted"
                       value={String(referrals?.convertedReferrals ?? 0)}
                       detail={`${referrals?.totalReferrals ?? 0} total`}
                       tone={(referrals?.convertedReferrals ?? 0) > 0 ? "verify" : "neutral"}
+                      icon={
+                        <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+                          <path
+                            d="M7 12h10m0 0-3.5-3.5M17 12l-3.5 3.5M7 6h7m-7 12h7"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      }
                     />
                   </div>
-                  <div className="mt-3 rounded-xl bg-zinc-50/85 px-3 py-2 font-mono text-[11px] text-zinc-700 dark:bg-zinc-900/35 dark:text-zinc-200">
+                  <div className="mt-2 rounded-lg bg-zinc-50/85 px-2.5 py-2 font-mono text-[11px] text-zinc-700 dark:bg-zinc-900/35 dark:text-zinc-200">
                     <div className="truncate">
                       {referrals?.referralUrl || "Claim handle to activate"}
                     </div>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="mt-2 flex flex-wrap gap-2">
                     <ActionLink href="/referrals">Open</ActionLink>
                     {referrals?.referralUrl ? (
                       <CopyButton
@@ -1110,16 +1524,64 @@ export function UserDashboardView({ data }: { data: UserDashboardData | null }) 
                     </Badge>
                   }
                 >
-                  <DataRow
-                    label="Status"
-                    value={listing ? listing.listing.status.replace("_", " ") : eligibilityText(marketplaceEligibility)}
-                  />
-                  <DataRow label="Offers" value={listing ? String(listing.offers.length) : "0"} />
-                  <DataRow
-                    label="Ask"
-                    value={listing ? formatCurrency(listing.listing.askAmount) : "Not listed"}
-                  />
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <Metric
+                      label="Status"
+                      value={
+                        listing
+                          ? listing.listing.status.replace("_", " ")
+                          : eligibilityText(marketplaceEligibility)
+                      }
+                      detail={`${marketplace?.transfers.length ?? 0} moves`}
+                      tone={listing || marketplaceEligibility?.eligible ? "verify" : "orange"}
+                      icon={
+                        <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+                          <path
+                            d="M5 12h14m-4-4 4 4-4 4"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      }
+                    />
+                    <Metric
+                      label="Offers"
+                      value={listing ? String(listing.offers.length) : "0"}
+                      detail={listing ? "Live interest" : "No offers"}
+                      tone={listing?.offers.length ? "verify" : "neutral"}
+                      icon={
+                        <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+                          <path
+                            d="M6 8h12M6 12h8M6 16h6M18 6v12l-3-2-3 2V6"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      }
+                    />
+                    <Metric
+                      label="Ask"
+                      value={listing ? formatCurrency(listing.listing.askAmount) : "Not listed"}
+                      detail={listing ? "Seller ask" : "Create listing"}
+                      tone={listing ? "verify" : "orange"}
+                      icon={
+                        <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+                          <path
+                            d="M12 4v16M8.5 7.5c0-1.4 1.6-2.5 3.5-2.5s3.5 1.1 3.5 2.5S13.9 10 12 10s-3.5 1.1-3.5 2.5S10.1 15 12 15s3.5 1.1 3.5 2.5"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      }
+                    />
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
                     <ActionLink href="/marketplace">Open</ActionLink>
                     {claim ? <ActionLink href={`/marketplace/${claim.handle}`}>Listing</ActionLink> : null}
                   </div>
@@ -1129,6 +1591,12 @@ export function UserDashboardView({ data }: { data: UserDashboardData | null }) 
           </div>
         </Container>
       </main>
+      <ProfileEditorModal
+        user={user}
+        claim={claim}
+        open={isProfileEditorOpen}
+        onClose={() => setProfileEditorOpen(false)}
+      />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Caveat, Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 
 import { PrivyAppProvider } from "@/components/auth/PrivyAppProvider";
+import { ToastProvider } from "@/components/nairatag/ToastProvider";
 
 import "./globals.css";
 
@@ -79,7 +80,9 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="flex min-h-full flex-col bg-white font-sans text-zinc-950 transition-colors dark:bg-zinc-950 dark:text-zinc-50">
-        <PrivyAppProvider>{children}</PrivyAppProvider>
+        <PrivyAppProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </PrivyAppProvider>
       </body>
     </html>
   );
