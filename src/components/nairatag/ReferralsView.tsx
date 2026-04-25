@@ -86,7 +86,7 @@ export function ReferralsView() {
       <Container>
         <SectionHeader
           eyebrow="Referrals"
-          title="Invite people to claim a handle."
+          title="Invite people to claim a ₦handle."
           description="Sign in first so we can attribute referrals to your account."
         />
         <div className="mt-10">
@@ -100,7 +100,7 @@ export function ReferralsView() {
               to copy your referral link.
             </div>
             <div className="mt-6 flex flex-wrap gap-3">
-              <ButtonLink href="/agent">Open claim flow</ButtonLink>
+              <ButtonLink href="/claim">Open claim flow</ButtonLink>
               <ButtonLink href="/" variant="secondary">
                 Home
               </ButtonLink>
@@ -120,8 +120,8 @@ export function ReferralsView() {
     <Container className="space-y-8">
       <SectionHeader
         eyebrow="Referrals"
-        title="Invite people to claim a handle."
-        description="Share your username link. You earn referral points when someone signs up, then a bigger bonus when they claim a handle."
+        title="Invite people to claim a ₦handle."
+        description="Share your username link. You earn referral points when someone signs up, then a bigger bonus when they claim a ₦handle."
       />
 
       {error && error !== "unauthorized" ? (
@@ -144,7 +144,7 @@ export function ReferralsView() {
 
           {dashboard?.requiresHandle ? (
             <div className="mt-4 rounded-3xl bg-orange-50 px-4 py-4 text-sm font-semibold leading-6 text-orange-950 dark:bg-orange-950/25 dark:text-orange-100">
-              Your referral link must be your username. Claim a handle first,
+              Your referral link must be your username. Claim a ₦handle first,
               then this page will show `/r/your_handle`.
             </div>
           ) : null}
@@ -211,7 +211,7 @@ export function ReferralsView() {
               {dashboard ? dashboard.convertedReferrals.toLocaleString() : "-"}
             </div>
             <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-              Referred users who claimed a handle.
+              Referred users who claimed a ₦handle.
             </div>
           </Card>
 
@@ -223,7 +223,7 @@ export function ReferralsView() {
               {dashboard ? dashboard.pendingConversionPoints.toLocaleString() : "-"}
             </div>
             <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-              Possible points when pending referrals claim handles.
+              Possible points when pending referrals claim ₦handles.
             </div>
           </Card>
         </div>

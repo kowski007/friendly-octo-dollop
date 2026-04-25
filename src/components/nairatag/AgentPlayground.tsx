@@ -378,6 +378,10 @@ function ActionButtonCard({
 
 export function AgentPlayground() {
   const pathname = usePathname();
+  const claimRootPath = "/claim";
+  const claimHistoryPath = "/claim/history";
+  const claimRootActive = pathname === "/claim";
+  const claimHistoryActive = pathname === "/claim/history";
   const [messages, setMessages] = useState<ChatMessage[]>([
     makeMessage(
       "assistant",
@@ -900,8 +904,8 @@ export function AgentPlayground() {
               <button type="button" onClick={() => scrollToSection(quickActionsRef)} className="block" aria-label="Quick actions">
                 <RailIcon kind="spark" />
               </button>
-              <Link href="/agent/history" className="block" aria-label="Chat history">
-                <RailIcon kind="history" active={pathname === "/agent/history"} />
+              <Link href={claimHistoryPath} className="block" aria-label="Claim history">
+                <RailIcon kind="history" active={claimHistoryActive} />
               </Link>
               <button type="button" onClick={() => scrollToSection(verificationRef)} className="block" aria-label="Verification">
                 <RailIcon kind="shield" />
@@ -955,21 +959,21 @@ export function AgentPlayground() {
                   Home
                 </Link>
                 <Link
-                  href="/agent"
+                  href={claimRootPath}
                   className={cn(
                     "rounded-full px-3 py-1.5 text-[12px] font-semibold transition",
-                    pathname === "/agent"
+                    claimRootActive
                       ? "bg-zinc-950 text-white dark:bg-white dark:text-zinc-950"
                       : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50"
                   )}
                 >
-                  Agent
+                  Claim
                 </Link>
                 <Link
-                  href="/agent/history"
+                  href={claimHistoryPath}
                   className={cn(
                     "rounded-full px-3 py-1.5 text-[12px] font-semibold transition",
-                    pathname === "/agent/history"
+                    claimHistoryActive
                       ? "bg-zinc-950 text-white dark:bg-white dark:text-zinc-950"
                       : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50"
                   )}

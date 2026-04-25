@@ -1,7 +1,12 @@
-import type { MarketplaceListingDetail } from "@/lib/adminTypes";
+import type {
+  MarketplaceListingDetail,
+  PublicHandleSuggestion,
+} from "@/lib/adminTypes";
+
 import { AppPageHeader } from "./AppPageHeader";
-import { Badge, ButtonLink, Card, Container, SectionHeader } from "./ui";
+import { HandleIdentity, SuggestedHandlesSection } from "./HandleTrust";
 import { MarketplaceOfferForm } from "./MarketplaceOfferForm";
+import { Badge, ButtonLink, Card, Container, SectionHeader } from "./ui";
 
 function formatCurrency(amount?: number | null) {
   if (amount == null) return "Open to offers";
@@ -29,8 +34,10 @@ function creditTone(riskBand?: "low" | "medium" | "high") {
 
 export function MarketplaceListingDetailView({
   detail,
+  suggestions,
 }: {
   detail: MarketplaceListingDetail | null;
+  suggestions: PublicHandleSuggestion[];
 }) {
   if (!detail) {
     return (
@@ -67,7 +74,7 @@ export function MarketplaceListingDetailView({
         <Container className="space-y-8">
           <SectionHeader
             eyebrow="Marketplace listing"
-            title={`₦${detail.listing.handle}`}
+            title={`\u20A6${detail.listing.handle}`}
             description="Handle ownership can transfer, but trust history does not automatically move with the string. Accepted deals enter review before transfer."
           />
 
@@ -87,6 +94,12 @@ export function MarketplaceListingDetailView({
                   </Badge>
                 ) : null}
               </div>
+
+              <HandleIdentity
+                handle={detail.listing.handle}
+                verification={detail.claim.verification}
+                className="mt-5"
+              />
 
               <div className="mt-5 grid gap-4 md:grid-cols-3">
                 <div className="rounded-[1.5rem] border border-zinc-200/70 bg-zinc-50/80 p-4 dark:border-zinc-800/80 dark:bg-zinc-900/40">
@@ -281,6 +294,13 @@ export function MarketplaceListingDetailView({
               </Card>
             </div>
           </div>
+
+          <SuggestedHandlesSection
+            items={suggestions}
+            mode="marketplace"
+            title="Suggested handles nearby"
+            description="Explore related live listings and high-trust handles before you leave the marketplace."
+          />
         </Container>
       </main>
     </div>

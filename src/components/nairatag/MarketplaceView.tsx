@@ -1,11 +1,12 @@
-import type { ReactNode } from "react";
 import type {
+  PublicHandleSuggestion,
   MarketplaceListingView as ListingView,
   MarketplaceStats,
 } from "@/lib/adminTypes";
 
 import { AppPageHeader } from "./AppPageHeader";
 import { Badge, ButtonLink, Container, cn } from "./ui";
+import { SuggestedHandlesSection } from "./HandleTrust";
 import { MarketplaceConsole } from "./MarketplaceConsole";
 
 const NAIRA = "\u20A6";
@@ -15,7 +16,7 @@ type CategoryRow = {
   title: string;
   floor: number | null;
   volume: number;
-  change: number;
+  count: number;
   mark: string;
   tileClassName: string;
 };
@@ -113,17 +114,6 @@ function formatHistoryTime(value: string) {
   });
 }
 
-function formatOfferExpiry(value: string, offsetDays: number) {
-  return new Date(
-    Date.parse(value) + offsetDays * 24 * 60 * 60 * 1000
-  ).toLocaleString("en-NG", {
-    day: "numeric",
-    month: "short",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
 function historyMoment(entry: ListingView) {
   return (
     entry.listing.reviewStartedAt ??
@@ -210,30 +200,6 @@ function buildHistoryRow(entry: ListingView): HistoryRow {
   };
 }
 
-function IconButton({
-  label,
-  active = false,
-  children,
-}: {
-  label: string;
-  active?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      className={cn(
-        "inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50",
-        active && "bg-white text-zinc-950 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
 function CategoryTile({ category }: { category: CategoryRow }) {
   return (
     <div className="relative grid grid-cols-[6rem_minmax(0,1fr)_auto] items-center gap-5">
@@ -262,15 +228,8 @@ function CategoryTile({ category }: { category: CategoryRow }) {
         <div className="text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
           {formatCompactCurrency(category.volume)}
         </div>
-        <div
-          className={cn(
-            "mt-1 text-sm font-medium",
-            category.change >= 0
-              ? "text-emerald-600 dark:text-emerald-400"
-              : "text-rose-500 dark:text-rose-400"
-          )}
-        >
-          {changeLabel(category.change)}
+        <div className="mt-1 text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          {category.count.toLocaleString()} handles
         </div>
       </div>
     </div>
@@ -282,11 +241,13 @@ export function MarketplaceView({
   historyListings,
   stats,
   query,
+  suggestions,
 }: {
   listings: ListingView[];
   historyListings?: ListingView[];
   stats: MarketplaceStats;
   query?: string;
+  suggestions: PublicHandleSuggestion[];
 }) {
   const sortedListings = [...listings].sort(
     (a, b) => listingSortValue(b) - listingSortValue(a)
@@ -329,8 +290,9 @@ export function MarketplaceView({
   );
   const recentHistoryCount = sortedHistoryListings.filter(
     (entry) =>
+      latestHistoryTimestamp > 0 &&
       latestHistoryTimestamp - Date.parse(historyMoment(entry)) <=
-      7 * 24 * 60 * 60 * 1000
+        7 * 24 * 60 * 60 * 1000
   ).length;
   const reviewCount = sortedHistoryListings.filter(
     (entry) => entry.listing.status === "under_review"
@@ -344,78 +306,78 @@ export function MarketplaceView({
 
   const categoryRows: CategoryRow[] = [
     {
-      rank: 1,
       title: "Short handles",
       floor: floorFor(shortHandles),
       volume: volumeFor(shortHandles),
-      change: shortHandles.length > 0 ? 24 : 0,
-      mark: "4",
+      count: shortHandles.length,
+      mark: "SH",
       tileClassName: "bg-pink-500",
     },
     {
-      rank: 2,
       title: "Fixed price",
       floor: floorFor(fixedPrice),
       volume: volumeFor(fixedPrice),
-      change: fixedPrice.length > 0 ? 18 : 0,
-      mark: "NG",
+      count: fixedPrice.length,
+      mark: "FX",
       tileClassName: "bg-emerald-600",
     },
     {
-      rank: 3,
       title: "High trust",
       floor: floorFor(highTrust),
       volume: volumeFor(highTrust),
-      change: highTrust.length > 0 ? 41 : 0,
-      mark: "HI",
+      count: highTrust.length,
+      mark: "HT",
       tileClassName: "bg-cyan-600",
     },
     {
-      rank: 4,
       title: "Offers only",
       floor: floorFor(offersOnly),
       volume: volumeFor(offersOnly),
-      change: offersOnly.length > 0 ? -8 : 0,
-      mark: "BID",
+      count: offersOnly.length,
+      mark: "OF",
       tileClassName: "bg-violet-600",
     },
     {
-      rank: 5,
       title: "6-8 letters",
       floor: floorFor(midHandles),
       volume: volumeFor(midHandles),
-      change: midHandles.length > 0 ? 7 : 0,
-      mark: "7",
+      count: midHandles.length,
+      mark: "68",
       tileClassName: "bg-indigo-500",
     },
     {
-      rank: 6,
       title: "Long names",
       floor: floorFor(longHandles),
       volume: volumeFor(longHandles),
-      change: longHandles.length > 0 ? -4 : 0,
-      mark: "10",
+      count: longHandles.length,
+      mark: "LN",
       tileClassName: "bg-sky-500",
     },
     {
-      rank: 7,
       title: "Payout ready",
       floor: floorFor(payoutReady),
       volume: volumeFor(payoutReady),
-      change: payoutReady.length > 0 ? 13 : 0,
-      mark: "PAY",
+      count: payoutReady.length,
+      mark: "PY",
       tileClassName: "bg-lime-600",
     },
     {
-      rank: 8,
       title: "New owners",
       floor: floorFor(newOwners),
       volume: volumeFor(newOwners),
-      change: newOwners.length > 0 ? 3 : 0,
-      mark: "NEW",
+      count: newOwners.length,
+      mark: "NW",
       tileClassName: "bg-rose-500",
     },
-  ];
+  ]
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return b.volume - a.volume;
+    })
+    .map((category, index) => ({
+      ...category,
+      rank: index + 1,
+    }));
 
   const offerRows = sortedListings
     .filter(
@@ -428,7 +390,7 @@ export function MarketplaceView({
 
   return (
     <div className="min-h-screen bg-white text-zinc-950 transition-colors dark:bg-zinc-950 dark:text-zinc-50">
-      <AppPageHeader ctaHref="/agent" ctaLabel="Claim a handle" />
+      <AppPageHeader ctaHref="/claim" ctaLabel="Claim a ₦handle" />
 
       <main className="pb-14 pt-4 sm:pb-20">
         <Container className="max-w-[96rem] space-y-8">
@@ -462,23 +424,17 @@ export function MarketplaceView({
 
           <section id="categories" className="space-y-7">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <h1 className="text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                Top Categories
-              </h1>
-              <div className="inline-flex w-fit rounded-full bg-zinc-100 p-1 text-sm font-semibold text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
-                <button type="button" className="rounded-full px-5 py-2">
-                  1 day
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full bg-white px-5 py-2 text-zinc-950 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
-                >
-                  7 days
-                </button>
-                <button type="button" className="rounded-full px-5 py-2">
-                  30 days
-                </button>
+              <div>
+                <h1 className="text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                  Live categories
+                </h1>
+                <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+                  Ranked by real live listing counts, then by visible marketplace volume.
+                </p>
               </div>
+              <Badge tone="neutral">
+                {stats.liveListings.toLocaleString()} live listing{stats.liveListings === 1 ? "" : "s"}
+              </Badge>
             </div>
 
             <div className="grid gap-x-16 gap-y-8 lg:grid-cols-2 2xl:grid-cols-3">
@@ -486,31 +442,23 @@ export function MarketplaceView({
                 <CategoryTile key={category.rank} category={category} />
               ))}
             </div>
-
-            <div className="flex justify-center">
-              <button
-                type="button"
-                className="min-h-12 rounded-2xl border border-zinc-200 bg-white px-8 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-900"
-              >
-                Show more
-              </button>
-            </div>
           </section>
 
           <section id="collection" className="space-y-5">
-            <form className="grid gap-3 lg:grid-cols-[auto_minmax(18rem,1fr)_auto_auto_auto] lg:items-center">
-              <button
-                type="button"
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-zinc-100 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800"
-              >
-                <span className="flex w-4 flex-col gap-1" aria-hidden="true">
-                  <span className="h-0.5 rounded-full bg-current" />
-                  <span className="h-0.5 rounded-full bg-current" />
-                  <span className="h-0.5 rounded-full bg-current" />
-                </span>
-                Filters
-              </button>
+            <SuggestedHandlesSection
+              items={suggestions}
+              mode="marketplace"
+              title={query ? "Suggested handles for this search" : "Suggested handles"}
+              description={
+                query
+                  ? "These handles are the closest live or high-trust matches for what you searched."
+                  : "A tighter mix of live listings and trusted handles visitors can act on immediately."
+              }
+              emptyState="No suggested handles are available yet."
+              className="rounded-[2rem] bg-zinc-50 p-5 dark:bg-zinc-900/45 sm:p-7"
+            />
 
+            <form className="grid gap-3 lg:grid-cols-[minmax(18rem,1fr)_auto] lg:items-center">
               <label className="relative block">
                 <span
                   className="pointer-events-none absolute left-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full border-2 border-zinc-400"
@@ -526,36 +474,12 @@ export function MarketplaceView({
                   className="min-h-11 w-full rounded-2xl border-0 bg-zinc-100 py-3 pl-11 pr-4 text-sm font-medium text-zinc-950 outline-none transition placeholder:text-zinc-400 focus-visible:ring-2 focus-visible:ring-orange-200 dark:bg-zinc-900 dark:text-zinc-50 dark:focus-visible:ring-orange-900/60"
                 />
               </label>
-
-              <select className="min-h-11 rounded-2xl border-0 bg-zinc-100 px-4 text-sm font-semibold text-zinc-950 outline-none focus-visible:ring-2 focus-visible:ring-orange-200 dark:bg-zinc-900 dark:text-zinc-50 dark:focus-visible:ring-orange-900/60">
-                <option>For sale</option>
-                <option>Under review</option>
-                <option>All listings</option>
-              </select>
-
-              <select className="min-h-11 rounded-2xl border-0 bg-zinc-100 px-4 text-sm font-semibold text-zinc-950 outline-none focus-visible:ring-2 focus-visible:ring-orange-200 dark:bg-zinc-900 dark:text-zinc-50 dark:focus-visible:ring-orange-900/60">
-                <option>Price: High to Low</option>
-                <option>Price: Low to High</option>
-                <option>Newest first</option>
-              </select>
-
-              <div className="flex items-center gap-1 rounded-2xl bg-zinc-100 p-1 dark:bg-zinc-900">
-                <IconButton label="List view" active>
-                  <span className="flex w-4 flex-col gap-1" aria-hidden="true">
-                    <span className="h-0.5 rounded-full bg-current" />
-                    <span className="h-0.5 rounded-full bg-current" />
-                    <span className="h-0.5 rounded-full bg-current" />
-                  </span>
-                </IconButton>
-                <IconButton label="Grid view">
-                  <span className="grid grid-cols-2 gap-0.5">
-                    <span className="h-2 w-2 rounded-sm border border-current" />
-                    <span className="h-2 w-2 rounded-sm border border-current" />
-                    <span className="h-2 w-2 rounded-sm border border-current" />
-                    <span className="h-2 w-2 rounded-sm border border-current" />
-                  </span>
-                </IconButton>
-              </div>
+              <button
+                type="submit"
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-zinc-950 px-4 text-sm font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+              >
+                Search live listings
+              </button>
             </form>
 
             <div className="rounded-3xl bg-zinc-50 p-4 dark:bg-zinc-900/55 sm:flex sm:items-center sm:justify-between sm:gap-5">
@@ -566,39 +490,42 @@ export function MarketplaceView({
                 <div className="text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
                   {formatCurrency(stats.averageAskAmount)}
                 </div>
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Availability is checked live per handle search, not shown as a global count.
+                </div>
               </div>
 
               <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:mt-0 sm:flex sm:items-center sm:gap-6">
                 <div>
                   <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                    Live
+                    Claimed
                   </div>
                   <div className="font-semibold text-zinc-950 dark:text-zinc-50">
-                    {stats.liveListings.toLocaleString()}
+                    {stats.totalClaims.toLocaleString()}
                   </div>
                 </div>
                 <div>
                   <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                    Offers
+                    Listed
                   </div>
                   <div className="font-semibold text-zinc-950 dark:text-zinc-50">
-                    {stats.pendingOffers.toLocaleString()}
+                    {stats.listedClaims.toLocaleString()}
                   </div>
                 </div>
                 <div>
                   <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                    Best bid
+                    Off-market
                   </div>
                   <div className="font-semibold text-zinc-950 dark:text-zinc-50">
-                    {formatCurrency(bestOffer)}
+                    {stats.unlistedClaims.toLocaleString()}
                   </div>
                 </div>
                 <div>
                   <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                    Reviews
+                    Reserved short
                   </div>
                   <div className="font-semibold text-zinc-950 dark:text-zinc-50">
-                    {stats.pendingTransfers.toLocaleString()}
+                    {stats.reservedClaimedHandles.toLocaleString()}
                   </div>
                 </div>
               </div>
@@ -628,7 +555,7 @@ export function MarketplaceView({
                       <th className="w-[22%] px-6 py-4">Item</th>
                       <th className="w-[14%] px-6 py-4">Price</th>
                       <th className="w-[16%] px-6 py-4">Next bid</th>
-                      <th className="w-[16%] px-6 py-4">Last sale</th>
+                      <th className="w-[16%] px-6 py-4">Settled activity</th>
                       <th className="w-[16%] px-6 py-4">Owner</th>
                       <th className="w-[16%] px-6 py-4 text-right">Action</th>
                     </tr>
@@ -768,27 +695,14 @@ export function MarketplaceView({
                   Marketplace health across listings, offers, and transfer review.
                 </p>
               </div>
-              <div className="inline-flex w-fit rounded-full bg-white p-1 text-sm font-semibold text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
-                <button type="button" className="rounded-full px-4 py-2">
-                  1 day
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full bg-zinc-950 px-4 py-2 text-white dark:bg-white dark:text-zinc-950"
-                >
-                  7 days
-                </button>
-                <button type="button" className="rounded-full px-4 py-2">
-                  30 days
-                </button>
-              </div>
+              <Badge tone="neutral">Current registry snapshot</Badge>
             </div>
 
             <div className="mt-7 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {[
+                ["Claimed handles", stats.totalClaims.toLocaleString()],
+                ["Verified claims", stats.verifiedClaims.toLocaleString()],
                 ["Live listings", stats.liveListings.toLocaleString()],
-                ["Pending offers", stats.pendingOffers.toLocaleString()],
-                ["Average ask", formatCompactCurrency(stats.averageAskAmount)],
                 ["Listed volume", formatCompactCurrency(listedVolume)],
               ].map(([label, value]) => (
                 <div
@@ -838,15 +752,8 @@ export function MarketplaceView({
                           />
                         </div>
                       </div>
-                      <div
-                        className={cn(
-                          "text-sm font-semibold",
-                          category.change >= 0
-                            ? "text-emerald-600"
-                            : "text-rose-500"
-                        )}
-                      >
-                        {changeLabel(category.change)}
+                      <div className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">
+                        {category.count.toLocaleString()}
                       </div>
                     </div>
                   ))}
@@ -862,7 +769,7 @@ export function MarketplaceView({
                     ["Best bid", formatCurrency(bestOffer)],
                     ["Average offer", formatCurrency(stats.averageOfferAmount)],
                     ["Pending reviews", stats.pendingTransfers.toLocaleString()],
-                    ["Payout ready", payoutReady.length.toLocaleString()],
+                    ["Reserved claimed", stats.reservedClaimedHandles.toLocaleString()],
                   ].map(([label, value]) => (
                     <div
                       key={label}
@@ -894,9 +801,9 @@ export function MarketplaceView({
                   <tr className="border-y border-zinc-200 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
                     <th className="px-6 py-4">Price per handle</th>
                     <th className="px-6 py-4">Floor difference</th>
-                    <th className="px-6 py-4">Attributes</th>
-                    <th className="px-6 py-4">Buy quantity</th>
-                    <th className="px-6 py-4">Expires</th>
+                    <th className="px-6 py-4">Handle size</th>
+                    <th className="px-6 py-4">Offer flow</th>
+                    <th className="px-6 py-4">Updated</th>
                     <th className="px-6 py-4">From</th>
                     <th className="px-6 py-4 text-right">Action</th>
                   </tr>
@@ -912,7 +819,7 @@ export function MarketplaceView({
                       </td>
                     </tr>
                   ) : (
-                    offerRows.map((entry, index) => {
+                    offerRows.map((entry) => {
                       const price =
                         entry.highestOfferAmount ??
                         entry.listing.minOfferAmount ??
@@ -947,7 +854,7 @@ export function MarketplaceView({
                             {entry.pendingOfferCount}/{Math.max(1, entry.offerCount)}
                           </td>
                           <td className="px-6 py-5">
-                            {formatOfferExpiry(entry.listing.publishedAt, index + 3)}
+                            {formatHistoryTime(entry.listing.updatedAt)}
                           </td>
                           <td className="px-6 py-5">
                             <div className="flex items-center gap-3">
@@ -964,7 +871,7 @@ export function MarketplaceView({
                               href={`/marketplace/${entry.listing.handle}`}
                               className="inline-flex min-h-10 items-center justify-center rounded-full bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-500"
                             >
-                              Sell
+                              Open
                             </a>
                           </td>
                         </tr>
@@ -990,20 +897,7 @@ export function MarketplaceView({
                   the marketplace.
                 </p>
               </div>
-              <div className="inline-flex w-fit rounded-full bg-white p-1 text-sm font-semibold text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
-                <button type="button" className="rounded-full px-4 py-2">
-                  1 day
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full bg-zinc-950 px-4 py-2 text-white dark:bg-white dark:text-zinc-950"
-                >
-                  7 days
-                </button>
-                <button type="button" className="rounded-full px-4 py-2">
-                  30 days
-                </button>
-              </div>
+              <Badge tone="neutral">Latest activity window</Badge>
             </div>
 
             <div className="mt-7 grid gap-4 md:grid-cols-2 xl:grid-cols-4">

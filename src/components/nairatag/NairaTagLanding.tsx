@@ -1,3 +1,4 @@
+import { ClientsSection } from "./ClientsSection";
 import { HeroRef } from "./HeroRef";
 import { HeaderNav } from "./HeaderNav";
 import { HowItWorksSection } from "./HowItWorksSection";
@@ -19,6 +20,7 @@ export function NairaTagLanding() {
       <HeaderNav />
       <main>
         <HeroRef />
+        <ClientsSection />
         <HowItWorksSection />
         <FeaturesSplitSection />
         <ServicesSection />

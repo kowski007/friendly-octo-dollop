@@ -41,7 +41,7 @@ export function AgentHistoryView() {
     if (typeof window !== "undefined") {
       window.sessionStorage.setItem("nairatag_agent_prefill", prompt);
     }
-    router.push("/agent");
+    router.push("/claim");
   }
 
   function resetTest() {
@@ -51,7 +51,7 @@ export function AgentHistoryView() {
           method: "POST",
           headers: { "Cache-Control": "no-store" },
         });
-        setStatus("Agent session reset.");
+        setStatus("Claim session reset.");
       })();
     });
   }
@@ -62,7 +62,7 @@ export function AgentHistoryView() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200/75 pb-3 dark:border-zinc-800/80">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400 dark:text-zinc-500">
-              Agent history
+              Claim history
             </div>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
               Prompt shortcuts and session tools
@@ -72,10 +72,10 @@ export function AgentHistoryView() {
           <div className="flex flex-wrap gap-2">
             <ThemeToggle className="px-3 py-2" />
             <Link
-              href="/agent"
+              href="/claim"
               className="inline-flex items-center justify-center rounded-full bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
             >
-              Back to agent
+              Back to claim
             </Link>
             <Link
               href="/"
@@ -118,7 +118,7 @@ export function AgentHistoryView() {
                     {prompt}
                   </div>
                   <div className="mt-1 text-[13px] leading-5 text-zinc-500 dark:text-zinc-400">
-                    Open this handle in the agent composer and continue testing.
+                    Open this handle in the claim composer and continue testing.
                   </div>
                 </button>
               ))}
@@ -135,11 +135,11 @@ export function AgentHistoryView() {
 
             <div className="mt-4 space-y-3">
               <Link
-                href="/agent"
+                href="/claim"
                 className="flex items-center justify-between rounded-[18px] border border-zinc-200/80 bg-white px-3 py-3 text-left text-sm font-semibold text-zinc-900 transition hover:bg-zinc-50 dark:border-zinc-800/80 dark:bg-zinc-950/70 dark:text-zinc-100 dark:hover:bg-zinc-900"
               >
                 <span>Resume claim flow</span>
-                <span className="text-zinc-400 dark:text-zinc-500">/agent</span>
+                <span className="text-zinc-400 dark:text-zinc-500">/claim</span>
               </Link>
 
               <button

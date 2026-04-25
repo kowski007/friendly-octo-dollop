@@ -30,6 +30,24 @@ services:
         value: https://api.withmono.com/v3
       - key: MONO_ENV
         value: sandbox
+      - key: MONO_V4_ENV
+        value: live
+      - key: MONO_V4_CLIENT_ID
+        sync: false
+      - key: MONO_V4_CLIENT_SECRET
+        sync: false
+      - key: MONO_V4_ENCRYPTION_KEY
+        sync: false
+      - key: FLW_BASE_URL
+        value: https://api.flutterwave.com/v3
+      - key: FLW_PUBLIC_KEY
+        sync: false
+      - key: FLW_SECRET_KEY
+        sync: false
+      - key: FLW_SECRET_HASH
+        sync: false
+      - key: NT_PUBLIC_APP_URL
+        sync: false
       - key: NEXT_PUBLIC_SUPABASE_URL
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY

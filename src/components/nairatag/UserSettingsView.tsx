@@ -279,7 +279,7 @@ function StatusPill({
 function SignInState() {
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-950 transition-colors dark:bg-zinc-950 dark:text-zinc-50">
-      <AppPageHeader ctaHref="/agent" ctaLabel="Claim a handle" />
+      <AppPageHeader ctaHref="/claim" ctaLabel="Claim a ₦handle" />
       <main className="py-6 sm:py-8">
         <Container className="max-w-3xl">
           <SectionCard
@@ -322,7 +322,7 @@ export function UserSettingsView({
 
   const { user, claim, bankAccount, cryptoWallet, notifications } = data;
   const name = displayName(user, claim);
-  const publicPath = claim ? `/h/${claim.handle}` : "/agent";
+  const publicPath = claim ? `/h/${claim.handle}` : "/claim";
   const payPath = claim ? `/pay/${claim.handle}` : "/payments/payment-links";
   const claimLabel = claim ? `${NAIRA}${claim.handle}` : "Handle not claimed";
 
@@ -588,6 +588,24 @@ export function UserSettingsView({
                         <StatusPill>clear</StatusPill>
                       )
                     }
+                  />
+                  <SettingsLinkRow
+                    href="/points"
+                    icon={
+                      <RowIcon tone={(user.pointsBalance ?? 0) > 0 ? "verify" : "neutral"}>
+                        <svg viewBox="0 0 24 24" fill="none" className="h-4.5 w-4.5" aria-hidden="true">
+                          <path
+                            d="M12 4 14.2 8.5 19 9.2l-3.5 3.4.8 4.8-4.3-2.3-4.3 2.3.8-4.8L5 9.2l4.8-.7L12 4Z"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </RowIcon>
+                    }
+                    label="Points"
+                    detail="Welcome rewards and referral bonuses"
+                    trailing={<StatusPill>{(user.pointsBalance ?? 0).toLocaleString()} pts</StatusPill>}
                   />
                   <SettingsLinkRow
                     href={payPath}

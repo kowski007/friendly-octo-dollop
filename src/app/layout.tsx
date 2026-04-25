@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Caveat, Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 
 import { PrivyAppProvider } from "@/components/auth/PrivyAppProvider";
+import { NotificationToastBridge } from "@/components/nairatag/NotificationToastBridge";
 import { ToastProvider } from "@/components/nairatag/ToastProvider";
 
 import "./globals.css";
@@ -43,7 +44,19 @@ const hand = Caveat({
   weight: ["500", "700"],
 });
 
+const metadataBase = (() => {
+  const fallback = "http://localhost:3000";
+  const raw = (process.env.NEXT_PUBLIC_APP_URL || process.env.NT_PUBLIC_APP_URL || fallback)
+    .trim();
+  try {
+    return new URL(raw);
+  } catch {
+    return new URL(fallback);
+  }
+})();
+
 export const metadata: Metadata = {
+  metadataBase,
   title: {
     default: "NairaTag",
     template: "%s | NairaTag",
@@ -81,7 +94,10 @@ export default function RootLayout({
       </head>
       <body className="flex min-h-full flex-col bg-white font-sans text-zinc-950 transition-colors dark:bg-zinc-950 dark:text-zinc-50">
         <PrivyAppProvider>
-          <ToastProvider>{children}</ToastProvider>
+          <ToastProvider>
+            <NotificationToastBridge />
+            {children}
+          </ToastProvider>
         </PrivyAppProvider>
       </body>
     </html>

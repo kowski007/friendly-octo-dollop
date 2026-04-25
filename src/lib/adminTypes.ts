@@ -27,9 +27,18 @@ export type MarketplaceTransferStatus =
 export type CreditRiskBand = "low" | "medium" | "high";
 export type NotificationType =
   | "otp_requested"
+  | "welcome_reward"
+  | "handle_claimed"
+  | "handle_sold"
+  | "paylink_created"
+  | "paylink_updated"
   | "payment_received"
   | "payment_failed"
+  | "settlement_completed"
+  | "settlement_failed"
   | "payment_disputed"
+  | "marketplace_listing_created"
+  | "marketplace_listing_updated"
   | "marketplace_offer_submitted"
   | "marketplace_offer_accepted"
   | "marketplace_offer_rejected"
@@ -101,6 +110,8 @@ export type UserRecord = {
   phone: string; // E.164-ish
   createdAt: string; // ISO
   phoneVerifiedAt: string; // ISO
+  pointsBalance?: number;
+  welcomeRewardedAt?: string; // ISO
   privyUserId?: string;
   privyLinkedAt?: string; // ISO
   email?: string;
@@ -319,6 +330,11 @@ export type MarketplaceStats = {
   pendingOffers: number;
   averageAskAmount: number | null;
   averageOfferAmount: number | null;
+  totalClaims: number;
+  verifiedClaims: number;
+  listedClaims: number;
+  unlistedClaims: number;
+  reservedClaimedHandles: number;
 };
 
 export type MarketplaceTransferDetail = MarketplaceTransferRecord & {
@@ -361,6 +377,7 @@ export type PublicHandleProfile = {
     verified: boolean;
     verifiedAt?: string; // ISO
     badges: string[];
+    phoneVerified: boolean;
     bankAccountVerified: boolean;
     bvnVerified: boolean;
   };
@@ -387,6 +404,31 @@ export type PublicHandleProfile = {
   shareUrl: string;
   payUrl: string;
   qrPayload: string;
+};
+
+export type PublicHandleSuggestion = {
+  handle: string;
+  displayName: string;
+  verification: Verification;
+  trustScore: number;
+  badges: string[];
+  isListed: boolean;
+  askAmount?: number | null;
+  reason: string;
+};
+
+export type PublicReferralShare = {
+  code: string;
+  referrerHandle?: string | null;
+  displayName: string;
+  verification: Verification;
+  trustScore: number;
+  referralUrl: string;
+  claimUrl: string;
+  signupPoints: number;
+  conversionPoints: number;
+  totalReferrals: number;
+  convertedReferrals: number;
 };
 
 export type AdminMetrics = {

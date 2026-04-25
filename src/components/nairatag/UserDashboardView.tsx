@@ -376,7 +376,7 @@ function SetupLine({
 function SignInState() {
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-950 transition-colors dark:bg-zinc-950 dark:text-zinc-50">
-      <AppPageHeader ctaHref="/agent" ctaLabel="Claim a handle" />
+      <AppPageHeader ctaHref="/claim" ctaLabel="Claim a ₦handle" />
       <main className="py-6 sm:py-8">
         <Container className="max-w-3xl">
           <Panel className="overflow-hidden">
@@ -399,7 +399,7 @@ function SignInState() {
               <AuthModalButton afterAuthHref="/dashboard" variant="primary">
                 Sign in
               </AuthModalButton>
-              <ActionLink href="/agent">Use phone claim flow</ActionLink>
+              <ActionLink href="/claim">Use phone claim flow</ActionLink>
             </div>
           </Panel>
         </Container>
@@ -659,8 +659,8 @@ function HeaderProfileMenu({
   claim: ClaimRecord | null;
   unread: number;
 }) {
-  const profilePath = claim ? `/h/${claim.handle}` : "/agent";
-  const payPath = claim ? `/pay/${claim.handle}` : "/payments/payment-links";
+  const profilePath = claim ? `/h/${claim.handle}` : "/claim";
+  const payPath = "/dashboard/paylinks";
   const label = claim ? `${NAIRA}${claim.handle}` : user.phone;
   const contact = user.email || user.phone;
   const verificationLabel = claim ? claim.verification : "setup";
@@ -752,6 +752,29 @@ function HeaderProfileMenu({
               unread > 0 ? (
                 <span className="rounded-full bg-nt-orange px-1.5 py-0.5 text-[9px] font-semibold text-white">
                   {unread}
+                </span>
+              ) : null
+            }
+          />
+          <ProfileMenuRow
+            href="/points"
+            icon={
+              <ProfileMenuIcon tone={(user.pointsBalance ?? 0) > 0 ? "verify" : "neutral"}>
+                <svg viewBox="0 0 24 24" fill="none" className="h-3 w-3" aria-hidden="true">
+                  <path
+                    d="M12 4 14.2 8.5 19 9.2l-3.5 3.4.8 4.8-4.3-2.3-4.3 2.3.8-4.8L5 9.2l4.8-.7L12 4Z"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </ProfileMenuIcon>
+            }
+            label="Points"
+            trailing={
+              (user.pointsBalance ?? 0) > 0 ? (
+                <span className="rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                  {user.pointsBalance}
                 </span>
               ) : null
             }
@@ -1161,8 +1184,8 @@ export function UserDashboardView({ data }: { data: UserDashboardData | null }) 
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-950 transition-colors dark:bg-zinc-950 dark:text-zinc-50">
       <AppPageHeader
-        ctaHref={claim ? profilePath : "/agent"}
-        ctaLabel={claim ? "Public profile" : "Claim a handle"}
+        ctaHref={claim ? profilePath : "/claim"}
+        ctaLabel={claim ? "Public profile" : "Claim a ₦handle"}
         rightSlot={
           <div className="flex items-center gap-2">
             <NotificationBell unread={notifications.unread} />
@@ -1235,6 +1258,7 @@ export function UserDashboardView({ data }: { data: UserDashboardData | null }) 
                         className="h-9 px-3 py-0 text-xs"
                       />
                     ) : null}
+                    <ActionLink href="/points">Points</ActionLink>
                     <ActionLink href="/marketplace">Market</ActionLink>
                   </div>
                 </div>
@@ -1332,10 +1356,14 @@ export function UserDashboardView({ data }: { data: UserDashboardData | null }) 
                   }
                 />
                 <Metric
-                  label="Referrals"
-                  value={String(referrals?.referralPoints ?? 0)}
-                  detail={`${referrals?.totalReferrals ?? 0} signup(s)`}
-                  tone={(referrals?.totalReferrals ?? 0) > 0 ? "verify" : "neutral"}
+                  label="Points"
+                  value={String(user.pointsBalance ?? 0)}
+                  detail={
+                    (referrals?.referralPoints ?? 0) > 0
+                      ? `${referrals?.referralPoints ?? 0} from referrals`
+                      : "Welcome reward ready"
+                  }
+                  tone={(user.pointsBalance ?? 0) > 0 ? "verify" : "neutral"}
                   icon={
                     <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
                       <path

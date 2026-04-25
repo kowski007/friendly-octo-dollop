@@ -60,6 +60,8 @@ async function ensureSchema() {
       phone text not null unique,
       created_at timestamptz not null,
       phone_verified_at timestamptz,
+      points_balance integer not null default 0,
+      welcome_rewarded_at timestamptz,
       privy_user_id text,
       privy_linked_at timestamptz,
       email text,
@@ -72,6 +74,12 @@ async function ensureSchema() {
       geo jsonb
     )
   `);
+  await pool.query(
+    `alter table ${USERS_TABLE} add column if not exists points_balance integer not null default 0`
+  );
+  await pool.query(
+    `alter table ${USERS_TABLE} add column if not exists welcome_rewarded_at timestamptz`
+  );
   await pool.query(
     `alter table ${USERS_TABLE} add column if not exists bank_linked_at timestamptz`
   );
@@ -479,6 +487,8 @@ async function replaceSnapshot(client: PoolClient, data: AdminData) {
       "phone",
       "created_at",
       "phone_verified_at",
+      "points_balance",
+      "welcome_rewarded_at",
       "privy_user_id",
       "privy_linked_at",
       "email",
@@ -498,6 +508,8 @@ async function replaceSnapshot(client: PoolClient, data: AdminData) {
       user.phone,
       user.createdAt,
       user.phoneVerifiedAt,
+      user.pointsBalance ?? 0,
+      user.welcomeRewardedAt ?? null,
       user.privyUserId ?? null,
       user.privyLinkedAt ?? null,
       user.email ?? null,
@@ -919,6 +931,8 @@ function mapRowsToSnapshot(rows: {
     phone: string;
     created_at: string;
     phone_verified_at: string;
+    points_balance: number | null;
+    welcome_rewarded_at: string | null;
     privy_user_id: string | null;
     privy_linked_at: string | null;
     email: string | null;
@@ -1106,6 +1120,11 @@ function mapRowsToSnapshot(rows: {
         toIso(user.phone_verified_at) ??
         toIso(user.created_at) ??
         new Date().toISOString(),
+      pointsBalance:
+        typeof user.points_balance === "number" && user.points_balance > 0
+          ? user.points_balance
+          : 0,
+      welcomeRewardedAt: toIso(user.welcome_rewarded_at),
       privyUserId: user.privy_user_id ?? undefined,
       privyLinkedAt: toIso(user.privy_linked_at),
       email: user.email ?? undefined,
@@ -1315,6 +1334,8 @@ export async function readAdminStateFromDatabase(): Promise<AdminData | null> {
       phone: string;
       created_at: string;
       phone_verified_at: string;
+      points_balance: number | null;
+      welcome_rewarded_at: string | null;
       privy_user_id: string | null;
       privy_linked_at: string | null;
       email: string | null;

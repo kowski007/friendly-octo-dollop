@@ -232,7 +232,7 @@ function ResultCard({
             Preview first, then confirm payment.
           </div>
           <Link
-            href="/agent"
+            href="/claim"
             className="inline-flex min-h-10 items-center justify-center rounded-full bg-zinc-950 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
           >
             Claim or manage
@@ -263,7 +263,7 @@ function ResultCard({
           </div>
           {available ? (
             <Link
-              href="/agent"
+              href="/claim"
               className="inline-flex min-h-8 shrink-0 items-center justify-center rounded-full bg-orange-500 px-3 text-xs font-semibold text-white transition hover:bg-orange-600"
             >
               Claim
@@ -301,7 +301,7 @@ function ResultCard({
       {available ? (
         <div className="border-t border-orange-200/70 bg-white/60 p-3 dark:border-orange-900/60 dark:bg-zinc-950/20">
           <Link
-            href="/agent"
+            href="/claim"
             className="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-orange-500 px-4 py-2 text-xs font-semibold text-white transition hover:bg-orange-600 sm:w-auto"
           >
             Claim this handle

@@ -1,4 +1,8 @@
-import { getMarketplaceStats, listMarketplaceListings } from "@/lib/adminStore";
+import {
+  getMarketplaceStats,
+  listMarketplaceListings,
+  listSuggestedHandles,
+} from "@/lib/adminStore";
 import { MarketplaceView } from "@/components/nairatag/MarketplaceView";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +15,7 @@ export default async function MarketplacePage({
   searchParams,
 }: MarketplacePageProps) {
   const query = (await searchParams).q?.trim() || undefined;
-  const [data, historyData, stats] = await Promise.all([
+  const [data, historyData, stats, suggestions] = await Promise.all([
     listMarketplaceListings({ limit: 24, q: query }),
     listMarketplaceListings({
       limit: 40,
@@ -19,6 +23,7 @@ export default async function MarketplacePage({
       statuses: ["active", "paused", "under_review", "withdrawn", "sold"],
     }),
     getMarketplaceStats(),
+    listSuggestedHandles({ limit: 6, seed: query, preferListed: true }),
   ]);
 
   return (
@@ -27,6 +32,7 @@ export default async function MarketplacePage({
       historyListings={historyData.items}
       stats={stats}
       query={query}
+      suggestions={suggestions}
     />
   );
 }

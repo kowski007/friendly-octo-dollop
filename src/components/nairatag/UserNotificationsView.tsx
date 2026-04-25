@@ -48,10 +48,18 @@ function priorityTone(priority: NotificationPriority) {
 }
 
 function notificationBucket(notification: NotificationRecord): Exclude<NotificationFilter, "all" | "unread"> {
-  if (notification.type.startsWith("payment_")) return "payments";
+  if (
+    notification.type.startsWith("payment_") ||
+    notification.type.startsWith("paylink_") ||
+    notification.type.startsWith("settlement_") ||
+    notification.type.startsWith("receipt_")
+  ) {
+    return "payments";
+  }
   if (
     notification.type.startsWith("marketplace_") ||
-    notification.type.startsWith("referral_")
+    notification.type.startsWith("referral_") ||
+    notification.type === "handle_sold"
   ) {
     return "activity";
   }
@@ -76,10 +84,12 @@ function ActionLink({
   href,
   children,
   variant = "secondary",
+  className,
 }: {
   href: string;
   children: ReactNode;
   variant?: "primary" | "secondary";
+  className?: string;
 }) {
   return (
     <a
@@ -88,7 +98,8 @@ function ActionLink({
         "inline-flex h-9 items-center justify-center rounded-xl px-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nt-orange/50",
         variant === "primary"
           ? "bg-nt-orange text-white hover:brightness-110"
-          : "border border-zinc-300/70 bg-white/75 text-zinc-950 hover:bg-white dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50 dark:hover:bg-zinc-950/45"
+          : "border border-zinc-300/70 bg-white/75 text-zinc-950 hover:bg-white dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50 dark:hover:bg-zinc-950/45",
+        className
       )}
     >
       {children}
@@ -115,34 +126,10 @@ function Panel({
   );
 }
 
-function SummaryTile({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-zinc-200/70 bg-white/80 p-3 dark:border-zinc-800/80 dark:bg-zinc-950/35">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">
-        {label}
-      </div>
-      <div className="mt-1 text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-        {value}
-      </div>
-      <div className="mt-0.5 truncate text-xs text-zinc-600 dark:text-zinc-300">
-        {detail}
-      </div>
-    </div>
-  );
-}
-
 function SignInState() {
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-950 transition-colors dark:bg-zinc-950 dark:text-zinc-50">
-      <AppPageHeader ctaHref="/agent" ctaLabel="Claim a handle" />
+      <AppPageHeader ctaHref="/claim" ctaLabel="Claim a ₦handle" />
       <main className="py-6 sm:py-8">
         <Container className="max-w-3xl">
           <Panel className="p-4 sm:p-5">
@@ -233,16 +220,16 @@ function NotificationTab({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex h-10 items-center gap-2 rounded-full px-3 text-sm font-semibold transition",
+        "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 text-[11px] font-semibold transition sm:h-10 sm:gap-2 sm:px-3 sm:text-sm",
         active
           ? "bg-zinc-950 text-white dark:bg-white dark:text-zinc-950"
           : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-white"
       )}
     >
-      <span>{label}</span>
+      <span className="whitespace-nowrap">{label}</span>
       <span
         className={cn(
-          "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+          "inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-semibold leading-none sm:h-auto sm:min-w-0 sm:px-1.5 sm:py-0.5 sm:text-[10px]",
           active
             ? "bg-white/15 text-white dark:bg-zinc-100 dark:text-zinc-950"
             : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
@@ -329,11 +316,7 @@ export function UserNotificationsView({
 
   if (!data) return <SignInState />;
 
-  const { user, claim, notifications } = data;
-  const accountLabel = claim ? `${NAIRA}${claim.handle}` : user.phone;
-  const highPriority = notifications.items.filter(
-    (notification) => notification.priority === "high"
-  ).length;
+  const { notifications } = data;
   const filteredItems = notifications.items.filter((notification) =>
     matchesFilter(notification, activeFilter)
   );
@@ -392,79 +375,52 @@ export function UserNotificationsView({
       <AppPageHeader ctaHref="/dashboard" ctaLabel="Dashboard" />
       <main className="py-5 sm:py-6">
         <Container className="max-w-5xl space-y-4">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="min-w-0">
-              <Badge tone="neutral" className="px-2 py-0.5 text-[11px]">
-                {accountLabel}
-              </Badge>
-              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                Notifications
-              </h1>
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                Keep account, payment, and activity updates in one compact inbox.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <ActionLink href="/settings#notifications">Manage settings</ActionLink>
-              <button
-                type="button"
-                onClick={() => markRead()}
-                disabled={isPending || notifications.unread === 0}
-                className="h-9 rounded-xl bg-nt-orange px-3 text-xs font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-55"
-              >
-                {isPending ? "Updating" : "Mark all as read"}
-              </button>
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            <SummaryTile
-              label="Unread"
-              value={notifications.unread.toLocaleString()}
-              detail="Needs attention"
-            />
-            <SummaryTile
-              label="Total"
-              value={notifications.total.toLocaleString()}
-              detail="Stored updates"
-            />
-            <SummaryTile
-              label="Priority"
-              value={highPriority.toLocaleString()}
-              detail="High priority"
-            />
-          </div>
-
           <Panel className="overflow-hidden">
-            <div className="flex items-center justify-between border-b border-zinc-200/70 px-4 py-4 dark:border-zinc-800/80">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200/70 px-3 py-3 dark:border-zinc-800/80 sm:gap-3 sm:px-4 sm:py-4">
               <div>
-                <div className="text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                <div className="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-lg">
                   Inbox
                 </div>
-                <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                <div className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400 sm:mt-1 sm:text-xs">
                   {filteredItems.length} item(s) in {filterLabel(activeFilter).toLowerCase()}
                 </div>
               </div>
-              {filteredUnread > 0 ? (
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                <ActionLink
+                  href="/settings#notifications"
+                  className="h-8 rounded-lg px-2.5 text-[11px] sm:h-9 sm:rounded-xl sm:px-3 sm:text-xs"
+                >
+                  Manage settings
+                </ActionLink>
                 <button
                   type="button"
-                  onClick={() =>
-                    markRead(
-                      filteredItems
-                        .filter((notification) => notification.status === "unread")
-                        .map((notification) => notification.id)
-                    )
-                  }
-                  disabled={isPending}
-                  className="hidden h-9 rounded-xl border border-zinc-300/70 bg-white/80 px-3 text-xs font-semibold text-zinc-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-55 dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50 sm:inline-flex"
+                  onClick={() => markRead()}
+                  disabled={isPending || notifications.unread === 0}
+                  className="h-8 rounded-lg bg-nt-orange px-2.5 text-[11px] font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-55 sm:h-9 sm:rounded-xl sm:px-3 sm:text-xs"
                 >
-                  Mark visible as read
+                  {isPending ? "Updating" : "Mark all as read"}
                 </button>
-              ) : null}
+                {filteredUnread > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      markRead(
+                        filteredItems
+                          .filter((notification) => notification.status === "unread")
+                          .map((notification) => notification.id)
+                      )
+                    }
+                    disabled={isPending}
+                    className="hidden h-9 rounded-xl border border-zinc-300/70 bg-white/80 px-3 text-xs font-semibold text-zinc-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-55 dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50 sm:inline-flex"
+                  >
+                    Mark visible as read
+                  </button>
+                ) : null}
+              </div>
             </div>
 
-            <div className="overflow-x-auto border-b border-zinc-200/70 px-3 py-3 dark:border-zinc-800/80">
-              <div className="flex min-w-max gap-2">
+            <div className="overflow-x-auto border-b border-zinc-200/70 px-2 py-1.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden dark:border-zinc-800/80 sm:px-3 sm:py-3">
+              <div className="flex min-w-max gap-1 sm:gap-2">
                 {(
                   ["all", "unread", "payments", "activity", "account"] as NotificationFilter[]
                 ).map((filter) => (

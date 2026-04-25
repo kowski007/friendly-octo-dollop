@@ -38,6 +38,8 @@ import type {
   NotificationType,
   OtpRecord,
   PublicHandleProfile,
+  PublicHandleSuggestion,
+  PublicReferralShare,
   ReferralRecord,
   ReferralSource,
   TransactionRecord,
@@ -63,6 +65,7 @@ export type AdminData = {
 const DATA_FILE = path.join(process.cwd(), "data", "nairatag-admin.json");
 const MAX_API_LOGS = 5000;
 const MAX_NOTIFICATIONS = 5000;
+const WELCOME_SIGNUP_POINTS = 50;
 const REFERRAL_SIGNUP_POINTS = 25;
 const REFERRAL_CONVERSION_POINTS = 100;
 const DEFAULT_ADMIN_DB_TIMEOUT_MS = 1500;
@@ -103,6 +106,25 @@ function normalizeReferralRecord(referral: ReferralRecord): ReferralRecord {
   };
 }
 
+function normalizeUserRecord(user: UserRecord): UserRecord {
+  return {
+    ...user,
+    pointsBalance:
+      typeof user.pointsBalance === "number" && user.pointsBalance > 0
+        ? user.pointsBalance
+        : 0,
+  };
+}
+
+function addPointsToUserUnsafe(user: UserRecord | null | undefined, points: number) {
+  if (!user || !Number.isFinite(points) || points <= 0) {
+    return user?.pointsBalance ?? 0;
+  }
+
+  user.pointsBalance = (user.pointsBalance ?? 0) + Math.round(points);
+  return user.pointsBalance;
+}
+
 let queue: Promise<unknown> = Promise.resolve();
 function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   const run = queue.then(fn, fn);
@@ -123,7 +145,7 @@ async function ensureDataFile() {
 }
 
 function normalizeData(parsed: Partial<AdminData> | null | undefined): AdminData {
-  return {
+  const data: AdminData = {
     claims: Array.isArray(parsed?.claims)
       ? (parsed!.claims as ClaimRecord[])
       : [],
@@ -133,7 +155,9 @@ function normalizeData(parsed: Partial<AdminData> | null | undefined): AdminData
     notifications: Array.isArray(parsed?.notifications)
       ? (parsed!.notifications as NotificationRecord[])
       : [],
-    users: Array.isArray(parsed?.users) ? (parsed!.users as UserRecord[]) : [],
+    users: Array.isArray(parsed?.users)
+      ? (parsed!.users as UserRecord[]).map(normalizeUserRecord)
+      : [],
     otps: Array.isArray(parsed?.otps) ? (parsed!.otps as OtpRecord[]) : [],
     bankAccounts: Array.isArray(parsed?.bankAccounts)
       ? (parsed!.bankAccounts as BankAccountRecord[])
@@ -157,6 +181,28 @@ function normalizeData(parsed: Partial<AdminData> | null | undefined): AdminData
       ? (parsed!.referrals as ReferralRecord[]).map(normalizeReferralRecord)
       : [],
   };
+
+  syncUserPointsBalancesUnsafe(data);
+  return data;
+}
+
+function pointsFromNotification(notification: NotificationRecord) {
+  const value = notification.metadata?.points;
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function syncUserPointsBalancesUnsafe(data: AdminData) {
+  for (const user of data.users) {
+    user.pointsBalance = user.pointsBalance ?? 0;
+
+    const derivedPoints = data.notifications
+      .filter((notification) => notification.userId === user.id)
+      .reduce((sum, notification) => sum + pointsFromNotification(notification), 0);
+
+    if (derivedPoints > user.pointsBalance) {
+      user.pointsBalance = derivedPoints;
+    }
+  }
 }
 
 async function readFileDataUnsafe(): Promise<AdminData> {
@@ -502,6 +548,20 @@ export async function claimHandle({
     };
 
     data.claims.unshift(record);
+    if (userId) {
+      addNotificationUnsafe(data, {
+        userId,
+        handle: record.handle,
+        type: "handle_claimed",
+        title: "Handle claimed",
+        body: `\u20A6${record.handle} is now assigned to your account.`,
+        metadata: {
+          claimId: record.id,
+          verification: record.verification,
+          source: record.source,
+        },
+      });
+    }
 
     await writeDataUnsafe(data);
     return record;
@@ -560,6 +620,38 @@ function addNotificationUnsafe(
     data.notifications = data.notifications.slice(0, MAX_NOTIFICATIONS);
   }
   return record;
+}
+
+function addWelcomeRewardUnsafe({
+  data,
+  user,
+  source,
+}: {
+  data: AdminData;
+  user: UserRecord;
+  source: "otp" | "privy";
+}) {
+  if (user.welcomeRewardedAt) {
+    return user.pointsBalance ?? 0;
+  }
+
+  const nowIso = new Date().toISOString();
+  const totalPoints = addPointsToUserUnsafe(user, WELCOME_SIGNUP_POINTS);
+  user.welcomeRewardedAt = nowIso;
+
+  addNotificationUnsafe(data, {
+    userId: user.id,
+    type: "welcome_reward",
+    title: `Welcome to NairaTag: +${WELCOME_SIGNUP_POINTS} points`,
+    body: `Your account is live. We added ${WELCOME_SIGNUP_POINTS} points to get you started. Claim your ${"\u20A6"}handle next.`,
+    metadata: {
+      points: WELCOME_SIGNUP_POINTS,
+      totalPoints,
+      source,
+    },
+  });
+
+  return totalPoints;
 }
 
 function notificationAudienceMatches(
@@ -1107,6 +1199,7 @@ function buildPublicHandleProfile(
       verified: claim.verification !== "pending",
       verifiedAt: claim.verifiedAt,
       badges,
+      phoneVerified: Boolean(user?.phoneVerifiedAt),
       bankAccountVerified: bankAccount?.status === "verified",
       bvnVerified: Boolean(user?.bvnLinkedAt),
     },
@@ -1362,6 +1455,141 @@ export async function listPublicHandleSuggestions({ limit = 5 }: { limit?: numbe
       total: data.claims.length,
       items,
     };
+  });
+}
+
+function suggestionSeed(input?: string) {
+  return input
+    ?.trim()
+    .replace(/^\u20A6/u, "")
+    .replace(/^@/u, "")
+    .toLowerCase();
+}
+
+function handleSimilarityScore(handle: string, seed?: string) {
+  const normalizedSeed = suggestionSeed(seed);
+  if (!normalizedSeed || normalizedSeed === handle) return 0;
+
+  let score = 0;
+  const prefixLimit = Math.min(handle.length, normalizedSeed.length, 4);
+  let sharedPrefix = 0;
+  while (
+    sharedPrefix < prefixLimit &&
+    handle[sharedPrefix] === normalizedSeed[sharedPrefix]
+  ) {
+    sharedPrefix += 1;
+  }
+
+  score += sharedPrefix * 18;
+  if (handle[0] === normalizedSeed[0]) score += 8;
+  if (Math.abs(handle.length - normalizedSeed.length) <= 1) score += 12;
+  if (handle.includes(normalizedSeed) || normalizedSeed.includes(handle)) score += 16;
+
+  return score;
+}
+
+function buildSuggestedHandle(
+  data: AdminData,
+  claim: ClaimRecord,
+  {
+    seed,
+    preferListed = false,
+  }: {
+    seed?: string;
+    preferListed?: boolean;
+  } = {}
+): (PublicHandleSuggestion & { score: number; claimedAt: string }) {
+  const reputation = buildHandleReputation(data, claim);
+  const listing =
+    data.marketplaceListings.find(
+      (entry) => entry.handle === claim.handle && entry.status === "active"
+    ) ?? null;
+  const similarity = handleSimilarityScore(claim.handle, seed);
+  const verificationBoost =
+    claim.verification === "business" ? 26 : claim.verification === "verified" ? 18 : 4;
+  const listingBoost = listing ? (preferListed ? 80 : 30) : 0;
+  const trustBoost = Math.round((reputation?.trustScore ?? 0) * 0.35);
+  const activityBoost =
+    (reputation?.settledTransactionCount ?? 0) > 0 ||
+    (reputation?.recentTransactionCount30d ?? 0) > 0
+      ? 10
+      : 0;
+  const recencyBoost = Math.max(
+    0,
+    12 - Math.min(12, ownerSinceDays(claim.claimedAt) / 14)
+  );
+  const score =
+    similarity + verificationBoost + listingBoost + trustBoost + activityBoost + recencyBoost;
+
+  let reason = "Recently claimed";
+  if (listing && similarity >= 24) {
+    reason = "Live listing similar to what you viewed";
+  } else if (listing) {
+    reason = "Live on the marketplace";
+  } else if (similarity >= 24 && seed) {
+    reason = "Close match to your current search";
+  } else if ((reputation?.trustScore ?? 0) >= 75) {
+    reason = "High trust handle";
+  } else if (claim.verification !== "pending") {
+    reason = "Verified payment identity";
+  }
+
+  return {
+    handle: claim.handle,
+    displayName: claim.displayName,
+    verification: claim.verification,
+    trustScore: reputation?.trustScore ?? (claim.verification === "pending" ? 12 : 48),
+    badges: reputation?.badges ?? [],
+    isListed: Boolean(listing),
+    askAmount: listing?.askAmount ?? null,
+    reason,
+    score,
+    claimedAt: claim.claimedAt,
+  };
+}
+
+export async function listSuggestedHandles({
+  limit = 6,
+  seed,
+  preferListed = false,
+}: {
+  limit?: number;
+  seed?: string;
+  preferListed?: boolean;
+} = {}) {
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const cappedLimit = Math.min(12, Math.max(1, limit));
+    const normalizedSeed = suggestionSeed(seed);
+
+    const items = data.claims
+      .filter((claim) => claim.handle !== normalizedSeed)
+      .map((claim) =>
+        buildSuggestedHandle(data, claim, {
+          seed,
+          preferListed,
+        })
+      )
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (Number(b.isListed) !== Number(a.isListed)) {
+          return Number(b.isListed) - Number(a.isListed);
+        }
+        return Date.parse(b.claimedAt) - Date.parse(a.claimedAt);
+      })
+      .slice(0, cappedLimit)
+      .map((item) => ({
+        handle: item.handle,
+        displayName: item.displayName,
+        verification: item.verification,
+        trustScore: item.trustScore,
+        badges: item.badges,
+        isListed: item.isListed,
+        askAmount: item.askAmount,
+        reason: item.reason,
+      }));
+
+    return items;
   });
 }
 
@@ -1640,11 +1868,14 @@ export async function verifyPhoneOtp({
         phone: normalized,
         createdAt: now.toISOString(),
         phoneVerifiedAt: now.toISOString(),
+        pointsBalance: 0,
         geo: ip ? { ip } : undefined,
       };
       data.users.unshift(user);
+      addWelcomeRewardUnsafe({ data, user, source: "otp" });
     } else {
       user.phoneVerifiedAt = user.phoneVerifiedAt || now.toISOString();
+      user.pointsBalance = user.pointsBalance ?? 0;
       user.geo = user.geo || (ip ? { ip } : undefined);
     }
 
@@ -1709,6 +1940,7 @@ export async function upsertPrivyUser({
         phone: normalizedPhone ?? fallbackPrivyPhone(cleanPrivyUserId),
         createdAt: nowIso,
         phoneVerifiedAt: nowIso,
+        pointsBalance: 0,
         privyUserId: cleanPrivyUserId,
         privyLinkedAt: nowIso,
         email: normalizedEmail ?? undefined,
@@ -1717,10 +1949,12 @@ export async function upsertPrivyUser({
         geo: ip ? { ip } : undefined,
       };
       data.users.unshift(user);
+      addWelcomeRewardUnsafe({ data, user, source: "privy" });
     } else {
       user.privyUserId = cleanPrivyUserId;
       user.privyLinkedAt = user.privyLinkedAt || nowIso;
       user.phoneVerifiedAt = user.phoneVerifiedAt || nowIso;
+      user.pointsBalance = user.pointsBalance ?? 0;
       user.geo = user.geo || (ip ? { ip } : undefined);
       if (normalizedPhone && user.phone !== normalizedPhone) {
         const currentUserId = user.id;
@@ -2382,6 +2616,17 @@ export async function getMarketplaceStats(): Promise<MarketplaceStats> {
             pendingOffers.reduce((sum, offer) => sum + offer.amount, 0) /
               pendingOffers.length
           );
+    const listedHandles = new Set(liveListings.map((listing) => listing.handle));
+    const totalClaims = data.claims.length;
+    const verifiedClaims = data.claims.filter(
+      (claim) => claim.verification !== "pending"
+    ).length;
+    const listedClaims = data.claims.filter((claim) =>
+      listedHandles.has(claim.handle)
+    ).length;
+    const reservedClaimedHandles = data.claims.filter((claim) =>
+      isShortHandleReserved(claim.handle)
+    ).length;
 
     return {
       liveListings: liveListings.length,
@@ -2392,6 +2637,11 @@ export async function getMarketplaceStats(): Promise<MarketplaceStats> {
       pendingOffers: pendingOffers.length,
       averageAskAmount,
       averageOfferAmount,
+      totalClaims,
+      verifiedClaims,
+      listedClaims,
+      unlistedClaims: Math.max(0, totalClaims - listedClaims),
+      reservedClaimedHandles,
     };
   });
 }
@@ -2548,26 +2798,28 @@ export async function applyReferralCodeForUser({
       createdAt: nowIso,
       signupPoints: REFERRAL_SIGNUP_POINTS,
       conversionPoints: 0,
-    };
-    if (!existing) {
-      data.referrals.unshift(record);
-      const referrerClaim =
-        data.claims.find((entry) => entry.userId === referrer.id) ?? null;
-      addNotificationUnsafe(data, {
+      };
+      if (!existing) {
+        data.referrals.unshift(record);
+        const totalPoints = addPointsToUserUnsafe(referrer, REFERRAL_SIGNUP_POINTS);
+        const referrerClaim =
+          data.claims.find((entry) => entry.userId === referrer.id) ?? null;
+        addNotificationUnsafe(data, {
         userId: referrer.id,
         handle: referrerClaim?.handle,
         type: "referral_signup",
         title: `New referral: +${REFERRAL_SIGNUP_POINTS} points`,
         body: "Someone signed up with your username referral link.",
-        metadata: {
-          referralId: record.id,
-          referredUserId: userId,
-          referralCode: referralIdentifier,
-          points: REFERRAL_SIGNUP_POINTS,
-          totalReferralPoints: referralTotalPoints(record),
-        },
-      });
-    }
+          metadata: {
+            referralId: record.id,
+            referredUserId: userId,
+            referralCode: referralIdentifier,
+            points: REFERRAL_SIGNUP_POINTS,
+            totalPoints,
+            totalReferralPoints: referralTotalPoints(record),
+          },
+        });
+      }
 
     await writeDataUnsafe(data);
     return { applied: true as const, reason: "applied" as const, referral: record };
@@ -2629,6 +2881,113 @@ export async function getReferralDashboardForUser(userId: string) {
       conversionPointsPerReferral: REFERRAL_CONVERSION_POINTS,
       recent,
     };
+  });
+}
+
+export async function getPointsHistoryForUser(userId: string) {
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const user = data.users.find((entry) => entry.id === userId) ?? null;
+    if (!user) throw new Error("user_not_found");
+
+    const claim = data.claims.find((entry) => entry.userId === userId) ?? null;
+    const entries = data.notifications
+      .filter(
+        (notification) =>
+          notification.userId === userId && pointsFromNotification(notification) !== 0
+      )
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+      .map((notification) => ({
+        id: notification.id,
+        type: notification.type,
+        title: notification.title,
+        body: notification.body,
+        createdAt: notification.createdAt,
+        handle: notification.handle ?? claim?.handle ?? null,
+        points: pointsFromNotification(notification),
+        totalPoints:
+          typeof notification.metadata?.totalPoints === "number"
+            ? notification.metadata.totalPoints
+            : undefined,
+        priority: notification.priority,
+        status: notification.status,
+      }));
+
+    const totalEarned = entries
+      .filter((entry) => entry.points > 0)
+      .reduce((sum, entry) => sum + entry.points, 0);
+    const welcomePoints = entries
+      .filter((entry) => entry.type === "welcome_reward")
+      .reduce((sum, entry) => sum + entry.points, 0);
+    const referralPoints = entries
+      .filter(
+        (entry) =>
+          entry.type === "referral_signup" ||
+          entry.type === "referral_converted" ||
+          entry.type === "referral_points_awarded"
+      )
+      .reduce((sum, entry) => sum + entry.points, 0);
+
+    return {
+      user,
+      claim,
+      balance: user.pointsBalance ?? 0,
+      totalEarned,
+      welcomePoints,
+      referralPoints,
+      entries,
+    };
+  });
+}
+
+export async function getPublicReferralShare(code: string) {
+  const normalizedHandle = normalizeHandle(code);
+  const normalizedCode = normalizeReferralCode(code);
+  const referralIdentifier =
+    normalizedHandle && isValidHandle(normalizedHandle)
+      ? normalizedHandle
+      : normalizedCode;
+
+  if (!referralIdentifier) return null;
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const referrer = findUserByReferralIdentifier(data, referralIdentifier);
+    if (!referrer) return null;
+
+    const claim = data.claims.find((entry) => entry.userId === referrer.id) ?? null;
+    const reputation = buildHandleReputation(data, claim);
+    const totalReferrals = data.referrals.filter(
+      (entry) => entry.referrerUserId === referrer.id
+    );
+    const referralHandle = claim?.handle ?? null;
+    const referralUrl = referralHandle
+      ? absoluteOrRelativeUrl(`/r/${referralHandle}`)
+      : absoluteOrRelativeUrl(`/r/${referralIdentifier}`);
+
+    const displayName =
+      claim?.displayName?.trim() ||
+      referrer.fullName?.trim() ||
+      (referralHandle ? `\u20A6${referralHandle}` : "NairaTag referral");
+
+    const share: PublicReferralShare = {
+      code: referralIdentifier,
+      referrerHandle: referralHandle,
+      displayName,
+      verification: claim?.verification ?? "pending",
+      trustScore:
+        reputation?.trustScore ??
+        ((claim?.verification ?? "pending") === "pending" ? 12 : 48),
+      referralUrl,
+      claimUrl: absoluteOrRelativeUrl("/claim"),
+      signupPoints: REFERRAL_SIGNUP_POINTS,
+      conversionPoints: REFERRAL_CONVERSION_POINTS,
+      totalReferrals: totalReferrals.length,
+      convertedReferrals: totalReferrals.filter((entry) => Boolean(entry.convertedAt))
+        .length,
+    };
+
+    return share;
   });
 }
 
@@ -2782,6 +3141,29 @@ export async function createMarketplaceListing({
       );
     }
     data.marketplaceListings.unshift(listing);
+
+    const pricingSummary =
+      listing.saleMode === "fixed_price"
+        ? `at NGN ${(listing.askAmount ?? 0).toLocaleString()}`
+        : listing.minOfferAmount
+          ? `with offers from NGN ${listing.minOfferAmount.toLocaleString()}`
+          : "with offers enabled";
+    addNotificationUnsafe(data, {
+      userId,
+      handle: listing.handle,
+      type: existingListing ? "marketplace_listing_updated" : "marketplace_listing_created",
+      title: existingListing ? "Marketplace listing updated" : "Marketplace listing created",
+      body: existingListing
+        ? `Your ${"\u20A6"}${listing.handle} listing is now live again ${pricingSummary}.`
+        : `Your ${"\u20A6"}${listing.handle} listing is now live ${pricingSummary}.`,
+      metadata: {
+        listingId: listing.id,
+        saleMode: listing.saleMode,
+        status: listing.status,
+        askAmount: listing.askAmount ?? null,
+        minOfferAmount: listing.minOfferAmount ?? null,
+      },
+    });
     await writeDataUnsafe(data);
 
     return buildMarketplaceListingDetail(data, listing);
@@ -2816,6 +3198,8 @@ export async function updateMarketplaceListing({
     );
     if (!listing) throw new Error("listing_not_found");
 
+    const changes: string[] = [];
+
     if (status && !["active", "paused", "withdrawn"].includes(status)) {
       throw new Error("invalid_listing_status");
     }
@@ -2832,6 +3216,9 @@ export async function updateMarketplaceListing({
         throw new Error("invalid_ask_amount");
       }
       listing.askAmount = normalizedAsk;
+      changes.push(
+        normalizedAsk ? `ask set to NGN ${normalizedAsk.toLocaleString()}` : "ask cleared"
+      );
     }
     if (minOfferAmount !== undefined) {
       const normalizedMin =
@@ -2840,9 +3227,15 @@ export async function updateMarketplaceListing({
         throw new Error("invalid_min_offer_amount");
       }
       listing.minOfferAmount = normalizedMin;
+      changes.push(
+        normalizedMin
+          ? `minimum offer set to NGN ${normalizedMin.toLocaleString()}`
+          : "minimum offer cleared"
+      );
     }
     if (sellerNote !== undefined) {
       listing.sellerNote = sellerNote?.trim() || undefined;
+      changes.push(listing.sellerNote ? "seller note updated" : "seller note removed");
     }
     if (status) {
       listing.status = status;
@@ -2852,8 +3245,26 @@ export async function updateMarketplaceListing({
       if (status === "active") {
         listing.reviewStartedAt = undefined;
       }
+      changes.push(`status changed to ${status}`);
     }
     listing.updatedAt = new Date().toISOString();
+
+    addNotificationUnsafe(data, {
+      userId,
+      handle: listing.handle,
+      type: "marketplace_listing_updated",
+      title: "Marketplace listing updated",
+      body: changes.length
+        ? `Your ${"\u20A6"}${listing.handle} listing was updated: ${changes.join(", ")}.`
+        : `Your ${"\u20A6"}${listing.handle} listing was refreshed.`,
+      metadata: {
+        listingId: listing.id,
+        saleMode: listing.saleMode,
+        status: listing.status,
+        askAmount: listing.askAmount ?? null,
+        minOfferAmount: listing.minOfferAmount ?? null,
+      },
+    });
 
     await writeDataUnsafe(data);
     return buildMarketplaceListingDetail(data, listing);
@@ -3199,6 +3610,19 @@ export async function reviewMarketplaceTransfer({
         },
       });
       addNotificationUnsafe(data, {
+        userId: transfer.sellerUserId,
+        handle: transfer.handle,
+        type: "handle_sold",
+        title: "Handle sold",
+        body: `\u20A6${transfer.handle} sold for NGN ${transfer.amount.toLocaleString()} and moved to ${transfer.buyerName}.`,
+        metadata: {
+          transferId: transfer.id,
+          listingId: listing.id,
+          amount: transfer.amount,
+          buyerUserId: buyer.id,
+        },
+      });
+      addNotificationUnsafe(data, {
         userId: buyer.id,
         handle: transfer.handle,
         type: "marketplace_transfer_approved",
@@ -3300,6 +3724,21 @@ export async function claimHandleForUser({
     };
 
     data.claims.unshift(record);
+    addNotificationUnsafe(data, {
+      userId,
+      handle: record.handle,
+      type: "handle_claimed",
+      title: "Handle claimed",
+      body:
+        record.verification === "verified" || record.verification === "business"
+          ? `\u20A6${record.handle} is live and verified on your NairaTag account.`
+          : `\u20A6${record.handle} is now assigned to your account. Link BVN and a bank destination to complete setup.`,
+      metadata: {
+        claimId: record.id,
+        verification: record.verification,
+        source: record.source,
+      },
+    });
 
     const referral = data.referrals.find((entry) => entry.referredUserId === userId);
     if (referral && !referral.convertedAt) {
@@ -3317,6 +3756,9 @@ export async function claimHandleForUser({
       const referrerClaim =
         data.claims.find((entry) => entry.userId === referral.referrerUserId) ??
         null;
+      const referrer =
+        data.users.find((entry) => entry.id === referral.referrerUserId) ?? null;
+      const totalPoints = addPointsToUserUnsafe(referrer, REFERRAL_CONVERSION_POINTS);
       addNotificationUnsafe(data, {
         userId: referral.referrerUserId,
         handle: referrerClaim?.handle,
@@ -3329,6 +3771,7 @@ export async function claimHandleForUser({
           referredHandle: normalized,
           referralCode: referral.referralCode,
           points: REFERRAL_CONVERSION_POINTS,
+          totalPoints,
           totalReferralPoints: referralTotalPoints(referral),
         },
       });

@@ -2,6 +2,7 @@ import {
   getCreditProfileForHandle,
   getHandleReputation,
   getPaymentDestinationByHandle,
+  listSuggestedHandles,
 } from "@/lib/adminStore";
 import { PaymentLinkView } from "@/components/nairatag/PaymentLinkView";
 
@@ -33,10 +34,11 @@ export default async function PayHandlePage({
   const { handle } = await params;
   const query = await searchParams;
   const cleanHandle = handle.replace(/^\u20A6/u, "");
-  const [payment, reputation, creditProfile] = await Promise.all([
+  const [payment, reputation, creditProfile, suggestions] = await Promise.all([
     getPaymentDestinationByHandle(cleanHandle),
     getHandleReputation(cleanHandle),
     getCreditProfileForHandle(cleanHandle),
+    listSuggestedHandles({ limit: 6, seed: cleanHandle, preferListed: true }),
   ]);
   const isCryptoLink =
     query.asset?.toUpperCase() === "USDC" || query.chain?.toLowerCase() === "base";
@@ -65,6 +67,7 @@ export default async function PayHandlePage({
       initialMethod={isCryptoLink ? "crypto" : "fiat"}
       note={note}
       shareUrl={shareUrl}
+      suggestions={suggestions}
     />
   );
 }

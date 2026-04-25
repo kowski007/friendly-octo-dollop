@@ -52,6 +52,63 @@ function BrandLockup({ mobile = false }: { mobile?: boolean }) {
   );
 }
 
+function LiveClaimsButton({ mobile = false }: { mobile?: boolean }) {
+  const [count, setCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadClaimsCount() {
+      try {
+        const response = await fetch("/api/stats/claims", {
+          cache: "no-store",
+        });
+
+        if (!response.ok) return;
+
+        const payload = (await response.json()) as { totalClaims?: unknown };
+        if (!active || typeof payload.totalClaims !== "number") return;
+
+        setCount(payload.totalClaims);
+      } catch {
+        // Keep the button hidden if the live count is unavailable.
+      }
+    }
+
+    void loadClaimsCount();
+    const interval = window.setInterval(() => {
+      void loadClaimsCount();
+    }, 45000);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  if (count === null) return null;
+
+  return (
+    <Link
+      href="/map"
+      className={cn(
+        "inline-flex items-center gap-2 rounded-full border border-zinc-200/80 bg-white/90 text-xs font-semibold text-zinc-800 shadow-sm backdrop-blur transition hover:border-orange-200 hover:text-zinc-950 dark:border-zinc-800/80 dark:bg-zinc-950/75 dark:text-zinc-100 dark:hover:border-zinc-700 dark:hover:text-white",
+        mobile
+          ? "mt-2.5 w-full justify-center px-3 py-2"
+          : "px-3.5 py-2.5"
+      )}
+      aria-label={`${count.toLocaleString()} claimed NairaTag handles`}
+      title="Live claimed handle count"
+    >
+      <span className="relative flex h-2.5 w-2.5">
+        <span className="absolute inset-0 rounded-full bg-emerald-500/30" />
+        <span className="absolute inset-[2px] rounded-full bg-emerald-500" />
+      </span>
+      <span>{count.toLocaleString()} Claimed</span>
+    </Link>
+  );
+}
+
 type NavItem = {
   href: string;
   label: string;
@@ -380,15 +437,18 @@ export function HeaderNav() {
   return (
     <header className="sticky top-0 z-50 bg-white/70 backdrop-blur dark:bg-black/40 md:border-b md:border-zinc-200/60 md:dark:border-zinc-800/60">
       <Container className="py-3 md:py-4">
-        <div className="flex items-center justify-between rounded-[1.6rem] border border-zinc-200 bg-white px-3 py-2.5 shadow-[0_16px_40px_rgba(15,23,42,0.08)] dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-[0_18px_44px_rgba(0,0,0,0.3)] md:hidden">
-          <BrandLockup mobile />
-          <div className="ml-3 flex shrink-0 items-center gap-1.5">
-            <ThemeToggle
-              size="compact"
-              className="border-zinc-200 bg-zinc-50 text-zinc-700 shadow-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
-            />
-            <MobileMenu />
+        <div className="rounded-[1.6rem] border border-zinc-200 bg-white px-3 py-2.5 shadow-[0_16px_40px_rgba(15,23,42,0.08)] dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-[0_18px_44px_rgba(0,0,0,0.3)] md:hidden">
+          <div className="flex items-center justify-between">
+            <BrandLockup mobile />
+            <div className="ml-3 flex shrink-0 items-center gap-1.5">
+              <ThemeToggle
+                size="compact"
+                className="border-zinc-200 bg-zinc-50 text-zinc-700 shadow-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              />
+              <MobileMenu />
+            </div>
           </div>
+          <LiveClaimsButton mobile />
         </div>
 
         <div className="hidden items-center justify-between md:flex">
@@ -408,6 +468,7 @@ export function HeaderNav() {
           </nav>
 
           <div className="flex items-center gap-2.5">
+            <LiveClaimsButton />
             <ThemeToggle size="dense" />
             <AuthModalButton
               afterAuthHref="/dashboard"

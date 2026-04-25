@@ -262,7 +262,7 @@ export function ClaimsMapView({ initialClaims }: { initialClaims: ClaimRecord[] 
                   <ButtonLink href="/marketplace" variant="secondary">
                     Open marketplace
                   </ButtonLink>
-                  <ButtonLink href="/agent">Claim your handle</ButtonLink>
+                  <ButtonLink href="/claim">Claim your ₦handle</ButtonLink>
                 </div>
               </Card>
             </div>

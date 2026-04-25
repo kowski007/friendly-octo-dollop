@@ -9,6 +9,7 @@ import type {
   ClaimRecord,
   CreditProfile,
   HandleReputation,
+  PublicHandleSuggestion,
 } from "@/lib/adminTypes";
 import {
   BASE_CHAIN_HEX,
@@ -21,6 +22,12 @@ import {
 } from "@/lib/cryptoConfig";
 import { AppPageHeader } from "./AppPageHeader";
 import { CopyButton } from "./CopyButton";
+import {
+  BadgeLegend,
+  HandleIdentity,
+  SuggestedHandlesSection,
+  VerificationChecklist,
+} from "./HandleTrust";
 import { Badge, ButtonLink, Card, Container, cn } from "./ui";
 
 const NAIRA = "\u20A6";
@@ -81,10 +88,6 @@ function formatCompactCurrency(amount: number) {
     notation: "compact",
     maximumFractionDigits: 1,
   }).format(amount);
-}
-
-function verificationTone(verification: ClaimRecord["verification"]) {
-  return verification === "pending" ? "neutral" : "verify";
 }
 
 function trustTone(score: number) {
@@ -721,6 +724,7 @@ export function PaymentLinkView({
   initialMethod = "fiat",
   note,
   shareUrl,
+  suggestions,
 }: {
   handle: string;
   payment: {
@@ -734,6 +738,7 @@ export function PaymentLinkView({
   initialMethod?: PaymentMethod;
   note?: string;
   shareUrl: string;
+  suggestions: PublicHandleSuggestion[];
 }) {
   const [method, setMethod] = useState<PaymentMethod>(initialMethod);
   const claim = payment?.claim ?? null;
@@ -750,29 +755,39 @@ export function PaymentLinkView({
       <main className="py-6 sm:py-10">
         <Container className="max-w-5xl">
           {!claim ? (
-            <Card className="p-6 sm:p-7">
-              <div className="space-y-5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone="orange">Payment link</Badge>
-                  <Badge tone="neutral">Handle not claimed</Badge>
+            <div className="space-y-6">
+              <Card className="p-6 sm:p-7">
+                <div className="space-y-5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone="orange">Payment link</Badge>
+                    <Badge tone="neutral">Handle not claimed</Badge>
+                  </div>
+                  <div>
+                    <h1 className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                      {NAIRA}{handle} is still available
+                    </h1>
+                    <p className="mt-3 max-w-2xl text-base leading-7 text-zinc-600 dark:text-zinc-300">
+                      There is no verified destination behind this handle yet. Claim it first before using it for payments.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <ButtonLink href="/claim">Claim this ₦handle</ButtonLink>
+                    <ButtonLink href="/" variant="secondary">Back home</ButtonLink>
+                  </div>
                 </div>
-                <div>
-                  <h1 className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                    {NAIRA}{handle} is still available
-                  </h1>
-                  <p className="mt-3 max-w-2xl text-base leading-7 text-zinc-600 dark:text-zinc-300">
-                    There is no verified destination behind this handle yet. Claim it first before using it for payments.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <ButtonLink href="/agent">Claim this handle</ButtonLink>
-                  <ButtonLink href="/" variant="secondary">Back home</ButtonLink>
-                </div>
-              </div>
-            </Card>
+              </Card>
+
+              <SuggestedHandlesSection
+                items={suggestions}
+                mode="pay"
+                title="Try these verified handles instead"
+                description="These nearby handles are already live or verified, so visitors are not left at a dead end."
+              />
+            </div>
           ) : (
-            <div className="mx-auto grid max-w-5xl gap-5 lg:grid-cols-[22rem_minmax(0,1fr)]">
-              <aside className="space-y-4">
+            <div className="space-y-6">
+              <div className="mx-auto grid max-w-5xl gap-5 lg:grid-cols-[22rem_minmax(0,1fr)]">
+                <aside className="space-y-4">
                 <div className="rounded-3xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800/80 dark:bg-zinc-950/60">
                   <div className="flex items-start gap-4">
                     <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-violet-600 text-3xl font-bold text-white shadow-lg shadow-violet-600/25">
@@ -780,16 +795,15 @@ export function PaymentLinkView({
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge tone={verificationTone(claim.verification)} className="px-2 py-0.5 text-[11px]">
-                          {claim.verification === "pending" ? "Claimed" : "Verified"}
-                        </Badge>
                         <Badge tone={trustTone(trustScore)} className="px-2 py-0.5 text-[11px]">
                           Trust {trustScore}
                         </Badge>
                       </div>
-                      <h1 className="mt-3 truncate text-4xl font-semibold tracking-tight">
-                        {NAIRA}{claim.handle}
-                      </h1>
+                      <HandleIdentity
+                        handle={claim.handle}
+                        verification={claim.verification}
+                        className="mt-3"
+                      />
                       <p className="mt-1 truncate text-sm text-zinc-600 dark:text-zinc-300">
                         {recipientName}
                       </p>
@@ -831,22 +845,69 @@ export function PaymentLinkView({
                   copiedLabel="Link copied"
                   className="h-11 w-full justify-center rounded-xl px-3 py-0 text-xs"
                 />
-              </aside>
+                </aside>
 
-              <section>
-                {method === "fiat" ? (
-                  <FiatPaymentCard
-                    claim={claim}
-                    bankAccount={bankAccount}
-                    recipientName={recipientName}
-                    requestedAmount={requestedAmount}
-                    note={note}
-                    shareUrl={shareUrl}
-                  />
-                ) : (
-                  <CryptoPaymentCard claim={claim} amount={cryptoDisplayAmount || "10"} />
-                )}
-              </section>
+                <section>
+                  {method === "fiat" ? (
+                    <FiatPaymentCard
+                      claim={claim}
+                      bankAccount={bankAccount}
+                      recipientName={recipientName}
+                      requestedAmount={requestedAmount}
+                      note={note}
+                      shareUrl={shareUrl}
+                    />
+                  ) : (
+                    <CryptoPaymentCard claim={claim} amount={cryptoDisplayAmount || "10"} />
+                  )}
+                </section>
+              </div>
+
+              <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+                <VerificationChecklist
+                  title="Verification checklist"
+                  description="Show visitors why this pay page is safe enough to use before they continue to transfer or send USDC."
+                  items={[
+                    {
+                      label: "Handle claimed",
+                      detail: `${NAIRA}${claim.handle} is reserved to one owner inside NairaTag.`,
+                      done: true,
+                    },
+                    {
+                      label: "Identity verification",
+                      detail:
+                        claim.verification === "pending"
+                          ? "Identity checks are still in progress."
+                          : "Identity checks passed for this handle.",
+                      done: claim.verification !== "pending",
+                    },
+                    {
+                      label: "Payout destination verified",
+                      detail: bankAccount
+                        ? `${bankAccount.bankName} is connected as the payout route.`
+                        : "A payout destination is not published yet.",
+                      done: bankAccount?.status === "verified",
+                    },
+                    {
+                      label: "Trust signals available",
+                      detail:
+                        (reputation?.settledTransactionCount ?? 0) > 0
+                          ? `${reputation?.settledTransactionCount ?? 0} settled payment signal(s) are already visible.`
+                          : "Settled history is still being built.",
+                      done: (reputation?.settledTransactionCount ?? 0) > 0,
+                    },
+                  ]}
+                />
+
+                <BadgeLegend />
+              </div>
+
+              <SuggestedHandlesSection
+                items={suggestions}
+                mode="pay"
+                title="Suggested handles"
+                description="Visitors can keep moving if they want a similar verified handle or live listing next."
+              />
             </div>
           )}
         </Container>

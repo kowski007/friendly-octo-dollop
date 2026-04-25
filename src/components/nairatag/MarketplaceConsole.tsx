@@ -680,7 +680,7 @@ export function MarketplaceConsole() {
               </p>
               <div className="mt-4 flex flex-wrap gap-3">
                 {!dashboard.claim ? (
-                  <ButtonLink href="/agent">Claim a handle</ButtonLink>
+                  <ButtonLink href="/claim">Claim a ₦handle</ButtonLink>
                 ) : !dashboard.bankAccount ? (
                     <ButtonLink href="/dashboard" variant="secondary">
                       Finish payout setup

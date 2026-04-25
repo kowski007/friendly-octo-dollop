@@ -1,9 +1,18 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 
-import type { PublicHandleProfile } from "@/lib/adminTypes";
+import type {
+  CreditRiskBand,
+  PublicHandleProfile,
+  PublicHandleSuggestion,
+} from "@/lib/adminTypes";
+
 import { AppPageHeader } from "./AppPageHeader";
 import { CopyButton } from "./CopyButton";
-import { Badge, ButtonLink, Card, Container, SectionHeader, cn } from "./ui";
+import { HandleIdentity } from "./HandleTrust";
+import { Badge, ButtonLink, Card, CheckIcon, Container, cn } from "./ui";
+
+const NAIRA = "\u20A6";
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("en-NG", {
@@ -12,10 +21,6 @@ function formatCurrency(amount: number) {
     notation: amount >= 1_000_000 ? "compact" : "standard",
     maximumFractionDigits: amount >= 1_000_000 ? 1 : 0,
   }).format(amount);
-}
-
-function formatPct(value: number) {
-  return `${(value * 100).toFixed(value > 0 && value < 0.01 ? 2 : 1)}%`;
 }
 
 function formatDate(value: string) {
@@ -31,16 +36,25 @@ function trustTone(score: number) {
   return "neutral";
 }
 
-function riskTone(riskLevel: PublicHandleProfile["reputation"]["riskLevel"]) {
+function riskTone(riskLevel: CreditRiskBand | "unknown") {
   if (riskLevel === "low") return "verify";
   if (riskLevel === "medium") return "orange";
   return "neutral";
 }
 
+function sanitizeDisplayName(profile: PublicHandleProfile) {
+  const value = profile.displayName.trim();
+  if (!value || /^pending verification$/i.test(value)) {
+    return null;
+  }
+  return value;
+}
+
 function profileInitials(profile: PublicHandleProfile) {
+  const name = sanitizeDisplayName(profile);
   return (
-    profile.displayName
-      .split(/\s+/)
+    name
+      ?.split(/\s+/)
       .filter(Boolean)
       .slice(0, 2)
       .map((part) => part[0]?.toUpperCase())
@@ -54,19 +68,94 @@ function qrBits(seed: string) {
   for (const char of seed) {
     state = (state * 33 + char.charCodeAt(0)) % 2147483647;
   }
-  for (let i = 0; i < 21 * 21; i++) {
+  for (let index = 0; index < 18 * 18; index += 1) {
     state = (state * 1103515245 + 12345) % 2147483647;
     bits.push(state % 5 !== 0);
   }
   return bits;
 }
 
+function ShieldIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className={cn("h-4 w-4", className)}
+      aria-hidden="true"
+    >
+      <path
+        d="M12 3l7 3v5c0 4.5-2.6 7.8-7 10-4.4-2.2-7-5.5-7-10V6l7-3z"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function BankIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className={cn("h-4 w-4", className)}
+      aria-hidden="true"
+    >
+      <path
+        d="M4 10h16M6 10V19M10 10V19M14 10V19M18 10V19M3 19h18M4 10l8-5 8 5"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ActivityIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className={cn("h-4 w-4", className)}
+      aria-hidden="true"
+    >
+      <path
+        d="M4 13h4l2.2-5 3.6 9 2.2-5H20"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function LockIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className={cn("h-4 w-4", className)}
+      aria-hidden="true"
+    >
+      <path
+        d="M7 10V8a5 5 0 0110 0v2M6 10h12v10H6V10z"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function QrPreview({ value }: { value: string }) {
   const bits = qrBits(value);
 
   return (
-    <div className="rounded-[2rem] border border-zinc-200/70 bg-white p-5 shadow-sm dark:border-zinc-800/70 dark:bg-zinc-950">
-      <div className="grid grid-cols-[repeat(21,minmax(0,1fr))] gap-[2px] rounded-2xl bg-zinc-100 p-3 dark:bg-zinc-900">
+    <div className="rounded-[1.5rem] border border-zinc-200/75 bg-white p-3.5 shadow-sm dark:border-zinc-800/80 dark:bg-zinc-950">
+      <div className="mx-auto grid max-w-[148px] grid-cols-[repeat(18,minmax(0,1fr))] gap-[2px] rounded-[1rem] bg-zinc-100 p-3 dark:bg-zinc-900">
         {bits.map((on, index) => (
           <div
             key={index}
@@ -77,46 +166,107 @@ function QrPreview({ value }: { value: string }) {
           />
         ))}
       </div>
-      <div className="mt-3 text-center text-xs font-medium text-zinc-500 dark:text-zinc-400">
+      <div className="mt-3 text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
         Scan to pay
       </div>
     </div>
   );
 }
 
-function StatCard({
+function MetaChip({
+  icon,
   label,
   value,
-  caption,
 }: {
+  icon: ReactNode;
   label: string;
   value: string;
-  caption: string;
 }) {
   return (
-    <Card className="rounded-[1.75rem] p-5">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-        {label}
+    <div className="flex items-center gap-3 rounded-[1.2rem] border border-zinc-200/70 bg-zinc-50/90 px-3.5 py-3 dark:border-zinc-800/80 dark:bg-zinc-900/45">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white text-zinc-700 shadow-sm dark:bg-zinc-950 dark:text-zinc-200">
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">
+          {label}
+        </div>
+        <div className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+          {value}
+        </div>
       </div>
-      <div className="mt-3 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-        {value}
+    </div>
+  );
+}
+
+function VerificationRow({
+  icon,
+  label,
+  status,
+  done,
+}: {
+  icon: ReactNode;
+  label: string;
+  status: string;
+  done: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-[1.15rem] border border-zinc-200/70 bg-zinc-50/85 px-3.5 py-3 dark:border-zinc-800/80 dark:bg-zinc-900/40">
+      <div className="flex min-w-0 items-center gap-3">
+        <span
+          className={cn(
+            "grid h-8 w-8 shrink-0 place-items-center rounded-full border",
+            done
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/35 dark:text-emerald-200"
+              : "border-zinc-200 bg-white text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400"
+          )}
+        >
+          {icon}
+        </span>
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+            {label}
+          </div>
+          <div className="text-xs text-zinc-500 dark:text-zinc-400">{status}</div>
+        </div>
       </div>
-      <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-        {caption}
+      <Badge tone={done ? "verify" : "neutral"}>{done ? "Done" : "Pending"}</Badge>
+    </div>
+  );
+}
+
+function NearbyHandleRow({ item }: { item: PublicHandleSuggestion }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+      <div className="min-w-0">
+        <HandleIdentity handle={item.handle} verification={item.verification} size="sm" />
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Badge tone={trustTone(item.trustScore)}>Trust {item.trustScore}</Badge>
+          {item.isListed ? <Badge tone="orange">Listed</Badge> : null}
+          {item.askAmount != null ? <Badge>{formatCurrency(item.askAmount)}</Badge> : null}
+        </div>
       </div>
-    </Card>
+      <Link
+        href={`/h/${item.handle}`}
+        className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200/80 px-3.5 text-xs font-semibold text-zinc-950 transition hover:bg-zinc-50 dark:border-zinc-800/80 dark:text-zinc-50 dark:hover:bg-zinc-900"
+      >
+        View
+      </Link>
+    </div>
   );
 }
 
 export function PublicHandleProfileView({
   profile,
+  suggestions,
 }: {
   profile: PublicHandleProfile | null;
+  suggestions: PublicHandleSuggestion[];
 }) {
   if (!profile) {
     return (
       <div className="min-h-screen bg-white text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
-        <AppPageHeader ctaHref="/agent" ctaLabel="Claim a handle" />
+        <AppPageHeader ctaHref="/claim" ctaLabel={`Claim a ${NAIRA}handle`} />
         <main className="py-14 sm:py-18">
           <Container>
             <Card className="p-6 sm:p-8">
@@ -124,10 +274,10 @@ export function PublicHandleProfileView({
                 Profile not found
               </div>
               <p className="mt-3 max-w-2xl text-base leading-7 text-zinc-600 dark:text-zinc-300">
-                This handle does not have a public NairaTag profile yet.
+                This handle does not have a public profile yet.
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
-                <ButtonLink href="/agent">Claim a handle</ButtonLink>
+                <ButtonLink href="/claim">{`Claim a ${NAIRA}handle`}</ButtonLink>
                 <ButtonLink href="/" variant="secondary">
                   Back home
                 </ButtonLink>
@@ -139,45 +289,33 @@ export function PublicHandleProfileView({
     );
   }
 
-  const handleLabel = `\u20A6${profile.handle}`;
-  const shareText = `${handleLabel} on NairaTag`;
-  const encodedShareUrl = encodeURIComponent(profile.shareUrl);
-  const encodedShareText = encodeURIComponent(shareText);
-  const whatsappUrl = `https://wa.me/?text=${encodedShareText}%20${encodedShareUrl}`;
-  const twitterUrl = `https://twitter.com/intent/tweet?text=${encodedShareText}&url=${encodedShareUrl}`;
-  const mailUrl = `mailto:?subject=${encodedShareText}&body=${encodedShareText}%0A${encodedShareUrl}`;
+  const displayName = sanitizeDisplayName(profile);
+  const trimmedSuggestions = suggestions
+    .filter((item) => item.handle !== profile.handle)
+    .slice(0, 3);
+  const payoutValue = profile.bank.accountVerified
+    ? profile.bank.name
+    : "Payout pending";
+  const activityValue =
+    profile.publicStats.recentTransactionCount30d > 0
+      ? `${profile.publicStats.recentTransactionCount30d} recent`
+      : "No recent activity";
+  const volumeValue =
+    profile.publicStats.totalVolume > 0
+      ? formatCurrency(profile.publicStats.totalVolume)
+      : `${NAIRA}0`;
 
   return (
     <div className="min-h-screen bg-white text-zinc-950 transition-colors dark:bg-zinc-950 dark:text-zinc-50">
       <AppPageHeader ctaHref={profile.payUrl} ctaLabel="Send money" />
 
-      <main className="py-14 sm:py-18">
-        <Container className="space-y-8">
-          <SectionHeader
-            eyebrow="Public handle profile"
-            title={handleLabel}
-            description="A privacy-safe trust page for verifying who owns this NairaTag handle before money moves."
-          />
-
-          <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-            <Card className="p-6 sm:p-8">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge tone={profile.verification.verified ? "verify" : "neutral"}>
-                  {profile.verification.verified ? "Verified" : "Claimed"}
-                </Badge>
-                <Badge tone={trustTone(profile.reputation.trustScore)}>
-                  Trust {profile.reputation.trustScore}/100
-                </Badge>
-                <Badge tone={riskTone(profile.reputation.riskLevel)}>
-                  {profile.reputation.riskLevel === "unknown"
-                    ? "Risk pending"
-                    : `${profile.reputation.riskLevel} risk`}
-                </Badge>
-              </div>
-
-              <div className="mt-8 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-                <div className="flex min-w-0 items-start gap-4">
-                  <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-zinc-950 text-white shadow-sm dark:bg-white dark:text-zinc-950">
+      <main className="py-10 sm:py-14">
+        <Container className="max-w-5xl space-y-5">
+          <Card className="p-5 sm:p-7">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-start">
+              <div className="min-w-0">
+                <div className="flex items-start gap-4">
+                  <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-zinc-950 text-white shadow-sm dark:bg-white dark:text-zinc-950">
                     {profile.avatarUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -186,186 +324,140 @@ export function PublicHandleProfileView({
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <div className="grid h-full w-full place-items-center text-lg font-semibold">
+                      <div className="grid h-full w-full place-items-center text-base font-semibold">
                         {profileInitials(profile)}
                       </div>
                     )}
                   </div>
                   <div className="min-w-0">
-                  <div className="text-5xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-6xl">
-                    {handleLabel}
-                  </div>
-                  <h1 className="mt-4 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                    {profile.displayName}
-                  </h1>
-                  <p className="mt-3 max-w-xl text-base leading-7 text-zinc-600 dark:text-zinc-300">
-                    {profile.bio ?? "Verified NairaTag payment identity."}
-                  </p>
+                    <HandleIdentity
+                      handle={profile.handle}
+                      verification={profile.verification.status}
+                      size="lg"
+                    />
+                    {displayName ? (
+                      <div className="mt-3 text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-2xl">
+                        {displayName}
+                      </div>
+                    ) : null}
+                    <div className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                      Verify the recipient, then pay with confidence.
+                    </div>
                   </div>
                 </div>
 
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Badge tone={trustTone(profile.reputation.trustScore)}>
+                    Trust {profile.reputation.trustScore}/100
+                  </Badge>
+                  <Badge tone={riskTone(profile.reputation.riskLevel)}>
+                    {profile.reputation.riskLevel === "unknown"
+                      ? "Risk pending"
+                      : `${profile.reputation.riskLevel} risk`}
+                  </Badge>
+                  <Badge>{`Since ${formatDate(profile.memberSince)}`}</Badge>
+                </div>
+
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <ButtonLink href={profile.payUrl}>Send money</ButtonLink>
+                  <CopyButton
+                    value={profile.shareUrl}
+                    label="Copy public link"
+                    copiedLabel="Link copied"
+                  />
+                </div>
+
+                <div className="mt-5 inline-flex max-w-2xl items-center gap-2 rounded-full border border-zinc-200/75 bg-zinc-50/90 px-3.5 py-2 text-xs font-medium text-zinc-600 dark:border-zinc-800/80 dark:bg-zinc-900/40 dark:text-zinc-300">
+                  <LockIcon className="text-zinc-500 dark:text-zinc-400" />
+                  Phone, BVN, account number, and raw transaction history stay private.
+                </div>
+              </div>
+
+              <div className="space-y-3">
                 <QrPreview value={profile.qrPayload} />
-              </div>
-
-              <div className="mt-7 flex flex-wrap gap-3">
-                <CopyButton value={handleLabel} label="Copy handle" copiedLabel="Handle copied" />
-                <CopyButton value={profile.shareUrl} label="Copy link" copiedLabel="Link copied" />
-                <ButtonLink href={profile.payUrl}>Send money</ButtonLink>
-              </div>
-            </Card>
-
-            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-1">
-              <Card className="p-6">
-                <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                  Bank destination
-                </div>
-                <div className="mt-3 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                  {profile.bank.name}
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Badge tone={profile.bank.accountVerified ? "verify" : "neutral"}>
-                    {profile.bank.accountVerified ? "Account verified" : "Account pending"}
-                  </Badge>
-                  <Badge tone={profile.verification.bvnVerified ? "verify" : "neutral"}>
-                    {profile.verification.bvnVerified ? "BVN linked" : "BVN pending"}
-                  </Badge>
-                </div>
-              </Card>
-
-              <Card className="p-6">
-                <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                  Reputation
-                </div>
-                <div className="mt-3 flex items-end gap-3">
-                  <div className="text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                    {profile.reputation.stars.toFixed(1)}
-                  </div>
-                  <div className="pb-1 text-sm text-zinc-600 dark:text-zinc-300">
-                    from {profile.reputation.reviewCount.toLocaleString()} settled signals
-                  </div>
-                </div>
-                {profile.reputation.creditScoreRange ? (
-                  <div className="mt-4">
-                    <Badge tone="verify">
-                      Credit score {profile.reputation.creditScoreRange}
-                    </Badge>
-                  </div>
-                ) : null}
-              </Card>
-            </div>
-          </div>
-
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-            <StatCard
-              label="Transactions"
-              value={profile.publicStats.transactionCount.toLocaleString()}
-              caption="Anonymized public count"
-            />
-            <StatCard
-              label="Settled volume"
-              value={formatCurrency(profile.publicStats.totalVolume)}
-              caption="Rounded public volume"
-            />
-            <StatCard
-              label="Recent 30d"
-              value={profile.publicStats.recentTransactionCount30d.toLocaleString()}
-              caption="Fresh activity signal"
-            />
-            <StatCard
-              label="Dispute rate"
-              value={formatPct(profile.publicStats.chargebackRate)}
-              caption="Recorded dispute share"
-            />
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-            <Card className="p-6 sm:p-7">
-              <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                About
-              </div>
-              <div className="mt-5 space-y-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
-                <p>Member since {formatDate(profile.memberSince)}</p>
-                {profile.location ? <p>Location: {profile.location}</p> : null}
-                {profile.lastActiveAt ? (
-                  <p>Last active {new Date(profile.lastActiveAt).toLocaleDateString()}</p>
-                ) : null}
-                <p>
-                  Public profile hides phone, BVN, full account number, and individual transaction history.
-                </p>
-              </div>
-            </Card>
-
-            <Card className="p-6 sm:p-7">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                    Badges
-                  </div>
-                  <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                    Verification and activity signals.
-                  </div>
-                </div>
-                <Badge tone="neutral">{profile.reputation.badges.length} badges</Badge>
-              </div>
-
-              <div className="mt-5 flex flex-wrap gap-2">
-                {(profile.reputation.badges.length
-                  ? profile.reputation.badges
-                  : ["New handle"]
-                ).map((badge) => (
-                  <Badge
-                    key={badge}
-                    tone={
-                      badge === "Verified" ||
-                      badge === "High trust" ||
-                      badge === "Clean history" ||
-                      badge === "Low risk"
-                        ? "verify"
-                        : badge === "Marketplace seller"
-                          ? "orange"
-                          : "neutral"
-                    }
-                  >
-                    {badge}
-                  </Badge>
-                ))}
-              </div>
-            </Card>
-          </div>
-
-          <Card className="p-6 sm:p-7">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                  Share this handle
-                </div>
-                <div className="mt-2 max-w-2xl text-sm leading-7 text-zinc-600 dark:text-zinc-300">
-                  {profile.shareUrl}
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <Link
-                  href={twitterUrl}
-                  className="rounded-full border border-zinc-300/70 bg-white/80 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-50 dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50"
-                >
-                  Twitter
-                </Link>
-                <Link
-                  href={whatsappUrl}
-                  className="rounded-full border border-zinc-300/70 bg-white/80 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-50 dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50"
-                >
-                  WhatsApp
-                </Link>
-                <Link
-                  href={mailUrl}
-                  className="rounded-full border border-zinc-300/70 bg-white/80 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-50 dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50"
-                >
-                  Email
-                </Link>
-                <CopyButton value={profile.shareUrl} label="Copy public link" />
+                <MetaChip
+                  icon={<BankIcon className="text-zinc-700 dark:text-zinc-200" />}
+                  label="Payout"
+                  value={payoutValue}
+                />
+                <MetaChip
+                  icon={<ActivityIcon className="text-zinc-700 dark:text-zinc-200" />}
+                  label="Activity"
+                  value={activityValue}
+                />
+                <MetaChip
+                  icon={<ShieldIcon className="text-zinc-700 dark:text-zinc-200" />}
+                  label="Volume"
+                  value={volumeValue}
+                />
               </div>
             </div>
           </Card>
+
+          <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
+            <Card className="p-5 sm:p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                <ShieldIcon className="text-emerald-600 dark:text-emerald-300" />
+                Checks
+              </div>
+              <div className="mt-4 space-y-3">
+                <VerificationRow
+                  icon={<CheckIcon className="h-3.5 w-3.5" />}
+                  label="Phone"
+                  status="Verified session behind this handle"
+                  done={profile.verification.phoneVerified}
+                />
+                <VerificationRow
+                  icon={<ShieldIcon className="h-3.5 w-3.5" />}
+                  label="Handle claim"
+                  status={`${NAIRA}${profile.handle} belongs to one owner`}
+                  done
+                />
+                <VerificationRow
+                  icon={<CheckIcon className="h-3.5 w-3.5" />}
+                  label="BVN"
+                  status={
+                    profile.verification.bvnVerified
+                      ? "Identity checks completed"
+                      : "Identity check still pending"
+                  }
+                  done={profile.verification.bvnVerified}
+                />
+                <VerificationRow
+                  icon={<BankIcon className="h-3.5 w-3.5" />}
+                  label="Payout"
+                  status={
+                    profile.bank.accountVerified
+                      ? `${profile.bank.name} is payout ready`
+                      : `${profile.bank.name} not verified yet`
+                  }
+                  done={profile.bank.accountVerified}
+                />
+              </div>
+            </Card>
+
+            <Card className="p-5 sm:p-6">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                  <ActivityIcon className="text-emerald-600 dark:text-emerald-300" />
+                  Nearby handles
+                </div>
+                {trimmedSuggestions.length > 0 ? <Badge>{trimmedSuggestions.length}</Badge> : null}
+              </div>
+
+              {trimmedSuggestions.length === 0 ? (
+                <div className="mt-4 rounded-[1.15rem] border border-zinc-200/75 bg-zinc-50/85 px-4 py-4 text-sm text-zinc-600 dark:border-zinc-800/80 dark:bg-zinc-900/35 dark:text-zinc-300">
+                  No nearby handles to show right now.
+                </div>
+              ) : (
+                <div className="mt-4 divide-y divide-zinc-200/70 dark:divide-zinc-800/80">
+                  {trimmedSuggestions.map((item) => (
+                    <NearbyHandleRow key={item.handle} item={item} />
+                  ))}
+                </div>
+              )}
+            </Card>
+          </div>
         </Container>
       </main>
     </div>

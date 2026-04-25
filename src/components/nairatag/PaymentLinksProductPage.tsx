@@ -144,7 +144,7 @@ function FeatureCard({
 export function PaymentLinksProductPage() {
   return (
     <div className="min-h-screen bg-white text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
-      <AppPageHeader ctaHref="/pay/femi" ctaLabel="Open demo" />
+      <AppPageHeader ctaHref="/payments/payment-links/builder" ctaLabel="Create PayLink" />
       <HeroScene />
 
       <main>
@@ -198,6 +198,23 @@ export function PaymentLinksProductPage() {
                 title="Sender chooses the rail"
                 body="Bank transfer remains manual. USDC transfers go wallet-to-wallet with no custody."
               />
+            </div>
+
+            <div className="mt-10 flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-zinc-200/70 bg-zinc-50 px-6 py-5 dark:border-zinc-800/70 dark:bg-zinc-950/35">
+              <div>
+                <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                  Ready to create yours?
+                </div>
+                <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                  Claim a handle, link your bank account, then share your PayLink.
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <ButtonLink href="/payments/payment-links/builder">Open builder</ButtonLink>
+                <ButtonLink href="/claim" variant="secondary">
+                  Claim a ₦handle
+                </ButtonLink>
+              </div>
             </div>
           </Container>
         </section>

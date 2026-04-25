@@ -40,6 +40,7 @@ const toolLinks = [
   { href: "/send/crypto", label: "Send crypto" },
   { href: "/marketplace", label: "Marketplace" },
   { href: "/map", label: "Live map" },
+  { href: "/points", label: "Points" },
   { href: "/referrals", label: "Referrals" },
 ];
 
@@ -135,8 +136,8 @@ function ToolsMenu() {
 }
 
 export function AppPageHeader({
-  ctaHref = "/agent",
-  ctaLabel = "Claim a handle",
+  ctaHref = "/claim",
+  ctaLabel = "Claim a ₦handle",
   rightSlot,
 }: {
   ctaHref?: string;
@@ -173,10 +174,10 @@ export function AppPageHeader({
             Dashboard
           </AuthModalButton>
           <Link
-            href="/agent"
+            href="/claim"
             className="rounded-full px-3 py-2 font-semibold transition hover:bg-zinc-100 hover:text-zinc-950 dark:hover:bg-zinc-900/70 dark:hover:text-white"
           >
-            Agent
+            Claim
           </Link>
         </nav>
 
