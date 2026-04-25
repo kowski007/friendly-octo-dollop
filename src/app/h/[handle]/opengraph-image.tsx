@@ -1,7 +1,5 @@
 import { ImageResponse } from "next/og";
 
-import { getPublicHandleProfile } from "@/lib/adminStore";
-
 export const runtime = "edge";
 export const size = {
   width: 1200,
@@ -15,15 +13,8 @@ type ImageProps = {
 
 export default async function Image({ params }: ImageProps) {
   const { handle } = await params;
-  const profile = await getPublicHandleProfile(handle);
-  const displayHandle = `\u20A6${profile?.handle ?? handle.replace(/^\u20A6/u, "")}`;
-  const displayName = profile?.displayName ?? "NairaTag handle";
-  const trustScore = profile?.reputation.trustScore ?? 0;
-  const verification = profile?.verification.verified
-    ? profile?.verification.status === "business"
-      ? "Business verified"
-      : "Verified"
-    : "Claimed";
+  const cleanHandle = handle.replace(/^\u20A6/u, "");
+  const displayHandle = `\u20A6${cleanHandle}`;
 
   return new ImageResponse(
     (
@@ -33,7 +24,7 @@ export default async function Image({ params }: ImageProps) {
           height: "100%",
           width: "100%",
           background:
-            "linear-gradient(135deg, #fff7ed 0%, #ffffff 40%, #ecfdf5 100%)",
+            "linear-gradient(135deg, #f7fdf8 0%, #ffffff 45%, #eefbf4 100%)",
           color: "#111827",
           padding: "48px",
           fontFamily:
@@ -48,12 +39,18 @@ export default async function Image({ params }: ImageProps) {
             width: "100%",
             borderRadius: 36,
             border: "1px solid rgba(229, 231, 235, 0.9)",
-            background: "rgba(255,255,255,0.88)",
+            background: "rgba(255,255,255,0.92)",
             padding: 40,
             boxShadow: "0 20px 80px rgba(15, 23, 42, 0.10)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+            }}
+          >
             <div
               style={{
                 display: "flex",
@@ -71,13 +68,13 @@ export default async function Image({ params }: ImageProps) {
                   borderRadius: 18,
                   alignItems: "center",
                   justifyContent: "center",
-                  background: "#ff6a00",
+                  background: "#16a34a",
                   color: "white",
                   fontSize: 30,
                   fontWeight: 700,
                 }}
               >
-                ₦
+                {"\u20A6"}
               </div>
               NairaTag
             </div>
@@ -87,9 +84,9 @@ export default async function Image({ params }: ImageProps) {
                 alignItems: "center",
                 gap: 10,
                 borderRadius: 999,
-                border: "1px solid rgba(16, 185, 129, 0.28)",
-                background: "rgba(236, 253, 245, 0.95)",
-                color: "#065f46",
+                border: "1px solid rgba(22, 163, 74, 0.24)",
+                background: "rgba(240, 253, 244, 0.98)",
+                color: "#166534",
                 padding: "12px 18px",
                 fontSize: 24,
                 fontWeight: 600,
@@ -103,14 +100,14 @@ export default async function Image({ params }: ImageProps) {
                   borderRadius: 999,
                   alignItems: "center",
                   justifyContent: "center",
-                  background: "#10b981",
+                  background: "#16a34a",
                   color: "white",
                   fontSize: 18,
                 }}
               >
-                ✓
+                {"\u2713"}
               </div>
-              {verification}
+              Public handle
             </div>
           </div>
 
@@ -119,10 +116,11 @@ export default async function Image({ params }: ImageProps) {
               {displayHandle}
             </div>
             <div style={{ fontSize: 42, fontWeight: 600, color: "#111827" }}>
-              {displayName}
+              NairaTag payment identity
             </div>
             <div style={{ fontSize: 28, color: "#4b5563", maxWidth: 900 }}>
-              Public NairaTag profile with privacy-safe verification and ₦handle trust signals.
+              Public NairaTag profile with privacy-safe trust signals before money
+              moves.
             </div>
           </div>
 
@@ -135,26 +133,28 @@ export default async function Image({ params }: ImageProps) {
                 background: "#111827",
                 color: "white",
                 padding: "18px 22px",
-                minWidth: 220,
+                minWidth: 250,
               }}
             >
-              <div style={{ fontSize: 18, opacity: 0.7 }}>Trust score</div>
-              <div style={{ marginTop: 8, fontSize: 38, fontWeight: 700 }}>{trustScore}/100</div>
+              <div style={{ fontSize: 18, opacity: 0.7 }}>Identity layer</div>
+              <div style={{ marginTop: 8, fontSize: 38, fontWeight: 700 }}>
+                Pay by name
+              </div>
             </div>
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
                 borderRadius: 24,
-                background: "rgba(255, 106, 0, 0.10)",
-                color: "#9a3412",
+                background: "rgba(22, 163, 74, 0.10)",
+                color: "#166534",
                 padding: "18px 22px",
                 minWidth: 320,
               }}
             >
               <div style={{ fontSize: 18, opacity: 0.8 }}>What this means</div>
               <div style={{ marginTop: 8, fontSize: 28, fontWeight: 600 }}>
-                Send money to a verified ₦handle, not an account number.
+                Send money to a verified {"\u20A6"}handle, not an account number.
               </div>
             </div>
           </div>

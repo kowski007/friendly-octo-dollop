@@ -1,7 +1,5 @@
 import { ImageResponse } from "next/og";
 
-import { getPublicReferralShare } from "@/lib/adminStore";
-
 export const runtime = "edge";
 export const size = {
   width: 1200,
@@ -15,15 +13,8 @@ type ImageProps = {
 
 export default async function Image({ params }: ImageProps) {
   const { code } = await params;
-  const share = await getPublicReferralShare(code);
-  const handle = share?.referrerHandle ? `\u20A6${share.referrerHandle}` : "NairaTag invite";
-  const title = share?.displayName ?? "Claim your ₦handle on NairaTag";
-  const verification =
-    share?.verification === "business"
-      ? "Business verified"
-      : share?.verification === "verified"
-        ? "Verified referrer"
-        : "Referral invite";
+  const cleanCode = code.replace(/^\u20A6/u, "");
+  const handle = `\u20A6${cleanCode}`;
 
   return new ImageResponse(
     (
@@ -33,7 +24,7 @@ export default async function Image({ params }: ImageProps) {
           height: "100%",
           width: "100%",
           background:
-            "linear-gradient(135deg, #fff7ed 0%, #ffffff 48%, #eef2ff 100%)",
+            "linear-gradient(135deg, #f7fdf8 0%, #ffffff 48%, #eef2ff 100%)",
           color: "#111827",
           padding: "48px",
           fontFamily:
@@ -48,12 +39,18 @@ export default async function Image({ params }: ImageProps) {
             width: "100%",
             borderRadius: 36,
             border: "1px solid rgba(229, 231, 235, 0.9)",
-            background: "rgba(255,255,255,0.90)",
+            background: "rgba(255,255,255,0.92)",
             padding: 40,
             boxShadow: "0 20px 80px rgba(15, 23, 42, 0.10)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+            }}
+          >
             <div
               style={{
                 display: "flex",
@@ -71,13 +68,13 @@ export default async function Image({ params }: ImageProps) {
                   borderRadius: 18,
                   alignItems: "center",
                   justifyContent: "center",
-                  background: "#ff6a00",
+                  background: "#16a34a",
                   color: "white",
                   fontSize: 30,
                   fontWeight: 700,
                 }}
               >
-                ₦
+                {"\u20A6"}
               </div>
               NairaTag Referral
             </div>
@@ -87,9 +84,9 @@ export default async function Image({ params }: ImageProps) {
                 alignItems: "center",
                 gap: 10,
                 borderRadius: 999,
-                border: "1px solid rgba(16, 185, 129, 0.28)",
-                background: "rgba(236, 253, 245, 0.95)",
-                color: "#065f46",
+                border: "1px solid rgba(22, 163, 74, 0.24)",
+                background: "rgba(240, 253, 244, 0.98)",
+                color: "#166534",
                 padding: "12px 18px",
                 fontSize: 24,
                 fontWeight: 600,
@@ -103,14 +100,14 @@ export default async function Image({ params }: ImageProps) {
                   borderRadius: 999,
                   alignItems: "center",
                   justifyContent: "center",
-                  background: "#10b981",
+                  background: "#16a34a",
                   color: "white",
                   fontSize: 18,
                 }}
               >
-                ✓
+                {"\u2713"}
               </div>
-              {verification}
+              Invite
             </div>
           </div>
 
@@ -119,10 +116,11 @@ export default async function Image({ params }: ImageProps) {
               {handle}
             </div>
             <div style={{ fontSize: 40, fontWeight: 600, color: "#111827" }}>
-              {title}
+              Claim your {"\u20A6"}handle on NairaTag
             </div>
             <div style={{ fontSize: 28, color: "#4b5563", maxWidth: 900 }}>
-              Claim your own ₦handle through this invite. Referral points are tracked on signup and again when you claim.
+              Join through this invite link, verify your identity, and start
+              receiving payments with a clean {"\u20A6"}handle.
             </div>
           </div>
 
@@ -140,7 +138,7 @@ export default async function Image({ params }: ImageProps) {
             >
               <div style={{ fontSize: 18, opacity: 0.7 }}>Invite rewards</div>
               <div style={{ marginTop: 8, fontSize: 36, fontWeight: 700 }}>
-                +{share?.signupPoints ?? 25} / +{share?.conversionPoints ?? 100}
+                +25 / +100
               </div>
             </div>
             <div
@@ -148,15 +146,15 @@ export default async function Image({ params }: ImageProps) {
                 display: "flex",
                 flexDirection: "column",
                 borderRadius: 24,
-                background: "rgba(79, 70, 229, 0.10)",
-                color: "#312e81",
+                background: "rgba(22, 163, 74, 0.10)",
+                color: "#166534",
                 padding: "18px 22px",
                 minWidth: 320,
               }}
             >
-              <div style={{ fontSize: 18, opacity: 0.8 }}>Referral history</div>
+              <div style={{ fontSize: 18, opacity: 0.8 }}>How it works</div>
               <div style={{ marginTop: 8, fontSize: 28, fontWeight: 600 }}>
-                {share ? `${share.totalReferrals} signup(s), ${share.convertedReferrals} claimed` : "Start your claim flow"}
+                Signup earns points. Claiming your handle earns more.
               </div>
             </div>
           </div>
