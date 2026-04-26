@@ -12,20 +12,26 @@ import {
   getPaylinkPaymentById,
   getPaylinkPaymentByProcessorTransactionId,
   getPaylinkPaymentByTxRef,
+  getSettlementById,
   getSettlementByPaymentId,
   getSettlementByProcessorTransferId,
   getSettlementByTransferReference,
+  listRetryableSettlements,
   markPaylinkPaymentFailed,
   markPaylinkPaymentPaid,
+  markPaylinkPaymentRefunded,
   markSettlementFailed,
   markSettlementProcessing,
+  markSettlementRetryQueued,
   markSettlementSkipped,
   markSettlementSuccessful,
   recordPaylinkWebhookEventOnce,
 } from "./db";
 import {
+  createRefund,
   createHostedPayment,
   createTransfer,
+  getTransfer,
   hasFlutterwaveConfig,
   verifyTransaction,
 } from "./flutterwave";
@@ -112,6 +118,26 @@ async function notifyPaymentReceived(
       receiptNumber: payment.receiptNumber,
       txRef: payment.txRef,
       status: payment.status,
+    },
+  }).catch(() => null);
+}
+
+async function notifyPaymentRefunded(
+  paylink: PaylinkRecord,
+  payment: PaylinkPaymentRecord
+) {
+  await createNotification({
+    userId: paylink.ownerId,
+    handle: paylink.handle,
+    type: "payment_refunded",
+    title: "PayLink refund initiated",
+    body: `${amountLabel(payment.refundAmountKobo ?? payment.amountKobo)} for ${NAIRA}${paylink.handle} has been marked for refund${payment.refundStatus ? ` (${payment.refundStatus})` : ""}.`,
+    priority: "normal",
+    metadata: {
+      paymentId: payment.id,
+      receiptNumber: payment.receiptNumber,
+      refundId: payment.refundId,
+      refundStatus: payment.refundStatus,
     },
   }).catch(() => null);
 }
@@ -456,7 +482,12 @@ export async function markPaylinkCancelledByTxRef(txRef: string, reason: string)
   if (paylink && failed) {
     await notifyPaymentFailed(paylink, failed, reason);
   }
-  return failed;
+  return failed
+    ? {
+        paylink,
+        payment: failed,
+      }
+    : null;
 }
 
 export async function reconcileFlutterwaveTransferEvent(input: {
@@ -502,6 +533,20 @@ export async function reconcileFlutterwaveTransferEvent(input: {
     return successful;
   }
 
+  if (
+    input.status === "pending" ||
+    input.status === "new" ||
+    input.status === "processing" ||
+    input.status === "queued" ||
+    input.status === "initiated"
+  ) {
+    return markSettlementProcessing({
+      settlementId: settlement.id,
+      processorTransferId: input.transferId,
+      processorResponse: input.payload,
+    });
+  }
+
   const failed = await markSettlementFailed({
     settlementId: settlement.id,
     failureReason: input.status,
@@ -516,4 +561,149 @@ export async function reconcileFlutterwaveTransferEvent(input: {
 
 export async function getPaylinkOwnerHandle(paylink: PaylinkRecord) {
   return getClaimByHandle(paylink.handle);
+}
+
+export async function refundPaylinkPayment(input: {
+  paymentId: string;
+  ownerId: string;
+  reason?: string;
+  amountNaira?: number;
+}) {
+  if (!hasFlutterwaveConfig()) throw new Error("flutterwave_not_configured");
+
+  const payment = await getPaylinkPaymentById(input.paymentId);
+  if (!payment || payment.ownerId !== input.ownerId) {
+    throw new Error("payment_not_found");
+  }
+  if (payment.status !== "paid" && payment.status !== "refunded") {
+    throw new Error("refund_not_allowed");
+  }
+  if (!payment.processorTransactionId) {
+    throw new Error("processor_transaction_missing");
+  }
+  if (payment.refundId && payment.status === "refunded") {
+    return payment;
+  }
+
+  const paylink = await getPaylinkByShortCode(payment.paylinkShortCode);
+  if (!paylink) throw new Error("paylink_not_found");
+
+  const requestedAmountKobo =
+    input.amountNaira && Number.isFinite(input.amountNaira) && input.amountNaira > 0
+      ? Math.round(input.amountNaira) * 100
+      : payment.amountKobo;
+  if (requestedAmountKobo <= 0 || requestedAmountKobo > payment.amountKobo) {
+    throw new Error("invalid_refund_amount");
+  }
+
+  const refund = await createRefund({
+    transactionId: payment.processorTransactionId,
+    amountKobo: requestedAmountKobo,
+    comments: input.reason?.trim() || `NairaTag refund for ${NAIRA}${paylink.handle}`,
+  });
+
+  const updated = await markPaylinkPaymentRefunded({
+    paymentId: payment.id,
+    refundId: refund.refundId,
+    refundReference: refund.reference,
+    refundStatus: refund.status,
+    refundAmountKobo: refund.amountRefundedKobo || requestedAmountKobo,
+    refundReason: input.reason?.trim(),
+    metadata: {
+      refundResponse: refund.raw,
+    },
+  });
+
+  if (updated) {
+    await notifyPaymentRefunded(paylink, updated);
+  }
+
+  return updated ?? payment;
+}
+
+export async function retryPaylinkSettlementById(input: {
+  settlementId: string;
+  appBaseUrl: string;
+}) {
+  const settlement = await getSettlementById(input.settlementId);
+  if (!settlement) return null;
+
+  const payment = await getPaylinkPaymentById(settlement.paymentId);
+  if (!payment) return null;
+
+  const paylink = await getPaylinkByShortCode(payment.paylinkShortCode);
+  if (!paylink) return null;
+
+  if (
+    settlement.status === "processing" &&
+    settlement.processorTransferId
+  ) {
+    const transfer = await getTransfer(settlement.processorTransferId);
+    return reconcileFlutterwaveTransferEvent({
+      transferId: settlement.processorTransferId,
+      reference: settlement.transferReference,
+      status: transfer.status,
+      payload: transfer.raw,
+    });
+  }
+
+  if (settlement.status === "failed" || settlement.status === "queued") {
+    const queued = await markSettlementRetryQueued({
+      settlementId: settlement.id,
+      reason: settlement.failureReason || "retry_requested",
+      processorResponse: {
+        retriedBy: "worker",
+      },
+    });
+
+    return triggerSettlementForPayment({
+      payment,
+      paylink,
+      appBaseUrl: input.appBaseUrl,
+    }).then((next) => next ?? queued ?? settlement);
+  }
+
+  return settlement;
+}
+
+export async function runPaylinkSettlementRetryBatch(input: {
+  appBaseUrl: string;
+  limit?: number;
+}) {
+  const now = Date.now();
+  const queuedBeforeIso = new Date(now - 2 * 60 * 1000).toISOString();
+  const failedBeforeIso = new Date(now - 10 * 60 * 1000).toISOString();
+  const processingBeforeIso = new Date(now - 15 * 60 * 1000).toISOString();
+
+  const settlements = await listRetryableSettlements({
+    limit: input.limit ?? 20,
+    queuedBeforeIso,
+    failedBeforeIso,
+    processingBeforeIso,
+  });
+
+  const results = [];
+  for (const settlement of settlements) {
+    try {
+      const result = await retryPaylinkSettlementById({
+        settlementId: settlement.id,
+        appBaseUrl: input.appBaseUrl,
+      });
+      results.push({
+        settlementId: settlement.id,
+        status: result?.status || "skipped",
+      });
+    } catch (error) {
+      results.push({
+        settlementId: settlement.id,
+        status: "error",
+        error: error instanceof Error ? error.message : "unknown_error",
+      });
+    }
+  }
+
+  return {
+    scanned: settlements.length,
+    results,
+  };
 }

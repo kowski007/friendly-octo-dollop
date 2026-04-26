@@ -70,7 +70,12 @@ function statusTone(status: string) {
   ) {
     return "verify" as const;
   }
-  if (status === "paused" || status === "queued" || status === "processing") {
+  if (
+    status === "paused" ||
+    status === "queued" ||
+    status === "processing" ||
+    status === "refunded"
+  ) {
     return "neutral" as const;
   }
   return "orange" as const;
@@ -97,6 +102,8 @@ export function PaymentLinkBuilder() {
   const [amountMax, setAmountMax] = useState("");
   const [suggestedAmounts, setSuggestedAmounts] = useState("2000,5000,10000");
   const [feeBearer, setFeeBearer] = useState<"recipient" | "payer">("recipient");
+  const [redirectUrl, setRedirectUrl] = useState("");
+  const [cancelUrl, setCancelUrl] = useState("");
 
   async function loadData() {
     const [meRes, dashRes] = await Promise.all([
@@ -152,6 +159,8 @@ export function PaymentLinkBuilder() {
     setAmountMax("");
     setSuggestedAmounts("2000,5000,10000");
     setFeeBearer("recipient");
+    setRedirectUrl("");
+    setCancelUrl("");
   }
 
   function showWarning(titleText: string, description: string) {
@@ -209,6 +218,8 @@ export function PaymentLinkBuilder() {
                     .filter((value) => Number.isFinite(value) && value > 0)
                 : undefined,
             feeBearer,
+            redirectUrl: redirectUrl.trim() || undefined,
+            cancelUrl: cancelUrl.trim() || undefined,
           }),
         });
 
@@ -236,6 +247,52 @@ export function PaymentLinkBuilder() {
         setError(message);
         toast({
           title: "PayLink creation failed",
+          description: message,
+          tone: "error",
+        });
+      }
+    });
+  }
+
+  function refundPayment(paymentId: string) {
+    setStatus("");
+    setError("");
+
+    startTransition(async () => {
+      try {
+        const response = await fetch(`/api/paylinks/payments/${paymentId}/refund`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-store",
+          },
+          body: JSON.stringify({
+            reason: "Customer requested refund",
+          }),
+        });
+
+        const body = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+
+        if (!response.ok) {
+          throw new Error(body?.error || "refund_failed");
+        }
+
+        await loadData();
+        const message = "Refund initiated and recorded on this payment.";
+        setStatus(message);
+        toast({
+          title: "Refund started",
+          description: message,
+          tone: "success",
+        });
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message.replace(/_/g, " ") : "Unable to start refund.";
+        setError(message);
+        toast({
+          title: "Refund failed",
           description: message,
           tone: "error",
         });
@@ -495,6 +552,34 @@ export function PaymentLinkBuilder() {
                     <div className="grid gap-4 sm:grid-cols-2">
                       <label className="block">
                         <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">
+                          Success redirect URL
+                        </div>
+                        <input
+                          value={redirectUrl}
+                          onChange={(event) => setRedirectUrl(event.target.value)}
+                          inputMode="url"
+                          placeholder="https://merchant.app/payments/success"
+                          className="mt-2 h-12 w-full rounded-xl border border-zinc-200/80 bg-white/85 px-4 text-sm font-semibold text-zinc-950 outline-none placeholder:text-zinc-400 dark:border-zinc-800/80 dark:bg-zinc-950/40 dark:text-zinc-50"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">
+                          Cancel redirect URL
+                        </div>
+                        <input
+                          value={cancelUrl}
+                          onChange={(event) => setCancelUrl(event.target.value)}
+                          inputMode="url"
+                          placeholder="https://merchant.app/payments/cancelled"
+                          className="mt-2 h-12 w-full rounded-xl border border-zinc-200/80 bg-white/85 px-4 text-sm font-semibold text-zinc-950 outline-none placeholder:text-zinc-400 dark:border-zinc-800/80 dark:bg-zinc-950/40 dark:text-zinc-50"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <label className="block">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">
                           Amount type
                         </div>
                         <select
@@ -681,6 +766,15 @@ export function PaymentLinkBuilder() {
                               >
                                 Open receipt
                               </Link>
+                              {payment.status === "paid" ? (
+                                <button
+                                  type="button"
+                                  onClick={() => refundPayment(payment.id)}
+                                  className="inline-flex h-9 items-center justify-center rounded-xl border border-orange-200/80 px-3 text-xs font-semibold text-orange-700 transition hover:bg-orange-50 dark:border-orange-900/60 dark:text-orange-200 dark:hover:bg-orange-950/20"
+                                >
+                                  Refund
+                                </button>
+                              ) : null}
                               <span className="inline-flex items-center text-xs text-zinc-500 dark:text-zinc-400">
                                 {dateLabel(payment.createdAt)}
                               </span>
@@ -803,6 +897,11 @@ export function PaymentLinkBuilder() {
                             <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                               {payment.paylinkShortCode} - {currencyFromKobo(payment.amountKobo)}
                             </div>
+                            {payment.refundStatus ? (
+                              <div className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                                Refund {payment.refundStatus}
+                              </div>
+                            ) : null}
                           </div>
                           <Badge tone={statusTone(payment.status)}>{payment.status}</Badge>
                         </div>

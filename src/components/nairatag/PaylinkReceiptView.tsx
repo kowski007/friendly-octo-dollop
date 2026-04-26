@@ -15,25 +15,44 @@ function formatCurrencyFromKobo(kobo: number) {
   }).format(Math.round(kobo / 100));
 }
 
+function maskEmail(value: string) {
+  const [local, domain] = value.split("@");
+  if (!local || !domain) return value;
+  const visible = local.length <= 2 ? local[0] || "*" : local.slice(0, 2);
+  return `${visible}${"*".repeat(Math.max(2, local.length - visible.length))}@${domain}`;
+}
+
 function statusTone(status: string) {
   if (status === "paid" || status === "successful") return "verify";
-  if (status === "processing" || status === "pending" || status === "queued") return "neutral";
+  if (
+    status === "processing" ||
+    status === "pending" ||
+    status === "queued" ||
+    status === "refunded"
+  ) {
+    return "neutral";
+  }
   return "orange";
 }
 
 function titleForStatus(status: string) {
   if (status === "paid") return "Payment completed";
+  if (status === "refunded") return "Refund recorded";
   if (status === "failed" || status === "cancelled") return "Payment not completed";
   return "Payment status";
 }
 
 export function PaylinkReceiptView({
   receipt,
+  ownerView = false,
 }: {
   receipt: PaylinkReceiptData;
+  ownerView?: boolean;
 }) {
   const payment = receipt.payment;
   const settlement = receipt.settlement;
+  const payerEmail = ownerView ? payment.payerEmail : maskEmail(payment.payerEmail);
+  const payerLabel = payment.payerName || payerEmail;
 
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
@@ -46,6 +65,9 @@ export function PaylinkReceiptView({
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={statusTone(payment.status)}>{titleForStatus(payment.status)}</Badge>
               <Badge tone="neutral">{payment.receiptNumber}</Badge>
+              {payment.refundStatus ? (
+                <Badge tone="neutral">Refund {payment.refundStatus}</Badge>
+              ) : null}
               {settlement ? (
                 <Badge tone={statusTone(settlement.status)}>
                   Settlement {settlement.status}
@@ -78,13 +100,13 @@ export function PaylinkReceiptView({
                   <div className="grid grid-cols-[8rem_minmax(0,1fr)] gap-3 text-sm">
                     <div className="font-semibold text-zinc-500 dark:text-zinc-400">Payer</div>
                     <div className="font-semibold text-zinc-950 dark:text-zinc-50">
-                      {payment.payerName || payment.payerEmail}
+                      {payerLabel}
                     </div>
                   </div>
                   <div className="grid grid-cols-[8rem_minmax(0,1fr)] gap-3 text-sm">
                     <div className="font-semibold text-zinc-500 dark:text-zinc-400">Email</div>
                     <div className="font-semibold text-zinc-950 dark:text-zinc-50">
-                      {payment.payerEmail}
+                      {payerEmail}
                     </div>
                   </div>
                   <div className="grid grid-cols-[8rem_minmax(0,1fr)] gap-3 text-sm">
@@ -98,6 +120,18 @@ export function PaylinkReceiptView({
                       <div className="font-semibold text-zinc-500 dark:text-zinc-400">Note</div>
                       <div className="font-semibold text-zinc-950 dark:text-zinc-50">
                         {payment.note}
+                      </div>
+                    </div>
+                  ) : null}
+                  {payment.refundStatus ? (
+                    <div className="grid grid-cols-[8rem_minmax(0,1fr)] gap-3 text-sm">
+                      <div className="font-semibold text-zinc-500 dark:text-zinc-400">Refund</div>
+                      <div className="font-semibold text-zinc-950 dark:text-zinc-50">
+                        {payment.refundAmountKobo
+                          ? `${formatCurrencyFromKobo(payment.refundAmountKobo)} - `
+                          : ""}
+                        {payment.refundStatus}
+                        {payment.refundReason ? ` - ${payment.refundReason}` : ""}
                       </div>
                     </div>
                   ) : null}

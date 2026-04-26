@@ -162,6 +162,15 @@ function rowToPayment(row: Record<string, unknown>): PaylinkPaymentRecord {
       ? String(row.processor_reference)
       : undefined,
     processorStatus: row.processor_status ? String(row.processor_status) : undefined,
+    refundId: row.refund_id ? String(row.refund_id) : undefined,
+    refundReference: row.refund_reference
+      ? String(row.refund_reference)
+      : undefined,
+    refundStatus: row.refund_status ? String(row.refund_status) : undefined,
+    refundAmountKobo: parseMaybeInt(row.refund_amount_kobo),
+    refundReason: row.refund_reason ? String(row.refund_reason) : undefined,
+    refundRequestedAt: iso(row.refund_requested_at),
+    refundedAt: iso(row.refunded_at),
     paidAt: iso(row.paid_at),
     createdAt: iso(row.created_at) ?? new Date().toISOString(),
     updatedAt: iso(row.updated_at) ?? new Date().toISOString(),
@@ -190,6 +199,8 @@ function rowToSettlement(row: Record<string, unknown>): PaylinkSettlementRecord 
       : undefined,
     failureReason: row.failure_reason ? String(row.failure_reason) : undefined,
     processorResponse: parseObject(row.processor_response),
+    retryCount: parseMaybeInt(row.retry_count) ?? 0,
+    lastRetryAt: iso(row.last_retry_at),
     createdAt: iso(row.created_at) ?? new Date().toISOString(),
     updatedAt: iso(row.updated_at) ?? new Date().toISOString(),
     initiatedAt: iso(row.initiated_at),
@@ -301,6 +312,13 @@ async function ensureSchema(pool: Pool) {
       processor_transaction_id text,
       processor_reference text,
       processor_status text,
+      refund_id text,
+      refund_reference text,
+      refund_status text,
+      refund_amount_kobo bigint,
+      refund_reason text,
+      refund_requested_at timestamptz,
+      refunded_at timestamptz,
       paid_at timestamptz,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
@@ -325,12 +343,42 @@ async function ensureSchema(pool: Pool) {
       processor_beneficiary_id text,
       failure_reason text,
       processor_response jsonb not null default '{}'::jsonb,
+      retry_count integer not null default 0,
+      last_retry_at timestamptz,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now(),
       initiated_at timestamptz,
       completed_at timestamptz
     )
   `);
+
+  await pool.query(
+    `alter table ${PAYLINK_PAYMENTS_TABLE} add column if not exists refund_id text`
+  );
+  await pool.query(
+    `alter table ${PAYLINK_PAYMENTS_TABLE} add column if not exists refund_reference text`
+  );
+  await pool.query(
+    `alter table ${PAYLINK_PAYMENTS_TABLE} add column if not exists refund_status text`
+  );
+  await pool.query(
+    `alter table ${PAYLINK_PAYMENTS_TABLE} add column if not exists refund_amount_kobo bigint`
+  );
+  await pool.query(
+    `alter table ${PAYLINK_PAYMENTS_TABLE} add column if not exists refund_reason text`
+  );
+  await pool.query(
+    `alter table ${PAYLINK_PAYMENTS_TABLE} add column if not exists refund_requested_at timestamptz`
+  );
+  await pool.query(
+    `alter table ${PAYLINK_PAYMENTS_TABLE} add column if not exists refunded_at timestamptz`
+  );
+  await pool.query(
+    `alter table ${PAYLINK_SETTLEMENTS_TABLE} add column if not exists retry_count integer not null default 0`
+  );
+  await pool.query(
+    `alter table ${PAYLINK_SETTLEMENTS_TABLE} add column if not exists last_retry_at timestamptz`
+  );
 
   await pool.query(`
     create table if not exists ${PAYLINK_EVENTS_TABLE} (
@@ -359,7 +407,13 @@ async function ensureSchema(pool: Pool) {
     `create index if not exists ${PAYLINK_PAYMENTS_TABLE}_status_idx on ${PAYLINK_PAYMENTS_TABLE}(status)`
   );
   await pool.query(
+    `create index if not exists ${PAYLINK_PAYMENTS_TABLE}_refund_idx on ${PAYLINK_PAYMENTS_TABLE}(refund_status, updated_at desc)`
+  );
+  await pool.query(
     `create index if not exists ${PAYLINK_SETTLEMENTS_TABLE}_paylink_idx on ${PAYLINK_SETTLEMENTS_TABLE}(paylink_id, created_at desc)`
+  );
+  await pool.query(
+    `create index if not exists ${PAYLINK_SETTLEMENTS_TABLE}_retry_idx on ${PAYLINK_SETTLEMENTS_TABLE}(status, retry_count, updated_at desc)`
   );
 }
 
@@ -798,6 +852,61 @@ export async function markPaylinkPaymentPaid({
   }
 }
 
+export async function markPaylinkPaymentRefunded({
+  paymentId,
+  refundId,
+  refundReference,
+  refundStatus,
+  refundAmountKobo,
+  refundReason,
+  metadata,
+}: {
+  paymentId: string;
+  refundId?: string;
+  refundReference?: string;
+  refundStatus?: string;
+  refundAmountKobo?: number;
+  refundReason?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  const pool = requirePool();
+  await ensureSchema(pool);
+  const now = new Date().toISOString();
+
+  const res = await pool.query<Record<string, unknown>>(
+    `
+      update ${PAYLINK_PAYMENTS_TABLE}
+      set status = 'refunded',
+          refund_id = coalesce($2, refund_id),
+          refund_reference = coalesce($3, refund_reference),
+          refund_status = coalesce($4, refund_status),
+          refund_amount_kobo = coalesce($5, refund_amount_kobo),
+          refund_reason = coalesce($6, refund_reason),
+          refund_requested_at = coalesce(refund_requested_at, $7),
+          refunded_at = case
+            when lower(coalesce($4, '')) in ('successful', 'completed', 'refunded') then coalesce(refunded_at, $7)
+            else refunded_at
+          end,
+          metadata = metadata || $8::jsonb,
+          updated_at = $7
+      where id = $1
+      returning *
+    `,
+    [
+      paymentId,
+      refundId ?? null,
+      refundReference ?? null,
+      refundStatus ?? null,
+      refundAmountKobo ?? null,
+      refundReason ?? null,
+      now,
+      JSON.stringify(metadata ?? {}),
+    ]
+  );
+
+  return res.rows[0] ? rowToPayment(res.rows[0]) : null;
+}
+
 export async function recordPaylinkWebhookEventOnce({
   provider,
   eventKey,
@@ -852,6 +961,17 @@ export async function getSettlementByTransferReference(reference: string) {
   const res = await pool.query<Record<string, unknown>>(
     `select * from ${PAYLINK_SETTLEMENTS_TABLE} where transfer_reference = $1 limit 1`,
     [reference]
+  );
+  return res.rows[0] ? rowToSettlement(res.rows[0]) : null;
+}
+
+export async function getSettlementById(settlementId: string) {
+  const pool = requirePool();
+  await ensureSchema(pool);
+
+  const res = await pool.query<Record<string, unknown>>(
+    `select * from ${PAYLINK_SETTLEMENTS_TABLE} where id = $1 limit 1`,
+    [settlementId]
   );
   return res.rows[0] ? rowToSettlement(res.rows[0]) : null;
 }
@@ -1008,6 +1128,35 @@ export async function markSettlementSkipped({
   return res.rows[0] ? rowToSettlement(res.rows[0]) : null;
 }
 
+export async function markSettlementRetryQueued({
+  settlementId,
+  reason,
+  processorResponse,
+}: {
+  settlementId: string;
+  reason: string;
+  processorResponse?: Record<string, unknown>;
+}) {
+  const pool = requirePool();
+  await ensureSchema(pool);
+  const now = new Date().toISOString();
+  const res = await pool.query<Record<string, unknown>>(
+    `
+      update ${PAYLINK_SETTLEMENTS_TABLE}
+      set status = 'queued',
+          retry_count = retry_count + 1,
+          last_retry_at = $2,
+          failure_reason = $3,
+          processor_response = processor_response || $4::jsonb,
+          updated_at = $2
+      where id = $1
+      returning *
+    `,
+    [settlementId, now, reason, JSON.stringify(processorResponse ?? {})]
+  );
+  return res.rows[0] ? rowToSettlement(res.rows[0]) : null;
+}
+
 export async function markSettlementFailed({
   settlementId,
   failureReason,
@@ -1087,6 +1236,57 @@ export async function listPaylinkSettlementsForOwner({
     `,
     [ownerId, Math.min(Math.max(limit, 1), 100)]
   );
+  return res.rows.map(rowToSettlement);
+}
+
+export async function listRetryableSettlements({
+  limit = 20,
+  maxRetryCount = 3,
+  queuedBeforeIso,
+  failedBeforeIso,
+  processingBeforeIso,
+}: {
+  limit?: number;
+  maxRetryCount?: number;
+  queuedBeforeIso: string;
+  failedBeforeIso: string;
+  processingBeforeIso: string;
+}) {
+  const pool = requirePool();
+  await ensureSchema(pool);
+
+  const res = await pool.query<Record<string, unknown>>(
+    `
+      select *
+      from ${PAYLINK_SETTLEMENTS_TABLE}
+      where
+        (
+          status = 'queued'
+          and updated_at <= $1
+        )
+        or (
+          status = 'failed'
+          and coalesce(processor_transfer_id, '') = ''
+          and retry_count < $2
+          and updated_at <= $3
+        )
+        or (
+          status = 'processing'
+          and processor_transfer_id is not null
+          and updated_at <= $4
+        )
+      order by updated_at asc
+      limit $5
+    `,
+    [
+      queuedBeforeIso,
+      maxRetryCount,
+      failedBeforeIso,
+      processingBeforeIso,
+      Math.min(Math.max(limit, 1), 100),
+    ]
+  );
+
   return res.rows.map(rowToSettlement);
 }
 

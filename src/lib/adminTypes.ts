@@ -46,6 +46,7 @@ export type NotificationType =
   | "paylink_updated"
   | "payment_received"
   | "payment_failed"
+  | "payment_refunded"
   | "settlement_completed"
   | "settlement_failed"
   | "payment_disputed"

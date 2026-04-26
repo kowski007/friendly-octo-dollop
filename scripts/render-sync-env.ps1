@@ -61,12 +61,16 @@ function New-RandomSecret([int]$bytes = 32) {
 $envMap = Parse-DotEnv $EnvFile
 
 if (-not $envMap.ContainsKey("NT_SESSION_SECRET")) { $envMap["NT_SESSION_SECRET"] = New-RandomSecret 48 }
+if (-not $envMap.ContainsKey("NT_RECEIPT_ACCESS_SECRET")) { $envMap["NT_RECEIPT_ACCESS_SECRET"] = New-RandomSecret 48 }
 if (-not $envMap.ContainsKey("NT_OTP_SECRET")) { $envMap["NT_OTP_SECRET"] = New-RandomSecret 32 }
+if (-not $envMap.ContainsKey("NT_WORKER_SECRET")) { $envMap["NT_WORKER_SECRET"] = New-RandomSecret 48 }
 
 $keys = @(
   "NODE_ENV",
   "NT_SESSION_SECRET",
+  "NT_RECEIPT_ACCESS_SECRET",
   "NT_OTP_SECRET",
+  "NT_WORKER_SECRET",
   "MONO_PUBLIC_KEY",
   "MONO_SECRET_KEY",
   "MONO_BASE_URL",

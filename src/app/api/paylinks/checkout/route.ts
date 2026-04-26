@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { logApiUsage } from "@/lib/adminStore";
 import { getPaylinkByShortCode, startPaylinkCheckout } from "@/lib/paylinks";
+import { consumeRateLimit, getClientAddress } from "@/lib/rateLimit";
 
 function publicBaseUrl(req: NextRequest) {
   return (
@@ -56,6 +57,38 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const clientIp = getClientAddress(req);
+    const [ipLimit, paylinkLimit] = await Promise.all([
+      consumeRateLimit({
+        scope: "paylinks:checkout:ip",
+        identifier: clientIp,
+        limit: 30,
+        windowMs: 10 * 60 * 1000,
+      }),
+      consumeRateLimit({
+        scope: "paylinks:checkout:shortcode",
+        identifier: `${shortCode}:${clientIp}`,
+        limit: 8,
+        windowMs: 5 * 60 * 1000,
+      }),
+    ]);
+
+    const limited = !ipLimit.allowed ? ipLimit : !paylinkLimit.allowed ? paylinkLimit : null;
+    if (limited) {
+      status = 429;
+      return NextResponse.json(
+        { error: "rate_limited" },
+        {
+          status,
+          headers: {
+            "Cache-Control": "no-store",
+            "Retry-After": String(limited.retryAfterSec),
+            "X-RateLimit-Remaining": String(limited.remaining),
+          },
+        }
+      );
+    }
+
     const result = await startPaylinkCheckout({
       paylink,
       requestedAmountNaira:
@@ -90,6 +123,8 @@ export async function POST(req: NextRequest) {
         ? 400
         : message === "paylink_not_found"
           ? 404
+          : message === "database_not_configured"
+            ? 503
           : message === "flutterwave_not_configured"
             ? 503
             : 500;

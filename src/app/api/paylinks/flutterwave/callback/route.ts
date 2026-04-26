@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { logApiUsage } from "@/lib/adminStore";
 import { markPaylinkCancelledByTxRef, reconcileFlutterwaveCharge } from "@/lib/paylinks";
+import { createReceiptAccessToken } from "@/lib/paylinks/receiptAccess";
 
 function publicBaseUrl(req: NextRequest) {
   return (
@@ -11,10 +12,30 @@ function publicBaseUrl(req: NextRequest) {
   ).replace(/\/+$/, "");
 }
 
-function redirectToReceipt(req: NextRequest, paymentId: string, extra?: Record<string, string>) {
+function buildReceiptUrl(req: NextRequest, paymentId: string) {
+  const access = createReceiptAccessToken({ paymentId });
   const url = new URL(`/payments/receipts/${encodeURIComponent(paymentId)}`, publicBaseUrl(req));
+  url.searchParams.set("access", access);
+  return url;
+}
+
+function redirectToReceipt(req: NextRequest, paymentId: string, extra?: Record<string, string>) {
+  const url = buildReceiptUrl(req, paymentId);
   if (extra) {
     for (const [key, value] of Object.entries(extra)) {
+      url.searchParams.set(key, value);
+    }
+  }
+  return NextResponse.redirect(url, { status: 302 });
+}
+
+function redirectToMerchantUrl(
+  baseUrl: string,
+  params: Record<string, string | undefined>
+) {
+  const url = new URL(baseUrl);
+  for (const [key, value] of Object.entries(params)) {
+    if (value) {
       url.searchParams.set(key, value);
     }
   }
@@ -49,6 +70,24 @@ export async function GET(req: NextRequest) {
         appBaseUrl: publicBaseUrl(req),
       });
 
+      const merchantTarget =
+        result && result.payment.status === "paid"
+          ? result.paylink.redirectUrl
+          : result?.paylink.cancelUrl || result?.paylink.redirectUrl;
+
+      if (merchantTarget && result) {
+        const receiptUrl = buildReceiptUrl(req, result.payment.id).toString();
+        status = 302;
+        return redirectToMerchantUrl(merchantTarget, {
+          payment_id: result.payment.id,
+          status: result.payment.status,
+          tx_ref: result.payment.txRef,
+          handle: result.paylink.handle,
+          short_code: result.paylink.shortCode,
+          receipt_url: receiptUrl,
+        });
+      }
+
       status = 302;
       return redirectToReceipt(req, result?.payment.id || paymentId, {
         status: result?.payment.status || providerStatus,
@@ -56,7 +95,30 @@ export async function GET(req: NextRequest) {
     }
 
     if (txRef) {
-      await markPaylinkCancelledByTxRef(txRef, providerStatus || "cancelled");
+      const cancelled = await markPaylinkCancelledByTxRef(
+        txRef,
+        providerStatus || "cancelled"
+      );
+
+      if (cancelled?.paylink?.cancelUrl) {
+        const receiptUrl = buildReceiptUrl(req, cancelled.payment.id).toString();
+        status = 302;
+        return redirectToMerchantUrl(cancelled.paylink.cancelUrl, {
+          payment_id: cancelled.payment.id,
+          status: cancelled.payment.status,
+          tx_ref: cancelled.payment.txRef,
+          handle: cancelled.paylink.handle,
+          short_code: cancelled.paylink.shortCode,
+          receipt_url: receiptUrl,
+        });
+      }
+
+      if (cancelled?.payment?.id) {
+        status = 302;
+        return redirectToReceipt(req, cancelled.payment.id, {
+          status: cancelled.payment.status,
+        });
+      }
     }
 
     status = 302;

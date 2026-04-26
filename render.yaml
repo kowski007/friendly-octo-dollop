@@ -12,7 +12,11 @@ services:
         value: production
       - key: NT_SESSION_SECRET
         generateValue: true
+      - key: NT_RECEIPT_ACCESS_SECRET
+        generateValue: true
       - key: NT_OTP_SECRET
+        generateValue: true
+      - key: NT_WORKER_SECRET
         generateValue: true
       - key: NEXT_PUBLIC_PRIVY_APP_ID
         value: cm8s0beg200jbava4d5szjlyc

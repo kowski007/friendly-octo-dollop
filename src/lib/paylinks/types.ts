@@ -28,6 +28,12 @@ export type PaylinkSettlementStatus =
   | "failed"
   | "skipped";
 
+export type PaylinkRefundStatus =
+  | "pending"
+  | "processing"
+  | "successful"
+  | "failed";
+
 export type PaylinkRecord = {
   id: string;
   shortCode: string;
@@ -101,6 +107,13 @@ export type PaylinkPaymentRecord = {
   processorTransactionId?: string;
   processorReference?: string;
   processorStatus?: string;
+  refundId?: string;
+  refundReference?: string;
+  refundStatus?: PaylinkRefundStatus | string;
+  refundAmountKobo?: number;
+  refundReason?: string;
+  refundRequestedAt?: string;
+  refundedAt?: string;
   paidAt?: string;
   createdAt: string;
   updatedAt: string;
@@ -123,6 +136,8 @@ export type PaylinkSettlementRecord = {
   processorBeneficiaryId?: string;
   failureReason?: string;
   processorResponse: Record<string, unknown>;
+  retryCount: number;
+  lastRetryAt?: string;
   createdAt: string;
   updatedAt: string;
   initiatedAt?: string;

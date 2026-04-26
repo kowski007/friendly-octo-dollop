@@ -9,6 +9,7 @@ import {
   logApiUsage,
 } from "@/lib/adminStore";
 import { createPaylinkRecord, listPaylinksForOwner } from "@/lib/paylinks";
+import { consumeRateLimit, getClientAddress } from "@/lib/rateLimit";
 
 function normalizeSlug(input: string) {
   const trimmed = input.trim().toLowerCase();
@@ -25,6 +26,20 @@ function toKobo(value: number | undefined) {
   const normalized = Math.round(Number(value));
   if (!Number.isFinite(normalized) || normalized <= 0) return undefined;
   return normalized * 100;
+}
+
+function normalizeExternalUrl(input?: string) {
+  const trimmed = input?.trim();
+  if (!trimmed) return undefined;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      return null;
+    }
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -121,6 +136,38 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const clientIp = getClientAddress(req);
+    const [userLimit, ipLimit] = await Promise.all([
+      consumeRateLimit({
+        scope: "paylinks:create:user",
+        identifier: payload.uid,
+        limit: 12,
+        windowMs: 60 * 60 * 1000,
+      }),
+      consumeRateLimit({
+        scope: "paylinks:create:ip",
+        identifier: clientIp,
+        limit: 20,
+        windowMs: 60 * 60 * 1000,
+      }),
+    ]);
+
+    const limited = !userLimit.allowed ? userLimit : !ipLimit.allowed ? ipLimit : null;
+    if (limited) {
+      status = 429;
+      return NextResponse.json(
+        { error: "rate_limited" },
+        {
+          status,
+          headers: {
+            "Cache-Control": "no-store",
+            "Retry-After": String(limited.retryAfterSec),
+            "X-RateLimit-Remaining": String(limited.remaining),
+          },
+        }
+      );
+    }
+
     const claim = await getClaimByUserId(payload.uid);
     if (!claim) {
       status = 409;
@@ -190,6 +237,26 @@ export async function POST(req: NextRequest) {
       user.fullName?.trim() ||
       "Pending verification";
     const recipientBankCode = (bankAccount.nipCode || bankAccount.bankCode).trim();
+    const normalizedRedirectUrl = normalizeExternalUrl(body?.redirectUrl);
+    const normalizedCancelUrl = normalizeExternalUrl(body?.cancelUrl);
+
+    if (body?.redirectUrl && !normalizedRedirectUrl) {
+      status = 400;
+      return NextResponse.json(
+        { error: "invalid_redirect_url" },
+        { status, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+    if (body?.cancelUrl && !normalizedCancelUrl) {
+      status = 400;
+      return NextResponse.json(
+        { error: "invalid_cancel_url" },
+        { status, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
+    const redirectUrl = normalizedRedirectUrl ?? undefined;
+    const cancelUrl = normalizedCancelUrl ?? undefined;
 
     const record = await createPaylinkRecord({
       shortCode,
@@ -212,8 +279,8 @@ export async function POST(req: NextRequest) {
       collectPhone: body?.collectPhone ?? false,
       collectName: body?.collectName ?? true,
       customFields: Array.isArray(body?.customFields) ? body!.customFields : [],
-      redirectUrl: body?.redirectUrl?.trim() || undefined,
-      cancelUrl: body?.cancelUrl?.trim() || undefined,
+      redirectUrl,
+      cancelUrl,
       maxUses,
       expiresAt: body?.expiresAt?.trim() || undefined,
       feeBearer,

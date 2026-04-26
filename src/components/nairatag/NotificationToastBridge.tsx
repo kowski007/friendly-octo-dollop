@@ -32,6 +32,7 @@ function toastToneForNotification(notification: NotificationRecord): ToastTone {
   if (
     notification.type === "welcome_reward" ||
     notification.type === "payment_received" ||
+    notification.type === "payment_refunded" ||
     notification.type === "settlement_completed" ||
     notification.type === "handle_claimed" ||
     notification.type === "handle_sold" ||

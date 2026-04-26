@@ -34,6 +34,22 @@ type FlutterwaveVerifyPayload = {
   };
 };
 
+type FlutterwaveTransferPayload = {
+  id?: number | string;
+  reference?: string;
+  status?: string;
+  beneficiary?: number | string;
+};
+
+type FlutterwaveRefundPayload = {
+  id?: number | string;
+  tx_ref?: string;
+  flw_ref?: string;
+  status?: string;
+  amount_refunded?: number | string;
+  amount?: number | string;
+};
+
 function flwSecretKey() {
   return process.env.FLW_SECRET_KEY?.trim() || "";
 }
@@ -218,6 +234,73 @@ export async function createTransfer(input: {
     beneficiaryId: payload?.data?.beneficiary
       ? String(payload.data.beneficiary)
       : undefined,
+  };
+}
+
+export async function getTransfer(transferId: string) {
+  requireFlutterwaveSecret();
+  const response = await fetch(
+    `${flwBaseUrl()}/transfers/${encodeURIComponent(transferId)}`,
+    {
+      method: "GET",
+      headers: flwHeaders(),
+      cache: "no-store",
+    }
+  );
+
+  const payload = await parseResponse<{
+    status?: string;
+    message?: string;
+    data?: FlutterwaveTransferPayload;
+  }>(response);
+
+  return {
+    raw: payload ?? {},
+    transferId: payload?.data?.id ? String(payload.data.id) : transferId,
+    reference: payload?.data?.reference?.trim() || undefined,
+    status: payload?.data?.status?.trim().toLowerCase() || "unknown",
+    beneficiaryId: payload?.data?.beneficiary
+      ? String(payload.data.beneficiary)
+      : undefined,
+  };
+}
+
+export async function createRefund(input: {
+  transactionId: string;
+  amountKobo?: number;
+  comments?: string;
+}) {
+  requireFlutterwaveSecret();
+  const response = await fetch(
+    `${flwBaseUrl()}/transactions/${encodeURIComponent(input.transactionId)}/refund`,
+    {
+      method: "POST",
+      headers: flwHeaders(),
+      body: JSON.stringify({
+        amount: input.amountKobo ? toMajorAmount(input.amountKobo) : undefined,
+        comments: input.comments,
+      }),
+      cache: "no-store",
+    }
+  );
+
+  const payload = await parseResponse<{
+    status?: string;
+    message?: string;
+    data?: FlutterwaveRefundPayload;
+  }>(response);
+
+  return {
+    raw: payload ?? {},
+    refundId: payload?.data?.id ? String(payload.data.id) : undefined,
+    reference:
+      payload?.data?.tx_ref?.trim() ||
+      payload?.data?.flw_ref?.trim() ||
+      undefined,
+    status: payload?.data?.status?.trim().toLowerCase() || "processing",
+    amountRefundedKobo: toKobo(
+      payload?.data?.amount_refunded ?? payload?.data?.amount
+    ),
   };
 }
 
