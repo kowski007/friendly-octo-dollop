@@ -1,7 +1,4 @@
-import type {
-  MarketplaceListingRecord,
-  Verification,
-} from "./adminTypes";
+import type { MarketplaceListingRecord, Verification } from "./adminTypes";
 
 type ClaimBroadcastEvent = {
   type: "handle_claimed";
@@ -43,6 +40,17 @@ export type TelegramChannelEvent =
   | OfferBroadcastEvent
   | SaleBroadcastEvent;
 
+const NAIRA = "\u20A6";
+const CHANNEL_ICONS = {
+  claim: "\u{1F389}",
+  listing: "\u{1F3F7}\u{FE0F}",
+  listingUpdate: "\u{1F504}",
+  offer: "\u{1F4B8}",
+  offerUpdate: "\u{1F501}",
+  sold: "\u{2705}",
+  channel: "\u{1F4E3}",
+} as const;
+
 function telegramBotToken() {
   return (process.env.NT_TELEGRAM_BOT_TOKEN || "").trim();
 }
@@ -52,18 +60,18 @@ function telegramChannelId() {
 }
 
 function formatHandle(handle: string) {
-  return `₦${handle}`;
+  return `${NAIRA}${handle}`;
 }
 
 function formatVerification(verification: Verification) {
   if (verification === "business") return "Business verified";
-  if (verification === "verified") return "Verified";
-  return "Claimed";
+  if (verification === "verified") return "Verified identity";
+  return "Claimed identity";
 }
 
 function formatNaira(amount?: number | null) {
   if (!amount || !Number.isFinite(amount)) return null;
-  return `NGN ${Math.round(amount).toLocaleString("en-NG")}`;
+  return `${NAIRA}${Math.round(amount).toLocaleString("en-NG")}`;
 }
 
 function saleModeSummary(event: ListingBroadcastEvent) {
@@ -86,10 +94,10 @@ function escapeHtml(value: string) {
 function eventText(event: TelegramChannelEvent) {
   if (event.type === "handle_claimed") {
     return [
-      "🆕 <b>New NairaTag claim</b>",
-      `<b>${escapeHtml(formatHandle(event.handle))}</b>`,
-      `${escapeHtml(formatVerification(event.verification))} identity`,
-      `Claims live: <b>${event.totalClaims.toLocaleString("en-NG")}</b>`,
+      `${CHANNEL_ICONS.claim} <b>New NairaTag claim</b>`,
+      `<b>${escapeHtml(formatHandle(event.handle))}</b> is now live`,
+      `${escapeHtml(formatVerification(event.verification))}`,
+      `Total claims: <b>${event.totalClaims.toLocaleString("en-NG")}</b>`,
       `<a href="${escapeHtml(event.profileUrl)}">Open public profile</a>`,
     ].join("\n");
   }
@@ -100,8 +108,8 @@ function eventText(event: TelegramChannelEvent) {
   ) {
     return [
       event.type === "marketplace_listing_created"
-        ? "🏷 <b>New marketplace listing</b>"
-        : "♻️ <b>Marketplace listing updated</b>",
+        ? `${CHANNEL_ICONS.listing} <b>New marketplace listing</b>`
+        : `${CHANNEL_ICONS.listingUpdate} <b>Marketplace listing updated</b>`,
       `<b>${escapeHtml(formatHandle(event.handle))}</b>`,
       escapeHtml(saleModeSummary(event)),
       `Status: <b>${escapeHtml(event.status.replaceAll("_", " "))}</b>`,
@@ -115,11 +123,11 @@ function eventText(event: TelegramChannelEvent) {
   ) {
     return [
       event.type === "marketplace_offer_submitted"
-        ? "💸 <b>New marketplace offer</b>"
-        : "🔁 <b>Marketplace offer updated</b>",
+        ? `${CHANNEL_ICONS.offer} <b>New marketplace offer</b>`
+        : `${CHANNEL_ICONS.offerUpdate} <b>Marketplace offer updated</b>`,
       `<b>${escapeHtml(formatHandle(event.handle))}</b>`,
       `${escapeHtml(event.buyerName)} offered <b>${escapeHtml(
-        formatNaira(event.amount) || "NGN 0"
+        formatNaira(event.amount) || `${NAIRA}0`
       )}</b>`,
       `<a href="${escapeHtml(event.listingUrl)}">Review listing</a>`,
     ].join("\n");
@@ -127,15 +135,15 @@ function eventText(event: TelegramChannelEvent) {
 
   if (event.type === "handle_sold") {
     return [
-      "✅ <b>Handle sold</b>",
+      `${CHANNEL_ICONS.sold} <b>Handle sold</b>`,
       `<b>${escapeHtml(formatHandle(event.handle))}</b>`,
-      `Closed at <b>${escapeHtml(formatNaira(event.amount) || "NGN 0")}</b>`,
+      `Closed at <b>${escapeHtml(formatNaira(event.amount) || `${NAIRA}0`)}</b>`,
       `Buyer: ${escapeHtml(event.buyerName)}`,
       `<a href="${escapeHtml(event.profileUrl)}">Open public profile</a>`,
     ].join("\n");
   }
 
-  return "📣 <b>NairaTag update</b>";
+  return `${CHANNEL_ICONS.channel} <b>NairaTag update</b>`;
 }
 
 async function sendTelegramChannelMessage(text: string) {

@@ -86,6 +86,46 @@ type TelegramContext = {
 };
 
 const NAIRA = "\u20A6";
+const ICONS = {
+  wave: "\u{1F44B}",
+  confetti: "\u{1F389}",
+  lookup: "\u{1F50E}",
+  send: "\u{1F4B8}",
+  receive: "\u{1F4E5}",
+  marketplace: "\u{1F3EA}",
+  link: "\u{1F517}",
+  profile: "\u{1F464}",
+  spark: "\u{2728}",
+  globe: "\u{1F310}",
+  history: "\u{1F550}",
+  back: "\u{21A9}\u{FE0F}",
+  ens: "\u{1F9FE}",
+  phone: "\u{1F4F1}",
+  rocket: "\u{1F680}",
+} as const;
+
+const BUTTON_TEXT = {
+  claimHandle: `${ICONS.confetti} Claim ${NAIRA}handle`,
+  lookup: `${ICONS.lookup} Lookup`,
+  sendMoney: `${ICONS.send} Send money`,
+  marketplace: `${ICONS.marketplace} Marketplace`,
+  linkTelegram: `${ICONS.link} Link Telegram`,
+  myHandle: `${ICONS.profile} My ${NAIRA}handle`,
+  receiveMoney: `${ICONS.receive} Receive money`,
+  sharePayLink: `${ICONS.spark} Share my pay link`,
+  recentActivity: `${ICONS.history} Recent activity`,
+  openPayPage: `${ICONS.globe} Open my pay page`,
+  publishEns: `${ICONS.ens} Publish to ENS`,
+  backToMenu: `${ICONS.back} Back to menu`,
+  sharePhone: `${ICONS.phone} Share my phone number`,
+  createSavedPaylink: `${ICONS.spark} Create saved pay link`,
+  publicProfile: `${ICONS.globe} Public profile`,
+  openLink: `${ICONS.globe} Open link`,
+  openMarketplace: `${ICONS.marketplace} Open marketplace`,
+  openEnsFlow: `${ICONS.ens} Open ENS publish flow`,
+  payPage: `${ICONS.globe} Pay page`,
+  profile: `${ICONS.globe} Profile`,
+} as const;
 
 function botToken() {
   return (process.env.NT_TELEGRAM_BOT_TOKEN || "").trim();
@@ -104,6 +144,10 @@ function publicBaseUrl() {
 function appUrl(pathname: string) {
   const base = publicBaseUrl();
   return base ? `${base}${pathname}` : "";
+}
+
+function botBannerUrl() {
+  return appUrl("/telegram/nairatag-bot-banner.png");
 }
 
 function hasBotToken() {
@@ -159,12 +203,8 @@ async function callTelegram<T = unknown>(method: string, payload: Record<string,
   return (await response.json().catch(() => null)) as T | null;
 }
 
-async function sendMessage(
-  chatId: string,
-  text: string,
-  options: SendMessageOptions = {}
-) {
-  const reply_markup = options.inlineKeyboard
+function buildReplyMarkup(options: SendMessageOptions) {
+  return options.inlineKeyboard
     ? { inline_keyboard: options.inlineKeyboard }
     : options.replyKeyboard
       ? {
@@ -175,12 +215,32 @@ async function sendMessage(
       : options.removeKeyboard
         ? { remove_keyboard: true }
         : undefined;
+}
 
+async function sendMessage(
+  chatId: string,
+  text: string,
+  options: SendMessageOptions = {}
+) {
   return callTelegram("sendMessage", {
     chat_id: chatId,
     text,
     disable_web_page_preview: options.disablePreview ?? true,
-    reply_markup,
+    reply_markup: buildReplyMarkup(options),
+  });
+}
+
+async function sendPhoto(
+  chatId: string,
+  photoUrl: string,
+  caption: string,
+  options: SendMessageOptions = {}
+) {
+  return callTelegram("sendPhoto", {
+    chat_id: chatId,
+    photo: photoUrl,
+    caption,
+    reply_markup: buildReplyMarkup(options),
   });
 }
 
@@ -195,49 +255,49 @@ function mainMenuKeyboard(claimHandle?: string | null): InlineButton[][] {
   if (!claimHandle) {
     return [
       [
-        { text: `Claim ${NAIRA}handle`, callback_data: "claim" },
-        { text: "Lookup", callback_data: "lookup" },
+        { text: BUTTON_TEXT.claimHandle, callback_data: "claim" },
+        { text: BUTTON_TEXT.lookup, callback_data: "lookup" },
       ],
-      [{ text: "Send money", callback_data: "send" }],
-      [{ text: "Marketplace", callback_data: "market" }],
-      [{ text: "Link Telegram", callback_data: "linktg" }],
+      [{ text: BUTTON_TEXT.sendMoney, callback_data: "send" }],
+      [{ text: BUTTON_TEXT.marketplace, callback_data: "market" }],
+      [{ text: BUTTON_TEXT.linkTelegram, callback_data: "linktg" }],
     ];
   }
 
   const keyboard: InlineButton[][] = [
     [
-      { text: `My ${NAIRA}handle`, callback_data: "me" },
-      { text: "Receive money", callback_data: "receive" },
+      { text: BUTTON_TEXT.myHandle, callback_data: "me" },
+      { text: BUTTON_TEXT.receiveMoney, callback_data: "receive" },
     ],
     [
-      { text: "Share my pay link", callback_data: "sharepay" },
-      { text: "Send money", callback_data: "send" },
+      { text: BUTTON_TEXT.sharePayLink, callback_data: "sharepay" },
+      { text: BUTTON_TEXT.sendMoney, callback_data: "send" },
     ],
     [
-      { text: "Lookup", callback_data: "lookup" },
-      { text: "Recent activity", callback_data: "activity" },
+      { text: BUTTON_TEXT.lookup, callback_data: "lookup" },
+      { text: BUTTON_TEXT.recentActivity, callback_data: "activity" },
     ],
-    [{ text: "Marketplace", callback_data: "market" }],
+    [{ text: BUTTON_TEXT.marketplace, callback_data: "market" }],
   ];
 
   const payUrl = appUrl(`/pay/${claimHandle}`);
   if (payUrl) {
-    keyboard.push([{ text: "Open my pay page", url: payUrl }]);
+    keyboard.push([{ text: BUTTON_TEXT.openPayPage, url: payUrl }]);
   }
 
   const settingsUrl = appUrl("/settings#telegram-linking");
   keyboard.push([
     settingsUrl
-      ? { text: "Publish to ENS", url: settingsUrl }
-      : { text: "Publish to ENS", callback_data: "publishens" },
+      ? { text: BUTTON_TEXT.publishEns, url: settingsUrl }
+      : { text: BUTTON_TEXT.publishEns, callback_data: "publishens" },
   ]);
 
-  keyboard.push([{ text: "Link Telegram", callback_data: "linktg" }]);
+  keyboard.push([{ text: BUTTON_TEXT.linkTelegram, callback_data: "linktg" }]);
   return keyboard;
 }
 
 function sharePhoneKeyboard(): ReplyButton[][] {
-  return [[{ text: "Share my phone number", request_contact: true }]];
+  return [[{ text: BUTTON_TEXT.sharePhone, request_contact: true }]];
 }
 
 function looksLikeHandleInput(value: string) {
@@ -300,7 +360,10 @@ async function buildAccountLinks(userId: string, handle: string) {
   };
 }
 
-async function sendHome(context: TelegramContext) {
+async function sendHome(
+  context: TelegramContext,
+  options: { includeBanner?: boolean } = {}
+) {
   const account = await getTelegramBotAccount({
     telegramUserId: context.telegramUserId,
     telegramChatId: context.chatId,
@@ -311,8 +374,8 @@ async function sendHome(context: TelegramContext) {
 
   const name = context.firstName?.trim() || "there";
   const summary = account.claim
-    ? `You're linked to ₦${account.claim.handle}. Use the buttons below to open your handle, send money, or manage Telegram linking.`
-    : "Claim your ₦handle, look up people by handle or Telegram username, and jump into pay pages without leaving the bot.";
+    ? `You're linked to ${formatHandle(account.claim.handle)}. Open your handle, receive money, send money, or manage Telegram linking from one menu.`
+    : `Claim your ${NAIRA}handle, look up people by handle or Telegram username, and jump into pay pages without leaving the chat.`;
 
   await updateTelegramBotSession({
     telegramUserId: context.telegramUserId,
@@ -325,20 +388,30 @@ async function sendHome(context: TelegramContext) {
     pendingDisplayName: null,
   });
 
-  await sendMessage(
-    context.chatId,
-    `Hi ${name}.\n\n${summary}`,
-    {
-      inlineKeyboard: mainMenuKeyboard(account.claim?.handle),
+  const message = account.claim
+    ? `${ICONS.wave} Hi ${name}.\n\n${summary}`
+    : `${ICONS.wave} Hi ${name}.\n\n${summary}\n\nUse the menu below to claim your first ${NAIRA}handle, receive money, or explore the marketplace.`;
+  const keyboard = mainMenuKeyboard(account.claim?.handle);
+
+  if (options.includeBanner) {
+    const banner = botBannerUrl();
+    if (banner) {
+      const photoResult = await sendPhoto(context.chatId, banner, message, {
+        inlineKeyboard: keyboard,
+        disablePreview: true,
+      });
+      if (photoResult) return;
     }
-  );
+  }
+
+  await sendMessage(context.chatId, message, { inlineKeyboard: keyboard });
 }
 
 async function sendMarketplacePreview(context: TelegramContext) {
   const listings = await listMarketplaceListings({ limit: 3, statuses: ["active"] });
   if (!listings.items.length) {
-    await sendMessage(context.chatId, "No live marketplace listings yet.", {
-      inlineKeyboard: [[{ text: "Back to menu", callback_data: "home" }]],
+    await sendMessage(context.chatId, `${ICONS.marketplace} No live marketplace listings yet.`, {
+      inlineKeyboard: [[{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }]],
     });
     return;
   }
@@ -354,19 +427,19 @@ async function sendMarketplacePreview(context: TelegramContext) {
   const buttons: InlineButton[][] = listings.items
     .map((listing) => {
       const url = appUrl(`/marketplace/${listing.listing.handle}`);
-      return url ? [{ text: `Open ₦${listing.listing.handle}`, url }] : [];
+      return url ? [{ text: `${ICONS.marketplace} Open ${formatHandle(listing.listing.handle)}`, url }] : [];
     })
     .filter((row) => row.length > 0);
 
   const marketplaceUrl = appUrl("/marketplace");
   if (marketplaceUrl) {
-    buttons.push([{ text: "Open marketplace", url: marketplaceUrl }]);
+    buttons.push([{ text: BUTTON_TEXT.openMarketplace, url: marketplaceUrl }]);
   }
-  buttons.push([{ text: "Back to menu", callback_data: "home" }]);
+  buttons.push([{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }]);
 
   await sendMessage(
     context.chatId,
-    `Live marketplace now\n\n${lines.join("\n")}`,
+    `${ICONS.marketplace} Live marketplace now\n\n${lines.join("\n")}`,
     {
       inlineKeyboard: buttons,
     }
@@ -402,11 +475,11 @@ async function sendMyHandle(context: TelegramContext) {
   if (!account.claim) {
     await sendMessage(
       context.chatId,
-      "Your account is connected, but you have not claimed a ₦handle yet.",
+      `Your account is connected, but you have not claimed a ${NAIRA}handle yet.`,
       {
         inlineKeyboard: [
-          [{ text: "Claim ₦handle", callback_data: "claim" }],
-          [{ text: "Back to menu", callback_data: "home" }],
+          [{ text: BUTTON_TEXT.claimHandle, callback_data: "claim" }],
+          [{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }],
         ],
       }
     );
@@ -419,7 +492,7 @@ async function sendMyHandle(context: TelegramContext) {
     account.claim.handle
   );
   const lines = [
-    `₦${account.claim.handle}`,
+    `${ICONS.profile} ${formatHandle(account.claim.handle)}`,
     profile?.displayName || account.claim.displayName,
     `Verification: ${account.claim.verification}`,
     `Trust: ${profile?.reputation.trustScore ?? 0}/100`,
@@ -430,27 +503,27 @@ async function sendMyHandle(context: TelegramContext) {
   if (paylinkUrl || payUrl) {
     buttons.push(
       [
-        paylinkUrl ? { text: "Share pay link", callback_data: "sharepay" } : null,
-        payUrl ? { text: "Open pay page", url: payUrl } : null,
+        paylinkUrl ? { text: BUTTON_TEXT.sharePayLink, callback_data: "sharepay" } : null,
+        payUrl ? { text: BUTTON_TEXT.openPayPage, url: payUrl } : null,
       ].filter(Boolean) as InlineButton[]
     );
   }
   if (profileUrl || settingsUrl) {
     buttons.push(
       [
-        profileUrl ? { text: "Public profile", url: profileUrl } : null,
-        settingsUrl ? { text: "Publish to ENS", url: settingsUrl } : null,
+        profileUrl ? { text: BUTTON_TEXT.publicProfile, url: profileUrl } : null,
+        settingsUrl ? { text: BUTTON_TEXT.publishEns, url: settingsUrl } : null,
       ].filter(Boolean) as InlineButton[]
     );
   }
   buttons.push(
     [
-      { text: "Receive money", callback_data: "receive" },
-      { text: "Recent activity", callback_data: "activity" },
+      { text: BUTTON_TEXT.receiveMoney, callback_data: "receive" },
+      { text: BUTTON_TEXT.recentActivity, callback_data: "activity" },
     ],
-    [{ text: "Link Telegram", callback_data: "linktg" }]
+    [{ text: BUTTON_TEXT.linkTelegram, callback_data: "linktg" }]
   );
-  buttons.push([{ text: "Back to menu", callback_data: "home" }]);
+  buttons.push([{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }]);
 
   await sendMessage(context.chatId, lines.join("\n"), { inlineKeyboard: buttons });
 }
@@ -487,8 +560,8 @@ async function sendReceiveMoney(context: TelegramContext) {
       `Claim a ${NAIRA}handle first, then I can open your receive surfaces here.`,
       {
         inlineKeyboard: [
-          [{ text: `Claim ${NAIRA}handle`, callback_data: "claim" }],
-          [{ text: "Back to menu", callback_data: "home" }],
+          [{ text: BUTTON_TEXT.claimHandle, callback_data: "claim" }],
+          [{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }],
         ],
       }
     );
@@ -501,7 +574,7 @@ async function sendReceiveMoney(context: TelegramContext) {
   );
   const builderUrl = appUrl("/payments/payment-links/builder");
   const lines = [
-    `Receive with ${formatHandle(account.claim.handle)}`,
+    `${ICONS.receive} Receive with ${formatHandle(account.claim.handle)}`,
     paylinkUrl
       ? "Your saved pay link is ready for hosted checkout."
       : "Your direct pay page is live. Create a saved pay link anytime for richer checkout.",
@@ -515,23 +588,23 @@ async function sendReceiveMoney(context: TelegramContext) {
   if (paylinkUrl || payUrl) {
     buttons.push(
       [
-        paylinkUrl ? { text: "Share pay link", callback_data: "sharepay" } : null,
-        payUrl ? { text: "Open pay page", url: payUrl } : null,
+        paylinkUrl ? { text: BUTTON_TEXT.sharePayLink, callback_data: "sharepay" } : null,
+        payUrl ? { text: BUTTON_TEXT.openPayPage, url: payUrl } : null,
       ].filter(Boolean) as InlineButton[]
     );
   }
   if (builderUrl && !paylinkUrl) {
-    buttons.push([{ text: "Create saved pay link", url: builderUrl }]);
+    buttons.push([{ text: BUTTON_TEXT.createSavedPaylink, url: builderUrl }]);
   }
   if (profileUrl || settingsUrl) {
     buttons.push(
       [
-        profileUrl ? { text: "Public profile", url: profileUrl } : null,
-        settingsUrl ? { text: "Publish to ENS", url: settingsUrl } : null,
+        profileUrl ? { text: BUTTON_TEXT.publicProfile, url: profileUrl } : null,
+        settingsUrl ? { text: BUTTON_TEXT.publishEns, url: settingsUrl } : null,
       ].filter(Boolean) as InlineButton[]
     );
   }
-  buttons.push([{ text: "Back to menu", callback_data: "home" }]);
+  buttons.push([{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }]);
 
   await sendMessage(context.chatId, lines, {
     inlineKeyboard: buttons,
@@ -554,8 +627,8 @@ async function sendSharePayLink(context: TelegramContext) {
       `Claim your ${NAIRA}handle first, then I can give you a shareable payment link.`,
       {
         inlineKeyboard: [
-          [{ text: `Claim ${NAIRA}handle`, callback_data: "claim" }],
-          [{ text: "Back to menu", callback_data: "home" }],
+          [{ text: BUTTON_TEXT.claimHandle, callback_data: "claim" }],
+          [{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }],
         ],
       }
     );
@@ -566,20 +639,20 @@ async function sendSharePayLink(context: TelegramContext) {
   const shareUrl = paylinkUrl || payUrl;
   const buttons: InlineButton[][] = [];
   if (shareUrl) {
-    buttons.push([{ text: "Open link", url: shareUrl }]);
+    buttons.push([{ text: BUTTON_TEXT.openLink, url: shareUrl }]);
   }
   if (payUrl && payUrl !== shareUrl) {
-    buttons.push([{ text: "Open pay page", url: payUrl }]);
+    buttons.push([{ text: BUTTON_TEXT.openPayPage, url: payUrl }]);
   }
   buttons.push(
-    [{ text: "Receive money", callback_data: "receive" }],
-    [{ text: "Back to menu", callback_data: "home" }]
+    [{ text: BUTTON_TEXT.receiveMoney, callback_data: "receive" }],
+    [{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }]
   );
 
   await sendMessage(
     context.chatId,
     shareUrl
-      ? `Share this NairaTag payment link for ${formatHandle(account.claim.handle)}:\n\n${shareUrl}`
+      ? `${ICONS.spark} Share this NairaTag payment link for ${formatHandle(account.claim.handle)}:\n\n${shareUrl}`
       : `I could not find a public pay surface for ${formatHandle(account.claim.handle)} yet.`,
     {
       inlineKeyboard: buttons,
@@ -603,8 +676,8 @@ async function sendPublishEns(context: TelegramContext) {
       `Claim your ${NAIRA}handle first, then I can route you into the ENS publish flow.`,
       {
         inlineKeyboard: [
-          [{ text: `Claim ${NAIRA}handle`, callback_data: "claim" }],
-          [{ text: "Back to menu", callback_data: "home" }],
+          [{ text: BUTTON_TEXT.claimHandle, callback_data: "claim" }],
+          [{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }],
         ],
       }
     );
@@ -614,7 +687,7 @@ async function sendPublishEns(context: TelegramContext) {
   const settingsUrl = appUrl("/settings#telegram-linking");
   const username = context.telegramUsername || account.user.telegramUsername;
   const lines = [
-    `Publish Telegram to ENS for ${formatHandle(account.claim.handle)}`,
+    `${ICONS.ens} Publish Telegram to ENS for ${formatHandle(account.claim.handle)}`,
     username
       ? `Telegram on file: @${username.replace(/^@/u, "")}`
       : "Set a public Telegram username first so ENS has something to publish.",
@@ -623,12 +696,12 @@ async function sendPublishEns(context: TelegramContext) {
 
   const buttons: InlineButton[][] = [];
   if (!account.user.telegramLinkedAt) {
-    buttons.push([{ text: "Link Telegram", callback_data: "linktg" }]);
+    buttons.push([{ text: BUTTON_TEXT.linkTelegram, callback_data: "linktg" }]);
   }
   if (settingsUrl) {
-    buttons.push([{ text: "Open ENS publish flow", url: settingsUrl }]);
+    buttons.push([{ text: BUTTON_TEXT.openEnsFlow, url: settingsUrl }]);
   }
-  buttons.push([{ text: "Back to menu", callback_data: "home" }]);
+  buttons.push([{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }]);
 
   await sendMessage(context.chatId, lines.join("\n\n"), {
     inlineKeyboard: buttons,
@@ -651,8 +724,8 @@ async function sendRecentActivity(context: TelegramContext) {
       `Claim your ${NAIRA}handle first, then I can show recent payments and updates here.`,
       {
         inlineKeyboard: [
-          [{ text: `Claim ${NAIRA}handle`, callback_data: "claim" }],
-          [{ text: "Back to menu", callback_data: "home" }],
+          [{ text: BUTTON_TEXT.claimHandle, callback_data: "claim" }],
+          [{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }],
         ],
       }
     );
@@ -693,7 +766,7 @@ async function sendRecentActivity(context: TelegramContext) {
   await sendMessage(
     context.chatId,
     [
-      `Recent activity for ${formatHandle(account.claim.handle)}`,
+      `${ICONS.history} Recent activity for ${formatHandle(account.claim.handle)}`,
       "",
       "Payments",
       ...paymentLines,
@@ -704,10 +777,10 @@ async function sendRecentActivity(context: TelegramContext) {
     {
       inlineKeyboard: dashboardUrl
         ? [
-            [{ text: "Open dashboard", url: dashboardUrl }],
-            [{ text: "Back to menu", callback_data: "home" }],
+            [{ text: `${ICONS.rocket} Open dashboard`, url: dashboardUrl }],
+            [{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }],
           ]
-        : [[{ text: "Back to menu", callback_data: "home" }]],
+        : [[{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }]],
       disablePreview: false,
     }
   );
@@ -725,11 +798,11 @@ async function startClaim(context: TelegramContext) {
   if (account.claim) {
     await sendMessage(
       context.chatId,
-      `You already own ₦${account.claim.handle}. NairaTag is currently one handle per account.`,
+      `You already own ${formatHandle(account.claim.handle)}. NairaTag is currently one handle per account.`,
       {
         inlineKeyboard: [
-          [{ text: "My ₦handle", callback_data: "me" }],
-          [{ text: "Back to menu", callback_data: "home" }],
+          [{ text: BUTTON_TEXT.myHandle, callback_data: "me" }],
+          [{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }],
         ],
       }
     );
@@ -748,10 +821,10 @@ async function startClaim(context: TelegramContext) {
 
   await sendMessage(
     context.chatId,
-    "Send the handle you want next. Example: victor or ₦victor",
+    `${ICONS.confetti} Send the handle you want next.\nExample: victor or ${NAIRA}victor`,
     {
       removeKeyboard: true,
-      inlineKeyboard: [[{ text: "Back to menu", callback_data: "home" }]],
+      inlineKeyboard: [[{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }]],
     }
   );
 }
@@ -769,11 +842,11 @@ async function startLookup(context: TelegramContext, mode: "lookup_handle" | "se
   await sendMessage(
     context.chatId,
     mode === "send_handle"
-      ? "Send the ₦handle or @telegram username you want to pay."
-      : "Send the ₦handle or @telegram username you want to look up.",
+      ? `${ICONS.send} Send the ${NAIRA}handle or @telegram username you want to pay.`
+      : `${ICONS.lookup} Send the ${NAIRA}handle or @telegram username you want to look up.`,
     {
       removeKeyboard: true,
-      inlineKeyboard: [[{ text: "Back to menu", callback_data: "home" }]],
+      inlineKeyboard: [[{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }]],
     }
   );
 }
@@ -784,9 +857,9 @@ async function sendLookupResult(context: TelegramContext, rawInput: string, payM
   if (!looksLikeHandleInput(input)) {
     await sendMessage(
       context.chatId,
-      "Send a clean ₦handle like ₦victor or a Telegram username like @victor7593.",
+      `${ICONS.lookup} Send a clean ${NAIRA}handle like ${NAIRA}victor or a Telegram username like @victor7593.`,
       {
-        inlineKeyboard: [[{ text: "Back to menu", callback_data: "home" }]],
+        inlineKeyboard: [[{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }]],
       }
     );
     return;
@@ -805,9 +878,9 @@ async function sendLookupResult(context: TelegramContext, rawInput: string, payM
       context.chatId,
       socialResult
         ? `I could not find a live NairaTag route for ${input} yet.`
-        : `₦${handleToCheck} is not claimed yet.`,
+        : `${formatHandle(handleToCheck)} is not claimed yet.`,
       {
-        inlineKeyboard: [[{ text: "Back to menu", callback_data: "home" }]],
+        inlineKeyboard: [[{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }]],
       }
     );
     return;
@@ -819,16 +892,20 @@ async function sendLookupResult(context: TelegramContext, rawInput: string, payM
   const buttons: InlineButton[][] = [];
 
   const primaryRow: InlineButton[] = [];
-  if (payMode && payUrl) primaryRow.push({ text: `Pay ₦${resolved.handle}`, url: payUrl });
-  if (profileUrl) primaryRow.push({ text: "Profile", url: profileUrl });
-  if (!payMode && payUrl) primaryRow.push({ text: "Pay page", url: payUrl });
+  if (payMode && payUrl) {
+    primaryRow.push({ text: `${ICONS.send} Pay ${formatHandle(resolved.handle)}`, url: payUrl });
+  }
+  if (profileUrl) primaryRow.push({ text: BUTTON_TEXT.profile, url: profileUrl });
+  if (!payMode && payUrl) primaryRow.push({ text: BUTTON_TEXT.payPage, url: payUrl });
   if (primaryRow.length) buttons.push(primaryRow);
-  buttons.push([{ text: "Back to menu", callback_data: "home" }]);
+  buttons.push([{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }]);
 
   await sendMessage(
     context.chatId,
     [
-      socialResult ? `${input} resolves to ₦${resolved.handle}` : `₦${resolved.handle}`,
+      socialResult
+        ? `${ICONS.lookup} ${input} resolves to ${formatHandle(resolved.handle)}`
+        : `${ICONS.lookup} ${formatHandle(resolved.handle)}`,
       profile?.displayName || resolved.displayName,
       `Verification: ${resolved.verification}`,
       `Trust: ${profile?.reputation.trustScore ?? 0}/100`,
@@ -858,8 +935,8 @@ async function handleClaimHandleInput(
   if (account.claim) {
     await sendMessage(
       context.chatId,
-      `You already own ₦${account.claim.handle}.`,
-      { inlineKeyboard: [[{ text: "My ₦handle", callback_data: "me" }]] }
+      `You already own ${formatHandle(account.claim.handle)}.`,
+      { inlineKeyboard: [[{ text: BUTTON_TEXT.myHandle, callback_data: "me" }]] }
     );
     await updateTelegramBotSession({
       telegramUserId: context.telegramUserId,
@@ -875,7 +952,7 @@ async function handleClaimHandleInput(
     await sendMessage(
       context.chatId,
       "That handle format is invalid. Use letters, numbers, underscores, or periods only.",
-      { inlineKeyboard: [[{ text: "Try again", callback_data: "claim" }]] }
+      { inlineKeyboard: [[{ text: `${ICONS.confetti} Try again`, callback_data: "claim" }]] }
     );
     return;
   }
@@ -889,8 +966,8 @@ async function handleClaimHandleInput(
       : "";
     await sendMessage(
       context.chatId,
-      `₦${input} is already claimed.${suggestionText}`,
-      { inlineKeyboard: [[{ text: "Try another", callback_data: "claim" }]] }
+      `${formatHandle(input)} is already claimed.${suggestionText}`,
+      { inlineKeyboard: [[{ text: `${ICONS.confetti} Try another`, callback_data: "claim" }]] }
     );
     return;
   }
@@ -904,8 +981,8 @@ async function handleClaimHandleInput(
       `${availability.message}\n\nOpen the marketplace to review this system name properly.`,
       {
         inlineKeyboard: [
-          marketplaceUrl ? [{ text: "Open marketplace", url: marketplaceUrl }] : [],
-          [{ text: "Try another", callback_data: "claim" }],
+          marketplaceUrl ? [{ text: BUTTON_TEXT.openMarketplace, url: marketplaceUrl }] : [],
+          [{ text: `${ICONS.confetti} Try another`, callback_data: "claim" }],
         ].filter((row) => row.length > 0),
       }
     );
@@ -914,7 +991,7 @@ async function handleClaimHandleInput(
 
   if (availability.status === "blocked") {
     await sendMessage(context.chatId, availability.message, {
-      inlineKeyboard: [[{ text: "Try another", callback_data: "claim" }]],
+      inlineKeyboard: [[{ text: `${ICONS.confetti} Try another`, callback_data: "claim" }]],
     });
     return;
   }
@@ -963,7 +1040,7 @@ async function handleClaimHandleInput(
 
   await sendMessage(
     context.chatId,
-    `₦${input} is available. Share the phone number tied to your NairaTag account so I can finish the claim here.`,
+    `${ICONS.confetti} ${formatHandle(input)} is available. Share the phone number tied to your NairaTag account so I can finish the claim here.`,
     { replyKeyboard: sharePhoneKeyboard() }
   );
 }
@@ -981,27 +1058,27 @@ async function sendClaimSuccess(
   if (payUrl || profileUrl) {
     buttons.push(
       [
-        payUrl ? { text: "Open pay page", url: payUrl } : null,
-        profileUrl ? { text: "Public profile", url: profileUrl } : null,
+        payUrl ? { text: BUTTON_TEXT.openPayPage, url: payUrl } : null,
+        profileUrl ? { text: BUTTON_TEXT.publicProfile, url: profileUrl } : null,
       ].filter(Boolean) as InlineButton[]
     );
   }
   buttons.push(
     [
-      { text: "Receive money", callback_data: "receive" },
-      { text: "Share pay link", callback_data: "sharepay" },
+      { text: BUTTON_TEXT.receiveMoney, callback_data: "receive" },
+      { text: BUTTON_TEXT.sharePayLink, callback_data: "sharepay" },
     ].filter(Boolean) as InlineButton[]
   );
   if (settingsUrl) {
-    buttons.push([{ text: "Publish Telegram to ENS", url: settingsUrl }]);
+    buttons.push([{ text: BUTTON_TEXT.publishEns, url: settingsUrl }]);
   }
-  buttons.push([{ text: "Main menu", callback_data: "home" }]);
+  buttons.push([{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }]);
 
   await sendMessage(
     context.chatId,
     telegramLinked
-      ? `Claimed successfully.\n\n₦${handle} is live, and your Telegram identity is already linked. Publish it to ENS next when you're ready.`
-      : `Claimed successfully.\n\n₦${handle} is live on NairaTag.`,
+      ? `${ICONS.confetti} Claimed successfully!\n\n${formatHandle(handle)} is live, and your Telegram identity is already linked. Publish it to ENS next when you're ready.`
+      : `${ICONS.confetti} Claimed successfully!\n\n${formatHandle(handle)} is live on NairaTag.`,
     {
       removeKeyboard: true,
       inlineKeyboard: buttons,
@@ -1061,12 +1138,14 @@ async function handleContactMessage(context: TelegramContext, contact: TelegramC
     if (refreshed.claim) {
       await sendMessage(
         context.chatId,
-        `Connected successfully. Your account owns ₦${refreshed.claim.handle}.`,
+        `${ICONS.phone} Connected successfully. Your account owns ${formatHandle(
+          refreshed.claim.handle
+        )}.`,
         {
           removeKeyboard: true,
           inlineKeyboard: [
-            [{ text: "My ₦handle", callback_data: "me" }],
-            [{ text: "Main menu", callback_data: "home" }],
+            [{ text: BUTTON_TEXT.myHandle, callback_data: "me" }],
+            [{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }],
           ],
         }
       );
@@ -1075,12 +1154,12 @@ async function handleContactMessage(context: TelegramContext, contact: TelegramC
 
     await sendMessage(
       context.chatId,
-      "Your phone is connected. You can claim a ₦handle here next.",
+      `${ICONS.phone} Your phone is connected. You can claim a ${NAIRA}handle here next.`,
       {
         removeKeyboard: true,
         inlineKeyboard: [
-          [{ text: "Claim ₦handle", callback_data: "claim" }],
-          [{ text: "Main menu", callback_data: "home" }],
+          [{ text: BUTTON_TEXT.claimHandle, callback_data: "claim" }],
+          [{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }],
         ],
       }
     );
@@ -1167,8 +1246,8 @@ async function handleLinkTelegram(context: TelegramContext) {
   if (!account.claim) {
     await sendMessage(
       context.chatId,
-      "Claim a ₦handle first, then I can bind this Telegram username to it.",
-      { inlineKeyboard: [[{ text: "Claim ₦handle", callback_data: "claim" }]] }
+      `Claim a ${NAIRA}handle first, then I can bind this Telegram username to it.`,
+      { inlineKeyboard: [[{ text: BUTTON_TEXT.claimHandle, callback_data: "claim" }]] }
     );
     return;
   }
@@ -1177,7 +1256,7 @@ async function handleLinkTelegram(context: TelegramContext) {
     await sendMessage(
       context.chatId,
       "Set a public Telegram username first, then tap Link Telegram again.",
-      { inlineKeyboard: [[{ text: "Back to menu", callback_data: "home" }]] }
+      { inlineKeyboard: [[{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }]] }
     );
     return;
   }
@@ -1196,7 +1275,7 @@ async function handleLinkTelegram(context: TelegramContext) {
       error instanceof Error && error.message === "telegram_username_claimed"
         ? "That Telegram username is already linked to another NairaTag handle."
         : "I could not link this Telegram username right now.",
-      { inlineKeyboard: [[{ text: "Back to menu", callback_data: "home" }]] }
+      { inlineKeyboard: [[{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }]] }
     );
     return;
   }
@@ -1204,12 +1283,14 @@ async function handleLinkTelegram(context: TelegramContext) {
   const settingsUrl = appUrl("/settings#telegram-linking");
   await sendMessage(
     context.chatId,
-    `Linked ${context.telegramUsername} to ₦${account.claim.handle}. The last step is publishing it to ENS from your wallet.`,
+    `${ICONS.link} Linked ${context.telegramUsername} to ${formatHandle(
+      account.claim.handle
+    )}. The last step is publishing it to ENS from your wallet.`,
     {
       inlineKeyboard: [
-        settingsUrl ? [{ text: "Publish to ENS", url: settingsUrl }] : [],
-        [{ text: "My ₦handle", callback_data: "me" }],
-        [{ text: "Main menu", callback_data: "home" }],
+        settingsUrl ? [{ text: BUTTON_TEXT.publishEns, url: settingsUrl }] : [],
+        [{ text: BUTTON_TEXT.myHandle, callback_data: "me" }],
+        [{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }],
       ].filter((row) => row.length > 0),
     }
   );
@@ -1220,7 +1301,7 @@ async function handleVerificationFromBot(context: TelegramContext, code: string)
     await sendMessage(
       context.chatId,
       "Set a public Telegram username first, then send the verification message again.",
-      { inlineKeyboard: [[{ text: "Back to menu", callback_data: "home" }]] }
+      { inlineKeyboard: [[{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }]] }
     );
     return;
   }
@@ -1235,15 +1316,15 @@ async function handleVerificationFromBot(context: TelegramContext, code: string)
 
   await sendMessage(
     context.chatId,
-    "Verification recorded. Return to NairaTag and the linking page will detect it automatically.",
-    { inlineKeyboard: [[{ text: "Main menu", callback_data: "home" }]] }
+    `${ICONS.link} Verification recorded. Return to NairaTag and the linking page will detect it automatically.`,
+    { inlineKeyboard: [[{ text: BUTTON_TEXT.backToMenu, callback_data: "home" }]] }
   );
 }
 
 async function handleStartPayload(context: TelegramContext, payload: string) {
   const code = verificationPayloadCode(payload);
   if (!code) {
-    await sendHome(context);
+    await sendHome(context, { includeBanner: true });
     return;
   }
   await handleVerificationFromBot(context, code);
@@ -1326,7 +1407,7 @@ async function handleTextMessage(message: TelegramMessage, context: TelegramCont
       await handleStartPayload(context, payload);
       return;
     }
-    await sendHome(context);
+    await sendHome(context, { includeBanner: true });
     return;
   }
 
