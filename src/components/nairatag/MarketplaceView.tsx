@@ -1,8 +1,10 @@
 import type {
+  AdminNameIndexSummary,
   PublicHandleSuggestion,
   MarketplaceListingView as ListingView,
   MarketplaceStats,
 } from "@/lib/adminTypes";
+import type { NameIndexRecord } from "@/lib/nameIndex";
 
 import { AppPageHeader } from "./AppPageHeader";
 import { Badge, ButtonLink, Container, cn } from "./ui";
@@ -29,6 +31,8 @@ type HistoryRow = {
   at: string;
   entry: ListingView;
 };
+
+type NameCatalog = "live" | "premium" | "protected";
 
 function formatCurrency(amount?: number | null) {
   if (amount == null) return "-";
@@ -236,18 +240,83 @@ function CategoryTile({ category }: { category: CategoryRow }) {
   );
 }
 
+function NameIndexCard({
+  record,
+  mode,
+}: {
+  record: NameIndexRecord;
+  mode: "premium" | "protected";
+}) {
+  return (
+    <div className="rounded-[1.6rem] border border-zinc-200/70 bg-white p-5 shadow-sm dark:border-zinc-800/80 dark:bg-zinc-950/55">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+            {NAIRA}
+            {record.handle}
+          </div>
+          <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+            {record.reason || (mode === "premium" ? "High-value generic handle." : "Reserved namespace.")}
+          </div>
+        </div>
+        <Badge tone={mode === "premium" ? "orange" : "verify"}>
+          {record.badge ?? (mode === "premium" ? "Premium" : "Reserved")}
+        </Badge>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+        {mode === "premium" ? (
+          <span>
+            {typeof record.price === "number"
+              ? formatCurrency(record.price)
+              : "Managed release"}
+          </span>
+        ) : null}
+        {record.owner_type ? <span className="capitalize">{record.owner_type}</span> : null}
+      </div>
+
+      <div className="mt-5 flex flex-wrap gap-2">
+        {mode === "premium" ? (
+          <ButtonLink
+            href={`/claim?handle=${encodeURIComponent(record.handle)}`}
+            className="min-h-10 bg-zinc-950 px-4 py-2 text-xs hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+          >
+            Review premium name
+          </ButtonLink>
+        ) : (
+          <ButtonLink
+            href={`/claim?handle=${encodeURIComponent(record.handle)}`}
+            variant="secondary"
+            className="min-h-10 px-4 py-2 text-xs"
+          >
+            Review reserved name
+          </ButtonLink>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function MarketplaceView({
   listings,
   historyListings,
   stats,
   query,
   suggestions,
+  catalog,
+  premiumNames,
+  protectedNames,
+  nameIndexSummary,
 }: {
   listings: ListingView[];
   historyListings?: ListingView[];
   stats: MarketplaceStats;
   query?: string;
   suggestions: PublicHandleSuggestion[];
+  catalog: NameCatalog;
+  premiumNames: NameIndexRecord[];
+  protectedNames: NameIndexRecord[];
+  nameIndexSummary: AdminNameIndexSummary;
 }) {
   const sortedListings = [...listings].sort(
     (a, b) => listingSortValue(b) - listingSortValue(a)
@@ -387,6 +456,16 @@ export function MarketplaceView({
         entry.listing.askAmount != null
     )
     .slice(0, 10);
+  const systemCatalogItems = catalog === "premium" ? premiumNames : protectedNames;
+  const liveCatalogHref = query
+    ? `/marketplace?catalog=live&q=${encodeURIComponent(query)}`
+    : "/marketplace?catalog=live";
+  const premiumCatalogHref = query
+    ? `/marketplace?catalog=premium&q=${encodeURIComponent(query)}`
+    : "/marketplace?catalog=premium";
+  const protectedCatalogHref = query
+    ? `/marketplace?catalog=protected&q=${encodeURIComponent(query)}`
+    : "/marketplace?catalog=protected";
 
   return (
     <div className="min-h-screen bg-white text-zinc-950 transition-colors dark:bg-zinc-950 dark:text-zinc-50">
@@ -459,6 +538,7 @@ export function MarketplaceView({
             />
 
             <form className="grid gap-3 lg:grid-cols-[minmax(18rem,1fr)_auto] lg:items-center">
+              <input type="hidden" name="catalog" value={catalog} />
               <label className="relative block">
                 <span
                   className="pointer-events-none absolute left-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full border-2 border-zinc-400"
@@ -481,6 +561,42 @@ export function MarketplaceView({
                 Search live listings
               </button>
             </form>
+
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={liveCatalogHref}
+                className={cn(
+                  "inline-flex min-h-10 items-center justify-center rounded-full px-4 py-2 text-xs font-semibold transition",
+                  catalog === "live"
+                    ? "bg-zinc-950 text-white dark:bg-white dark:text-zinc-950"
+                    : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                )}
+              >
+                Live resale
+              </a>
+              <a
+                href={premiumCatalogHref}
+                className={cn(
+                  "inline-flex min-h-10 items-center justify-center rounded-full px-4 py-2 text-xs font-semibold transition",
+                  catalog === "premium"
+                    ? "bg-orange-500 text-white hover:bg-orange-500"
+                    : "bg-orange-50 text-orange-900 hover:bg-orange-100 dark:bg-orange-950/35 dark:text-orange-200 dark:hover:bg-orange-950/50"
+                )}
+              >
+                Premium names
+              </a>
+              <a
+                href={protectedCatalogHref}
+                className={cn(
+                  "inline-flex min-h-10 items-center justify-center rounded-full px-4 py-2 text-xs font-semibold transition",
+                  catalog === "protected"
+                    ? "bg-sky-600 text-white hover:bg-sky-600"
+                    : "bg-sky-50 text-sky-900 hover:bg-sky-100 dark:bg-sky-950/35 dark:text-sky-200 dark:hover:bg-sky-950/50"
+                )}
+              >
+                Reserved names
+              </a>
+            </div>
 
             <div className="rounded-3xl bg-zinc-50 p-4 dark:bg-zinc-900/55 sm:flex sm:items-center sm:justify-between sm:gap-5">
               <div className="grid gap-1">
@@ -528,6 +644,22 @@ export function MarketplaceView({
                     {stats.reservedClaimedHandles.toLocaleString()}
                   </div>
                 </div>
+                <div>
+                  <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                    Premium index
+                  </div>
+                  <div className="font-semibold text-zinc-950 dark:text-zinc-50">
+                    {nameIndexSummary.premiumNames.toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                    Reserved index
+                  </div>
+                  <div className="font-semibold text-zinc-950 dark:text-zinc-50">
+                    {nameIndexSummary.protectedNames.toLocaleString()}
+                  </div>
+                </div>
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2 sm:mt-0">
@@ -547,7 +679,30 @@ export function MarketplaceView({
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-3xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+            {catalog !== "live" ? (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {systemCatalogItems.length === 0 ? (
+                  <div className="rounded-[1.8rem] border border-zinc-200/70 bg-white/80 p-6 text-sm text-zinc-600 dark:border-zinc-800/80 dark:bg-zinc-950/40 dark:text-zinc-300 sm:col-span-2 xl:col-span-3">
+                    No {catalog === "premium" ? "premium" : "reserved"} names match this search right now.
+                  </div>
+                ) : (
+                  systemCatalogItems.map((record) => (
+                    <NameIndexCard
+                      key={record.handle}
+                      record={record}
+                      mode={catalog === "premium" ? "premium" : "protected"}
+                    />
+                  ))
+                )}
+              </div>
+            ) : null}
+
+            <div
+              className={cn(
+                "overflow-hidden rounded-3xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950",
+                catalog !== "live" && "hidden"
+              )}
+            >
               <div className="overflow-x-auto">
                 <table className="min-w-[1120px] w-full border-collapse text-left">
                   <thead>

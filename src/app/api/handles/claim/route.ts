@@ -60,6 +60,12 @@ export async function POST(req: NextRequest) {
         ? 409
         : code === "user_already_has_handle" || msg === "user_already_has_handle"
           ? 409
+          : code === "premium_name" || msg === "premium_name"
+            ? 403
+            : code === "protected_name" || msg === "protected_name"
+              ? 403
+              : code === "blocked_name" || msg === "blocked_name"
+                ? 403
           : msg === "missing_handle" || msg === "invalid_handle"
             ? 400
             : msg === "phone_not_verified" || msg === "user_not_found"
@@ -82,4 +88,3 @@ export async function POST(req: NextRequest) {
     return res;
   }
 }
-

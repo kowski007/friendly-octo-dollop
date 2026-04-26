@@ -18,8 +18,31 @@ import {
   nairaTagEnsName,
   resolveEnsExecutionTarget,
 } from "./ens";
+import {
+  classifyIndexedHandleAvailability,
+  getAllIndexedNames,
+  getNameIndexRecord,
+  getNameIndexSummary,
+  getSeedNameIndexRecord,
+  getSeedNameIndexRecordOrNull,
+  getMarketplaceNames as getIndexedMarketplaceNames,
+  isValidHandle as isValidIndexedHandle,
+  mergeNameIndexRecord,
+  normalizeHandle as normalizeIndexedHandle,
+  type NameAvailabilityRecord,
+} from "./nameIndex";
+import {
+  deleteNameIndexOverride,
+  getNameIndexOverridesMap,
+  listNameIndexOverrides,
+  upsertNameIndexOverride,
+  type NameIndexOverrideInput,
+} from "./nameIndexOverridesStore";
 import { queueTelegramChannelEvent } from "./telegramChannel";
 import type {
+  AdminNameIndexEntry,
+  AdminNameIndexFilters,
+  AdminNameIndexSummary,
   AdminMetrics,
   ApiLogRecord,
   BankAccountRecord,
@@ -469,15 +492,93 @@ function newId(prefix: string) {
 }
 
 export function normalizeHandle(input: string) {
-  return input
-    .trim()
-    .replace(/^\u20A6/u, "")
-    .replace(/^@/u, "")
-    .toLowerCase();
+  return normalizeIndexedHandle(input);
 }
 
 export function isValidHandle(handle: string) {
-  return /^[a-z0-9_]{2,20}$/.test(handle);
+  return isValidIndexedHandle(handle);
+}
+
+async function getMergedNameIndexRecordUnsafe(handle: string) {
+  const overrides = await getNameIndexOverridesMap();
+  return getNameIndexRecord(handle, overrides);
+}
+
+async function classifyHandleAvailabilityUnsafe(
+  data: AdminData,
+  inputHandle: string
+): Promise<NameAvailabilityRecord> {
+  const normalized = normalizeHandle(inputHandle);
+  if (!normalized || !isValidHandle(normalized)) {
+    return classifyIndexedHandleAvailability(inputHandle);
+  }
+
+  const overrides = await getNameIndexOverridesMap();
+  const claim = data.claims.find((entry) => entry.handle === normalized) ?? null;
+  const availability = classifyIndexedHandleAvailability(normalized, {
+    isClaimed: Boolean(claim),
+    overrides,
+  });
+
+  if (claim && availability.status === "taken") {
+    availability.displayName = claim.displayName;
+    availability.bank = claim.bank;
+    availability.verification = claim.verification;
+  }
+
+  return availability;
+}
+
+function buildAdminNameIndexSummaryUnsafe(
+  data: AdminData,
+  overrides: Awaited<ReturnType<typeof listNameIndexOverrides>>
+): AdminNameIndexSummary {
+  const records = getAllIndexedNames(overrides);
+  const summary = getNameIndexSummary(overrides);
+
+  return {
+    totalNames: summary.total,
+    publicNames: summary.public,
+    premiumNames: summary.premium,
+    protectedNames: summary.protected,
+    blockedNames: summary.blocked,
+    overrideCount: overrides.length,
+    claimedNames: data.claims.length,
+    listedNames: data.marketplaceListings.filter((entry) => entry.status === "active")
+      .length,
+    availablePublicNames: records.filter((record) => {
+      if (record.category !== "public" || !record.claimable) return false;
+      return !data.claims.some((claim) => claim.handle === record.handle);
+    }).length,
+    premiumPurchasableNames: records.filter(
+      (record) => record.category === "premium" && record.purchasable
+    ).length,
+    protectedRequestableNames: records.filter(
+      (record) => record.category === "protected" && record.requestable
+    ).length,
+  };
+}
+
+export async function classifyHandleAvailability(
+  inputHandle: string
+): Promise<NameAvailabilityRecord> {
+  const normalized = normalizeHandle(inputHandle);
+  if (!normalized || !isValidHandle(normalized)) {
+    return classifyIndexedHandleAvailability(inputHandle);
+  }
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    return classifyHandleAvailabilityUnsafe(data, normalized);
+  });
+}
+
+export async function getMarketplaceNames(
+  category?: "premium" | "protected" | "blocked",
+  options?: { q?: string; limit?: number }
+) {
+  const overrides = await getNameIndexOverridesMap();
+  return getIndexedMarketplaceNames(category, { ...options, overrides });
 }
 
 function normalizeAvatarUrl(input?: string) {
@@ -525,6 +626,32 @@ export async function resolveHandle(inputHandle: string): Promise<ResolveResult>
   });
 }
 
+function throwClaimAvailabilityError(availability: NameAvailabilityRecord) {
+  const error =
+    availability.status === "premium"
+      ? new Error("premium_name")
+      : availability.status === "protected"
+        ? new Error("protected_name")
+        : availability.status === "blocked"
+          ? new Error("blocked_name")
+          : availability.status === "taken"
+            ? new Error("already_claimed")
+            : new Error("invalid_handle");
+
+  // @ts-expect-error attach a code for API routes
+  error.code =
+    availability.status === "premium"
+      ? "premium_name"
+      : availability.status === "protected"
+        ? "protected_name"
+        : availability.status === "blocked"
+          ? "blocked_name"
+          : availability.status === "taken"
+            ? "already_claimed"
+            : "invalid_handle";
+  throw error;
+}
+
 export async function claimHandle({
   handle,
   displayName,
@@ -548,12 +675,9 @@ export async function claimHandle({
 
   return enqueue(async () => {
     const data = await readDataUnsafe();
-    const exists = data.claims.some((c) => c.handle === normalized);
-    if (exists) {
-      const err = new Error("already_claimed");
-      // @ts-expect-error attach a code for API routes
-      err.code = "already_claimed";
-      throw err;
+    const availability = await classifyHandleAvailabilityUnsafe(data, normalized);
+    if (availability.status !== "available") {
+      throwClaimAvailabilityError(availability);
     }
 
     const record: ClaimRecord = {
@@ -1511,6 +1635,125 @@ export async function listClaims({
       items: filtered.slice(offset, offset + limit),
     };
   });
+}
+
+export async function getAdminNameIndexSummary(): Promise<AdminNameIndexSummary> {
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const overrides = await listNameIndexOverrides();
+    return buildAdminNameIndexSummaryUnsafe(data, overrides);
+  });
+}
+
+export async function listAdminNameIndexEntries({
+  limit = 25,
+  offset = 0,
+  q,
+  category = "all",
+  status = "all",
+  source = "all",
+}: AdminNameIndexFilters) {
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const overrides = await listNameIndexOverrides();
+    const overrideMap = new Map(
+      overrides.map((record) => [record.handle, record] as const)
+    );
+    const query = q ? q.trim().toLowerCase() : "";
+    const normalizedQuery = query ? normalizeHandle(query) : "";
+
+    const filtered = getAllIndexedNames(overrides)
+      .map<AdminNameIndexEntry>((record) => {
+        const claim = data.claims.find((entry) => entry.handle === record.handle) ?? null;
+        const listing =
+          data.marketplaceListings.find((entry) => entry.handle === record.handle) ?? null;
+        const seedRecord = getSeedNameIndexRecordOrNull(record.handle);
+        const overrideRecord = overrideMap.get(record.handle) ?? null;
+        const availability = classifyIndexedHandleAvailability(record.handle, {
+          isClaimed: Boolean(claim),
+          overrides: overrideMap,
+        });
+
+        if (claim && availability.status === "taken") {
+          availability.displayName = claim.displayName;
+          availability.bank = claim.bank;
+          availability.verification = claim.verification;
+        }
+
+        return {
+          handle: record.handle,
+          displayHandle: `\u20A6${record.handle}`,
+          record,
+          seedRecord,
+          overrideRecord,
+          source: overrideRecord ? "override" : "seed",
+          availability,
+          claimed: Boolean(claim),
+          listed: Boolean(listing && listing.status === "active"),
+          claim,
+          listing,
+        };
+      })
+      .filter((entry) => {
+        if (category !== "all" && entry.record.category !== category) return false;
+        if (source !== "all" && entry.source !== source) return false;
+        if (status !== "all") {
+          if (status === "listed") return entry.listed;
+          if (status === "unlisted") return !entry.listed;
+          if (entry.availability.status !== status) return false;
+        }
+
+        if (!query) return true;
+
+        return (
+          entry.handle.includes(normalizedQuery || query) ||
+          entry.record.badge?.toLowerCase().includes(query) ||
+          entry.record.reason?.toLowerCase().includes(query) ||
+          entry.record.owner_type?.toLowerCase().includes(query) ||
+          entry.claim?.displayName.toLowerCase().includes(query) ||
+          entry.claim?.bank.toLowerCase().includes(query)
+        );
+      });
+
+    return {
+      total: filtered.length,
+      summary: buildAdminNameIndexSummaryUnsafe(data, overrides),
+      items: filtered.slice(offset, offset + limit),
+    };
+  });
+}
+
+export async function saveAdminNameIndexOverride(
+  input: Omit<NameIndexOverrideInput, "actor"> & { actor?: string | null }
+) {
+  const normalized = normalizeHandle(input.handle);
+  if (!normalized || !isValidHandle(normalized)) {
+    throw new Error("invalid_handle");
+  }
+
+  const seedRecord = getSeedNameIndexRecord(normalized);
+  const record = await upsertNameIndexOverride({
+    ...input,
+    handle: normalized,
+  });
+
+  return {
+    record,
+    effectiveRecord: mergeNameIndexRecord(seedRecord, record),
+  };
+}
+
+export async function resetAdminNameIndexOverride(handle: string) {
+  const normalized = normalizeHandle(handle);
+  if (!normalized || !isValidHandle(normalized)) {
+    throw new Error("invalid_handle");
+  }
+
+  await deleteNameIndexOverride(normalized);
+  return {
+    handle: normalized,
+    record: await getMergedNameIndexRecordUnsafe(normalized),
+  };
 }
 
 export async function listPublicHandleSuggestions({ limit = 5 }: { limit?: number } = {}) {
@@ -4874,12 +5117,9 @@ export async function claimHandleForUser({
       throw err;
     }
 
-    const exists = data.claims.some((c) => c.handle === normalized);
-    if (exists) {
-      const err = new Error("already_claimed");
-      // @ts-expect-error attach a code for API routes
-      err.code = "already_claimed";
-      throw err;
+    const availability = await classifyHandleAvailabilityUnsafe(data, normalized);
+    if (availability.status !== "available") {
+      throwClaimAvailabilityError(availability);
     }
 
     const claimedAt = new Date().toISOString();

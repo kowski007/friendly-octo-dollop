@@ -19,8 +19,11 @@ type Verification = "verified" | "business" | "pending";
 
 type ResolveResponse =
   | {
-      status: "claimed";
+      status: "claimed" | "taken";
       handle: string;
+      display_handle?: string;
+      message?: string;
+      badge?: string | null;
       displayName: string;
       bank: string;
       verification: Verification;
@@ -28,10 +31,23 @@ type ResolveResponse =
   | {
       status: "available";
       handle: string;
+      display_handle?: string;
+      message?: string;
+      badge?: string | null;
+    }
+  | {
+      status: "premium" | "protected" | "blocked";
+      handle: string;
+      display_handle: string;
+      message: string;
+      badge?: string | null;
+      price?: number | null;
+      currency?: "NGN" | "USD" | "USDC" | null;
     }
   | {
       status: "invalid";
       reason: string;
+      message?: string;
     };
 
 type SuggestionsResponse =
@@ -70,11 +86,16 @@ type SessionState =
   | null;
 
 function normalizeHandle(input: string) {
-  return input.trim().replace(/^\u20A6/u, "").replace(/^@/u, "").toLowerCase();
+  return input
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/^\u20A6/u, "")
+    .replace(/^@/u, "")
+    .toLowerCase();
 }
 
 function isValidHandle(handle: string) {
-  return /^[a-z0-9_]{2,20}$/.test(handle);
+  return /^[a-z0-9_.]{2,32}$/u.test(handle);
 }
 
 function verificationLabel(verification: Verification) {
@@ -102,6 +123,12 @@ function humanizeError(error: string) {
       return "Too many OTP attempts. Try again shortly.";
     case "already_claimed":
       return "That handle is no longer available.";
+    case "premium_name":
+      return "This is a premium name and cannot be claimed directly.";
+    case "protected_name":
+      return "This handle is reserved and needs special approval.";
+    case "blocked_name":
+      return "This handle is not available.";
     case "user_already_has_handle":
       return "This account already has a claimed handle.";
     case "invalid_bvn":
@@ -373,7 +400,7 @@ export function ClaimPageView() {
     setResolveError(null);
 
     try {
-      const response = await fetch(`/api/resolve?handle=${encodeURIComponent(handle)}`, {
+      const response = await fetch(`/api/handles/availability?handle=${encodeURIComponent(handle)}`, {
         headers: { "Cache-Control": "no-store" },
         signal,
       });
@@ -447,7 +474,10 @@ export function ClaimPageView() {
   }, []);
 
   const isAvailable = remote?.status === "available";
-  const isClaimed = remote?.status === "claimed";
+  const isClaimed = remote?.status === "claimed" || remote?.status === "taken";
+  const isPremium = remote?.status === "premium";
+  const isProtected = remote?.status === "protected";
+  const isBlocked = remote?.status === "blocked";
   const existingClaim = session?.claim ?? null;
   const sessionReady = Boolean(session?.ok && !existingClaim);
   const alreadyHasClaim = Boolean(existingClaim);
@@ -463,7 +493,15 @@ export function ClaimPageView() {
       ? `Claiming ${NAIRA}${normalized}`
       : loadingResolve
         ? "Searching..."
-        : "Claim";
+        : isPremium
+          ? "Premium"
+          : isProtected
+            ? "Reserved"
+            : isBlocked
+              ? "Unavailable"
+              : isClaimed
+                ? "Taken"
+                : "Claim";
 
   async function requestOtp(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -562,6 +600,8 @@ export function ClaimPageView() {
       setRemote({
         status: "claimed",
         handle: data.claim.handle,
+        display_handle: `${NAIRA}${data.claim.handle}`,
+        message: `${NAIRA}${data.claim.handle} is already taken`,
         displayName: session?.user.fullName?.trim() || "",
         bank: session?.bankAccount?.bankName || "Bank not linked yet",
         verification: data.claim.verification,
@@ -735,7 +775,7 @@ export function ClaimPageView() {
                   </div>
                 ) : !valid ? (
                   <div className="rounded-[1.35rem] border border-orange-200/50 bg-orange-50/85 p-4 text-sm text-orange-950 dark:border-orange-900/50 dark:bg-orange-950/25 dark:text-orange-100 sm:rounded-[1.6rem] sm:p-5">
-                    Use 2-20 characters with letters, numbers, or underscores.
+                    Use 2-32 characters with letters, numbers, underscores, or periods.
                   </div>
                 ) : isClaimed ? (
                   <div className="overflow-hidden rounded-[1.45rem] border border-emerald-200/50 bg-emerald-50/80 shadow-[0_8px_22px_rgba(16,185,129,0.06)] dark:border-emerald-900/50 dark:bg-emerald-950/20 sm:rounded-[1.8rem]">
@@ -775,6 +815,85 @@ export function ClaimPageView() {
                       >
                         View public profile
                       </Link>
+                    </div>
+                  </div>
+                ) : isPremium || isProtected || isBlocked ? (
+                  <div
+                    className={cn(
+                      "overflow-hidden rounded-[1.45rem] border shadow-[0_8px_22px_rgba(16,185,129,0.04)] sm:rounded-[1.8rem]",
+                      isPremium
+                        ? "border-orange-200/50 bg-orange-50/85 dark:border-orange-900/50 dark:bg-orange-950/25"
+                        : isProtected
+                          ? "border-sky-200/55 bg-sky-50/80 dark:border-sky-900/50 dark:bg-sky-950/20"
+                          : "border-zinc-200/55 bg-zinc-50/90 dark:border-zinc-800/60 dark:bg-zinc-900/45"
+                    )}
+                  >
+                    <div className="p-4 sm:p-5">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <div
+                            className={cn(
+                              "truncate text-2xl font-semibold tracking-tight",
+                              isPremium
+                                ? "text-orange-950 dark:text-orange-100"
+                                : isProtected
+                                  ? "text-sky-950 dark:text-sky-100"
+                                  : "text-zinc-950 dark:text-zinc-100"
+                            )}
+                          >
+                            {NAIRA}
+                            {normalized}
+                          </div>
+                          <div
+                            className={cn(
+                              "mt-2 text-sm font-semibold",
+                              isPremium
+                                ? "text-orange-900/85 dark:text-orange-200"
+                                : isProtected
+                                  ? "text-sky-900/85 dark:text-sky-200"
+                                  : "text-zinc-700 dark:text-zinc-300"
+                            )}
+                          >
+                            {remote?.message ??
+                              (isPremium
+                                ? "This is a premium name."
+                                : isProtected
+                                  ? "This handle is reserved."
+                                  : "This handle is not available.")}
+                          </div>
+                        </div>
+                        <Badge tone={isPremium ? "orange" : isProtected ? "verify" : "neutral"}>
+                          {remote?.badge ?? (isPremium ? "Premium" : isProtected ? "Reserved" : "Unavailable")}
+                        </Badge>
+                      </div>
+                      {isPremium || isProtected ? (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {isPremium ? (
+                            <Link
+                              href={`/marketplace?catalog=premium&q=${encodeURIComponent(normalized)}`}
+                              className="inline-flex items-center rounded-full bg-zinc-950 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+                            >
+                              Review premium options
+                            </Link>
+                          ) : null}
+                          {isProtected ? (
+                            <>
+                              <Link
+                                href="/name-policy"
+                                className="inline-flex items-center rounded-full bg-zinc-950 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+                              >
+                                Read name policy
+                              </Link>
+                              <Link
+                                href={`/marketplace?catalog=protected&q=${encodeURIComponent(normalized)}`}
+                                className="inline-flex items-center rounded-full border border-zinc-200/70 bg-white/80 px-3.5 py-2 text-xs font-semibold text-zinc-800 transition hover:bg-white dark:border-zinc-800/70 dark:bg-zinc-950/30 dark:text-zinc-100 dark:hover:bg-zinc-900/50"
+                              >
+                                Review reserved namespace
+                              </Link>
+                            </>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ) : (

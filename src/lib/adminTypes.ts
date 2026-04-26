@@ -1,3 +1,10 @@
+import type {
+  NameAvailabilityRecord,
+  NameCategory,
+  NameIndexOverrideRecord,
+  NameIndexRecord,
+} from "./nameIndex";
+
 export type Verification = "verified" | "business" | "pending";
 export type BankLinkStatus = "verified" | "pending_lookup";
 export type CryptoChain = "base";
@@ -397,6 +404,47 @@ export type MarketplaceStats = {
   listedClaims: number;
   unlistedClaims: number;
   reservedClaimedHandles: number;
+};
+
+export type AdminNameIndexEntry = {
+  handle: string;
+  displayHandle: string;
+  record: NameIndexRecord;
+  seedRecord: NameIndexRecord | null;
+  overrideRecord: NameIndexOverrideRecord | null;
+  source: "seed" | "override";
+  availability: NameAvailabilityRecord;
+  claimed: boolean;
+  listed: boolean;
+  claim: ClaimRecord | null;
+  listing: MarketplaceListingRecord | null;
+};
+
+export type AdminNameIndexSummary = {
+  totalNames: number;
+  publicNames: number;
+  premiumNames: number;
+  protectedNames: number;
+  blockedNames: number;
+  overrideCount: number;
+  claimedNames: number;
+  listedNames: number;
+  availablePublicNames: number;
+  premiumPurchasableNames: number;
+  protectedRequestableNames: number;
+};
+
+export type AdminNameIndexFilters = {
+  q?: string;
+  category?: NameCategory | "all";
+  status?:
+    | NameAvailabilityRecord["status"]
+    | "listed"
+    | "unlisted"
+    | "all";
+  source?: "seed" | "override" | "all";
+  limit?: number;
+  offset?: number;
 };
 
 export type MarketplaceTransferDetail = MarketplaceTransferRecord & {

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { ButtonLink, Container, NairaTermBadge } from "./ui";
 import { FaqAccordion, type FaqItem } from "./FaqAccordion";
 
@@ -21,16 +23,36 @@ const items: FaqItem[] = [
     tone: "blue",
   },
   {
-    title: "Is NairaTag a bank or a wallet?",
+    title: "Can protected names be bought on the marketplace?",
     body: (
       <>
-        No. NairaTag is an identity layer. Your money can still move through
-        your bank or fintech app; NairaTag adds a human-readable{" "}
-        <NairaTermBadge term="handle" tone="neutral" /> and recipient
-        verification UI before the transfer is confirmed.
+        No. Protected names are not sold as open inventory. Government,
+        regulatory, financial, brand, religious, and other sensitive identity
+        namespaces stay out of the public premium marketplace and are only
+        assigned after manual review and verification.
       </>
     ),
     tone: "gray",
+  },
+  {
+    title: "What happens if a name is premium, reserved, or blocked?",
+    body: (
+      <>
+        NairaTag checks the live Name Index before any claim. Public names can
+        be claimed. Premium names are reviewed as paid inventory. Protected
+        names are reserved for governments, regulated institutions, brands, and
+        sensitive public or religious identities. Blocked names are never made
+        available publicly. See the{" "}
+        <Link
+          href="/name-policy"
+          className="font-semibold underline decoration-zinc-400 underline-offset-4 transition hover:decoration-zinc-700 dark:decoration-zinc-500 dark:hover:decoration-zinc-200"
+        >
+          name policy
+        </Link>{" "}
+        for the full rule set.
+      </>
+    ),
+    tone: "orange",
   },
   {
     title: "How does verification work?",
@@ -44,6 +66,19 @@ const items: FaqItem[] = [
     tone: "orange",
   },
   {
+    title: "How do reserved names get approved?",
+    body: (
+      <>
+        Reserved names are not self-serve. Government bodies, regulated
+        institutions, brands, and other protected entities are reviewed
+        manually. NairaTag can require documentary proof such as incorporation
+        records, official domains, trademark evidence, regulatory approvals, or
+        delegated authority before a reserved name is assigned and verified.
+      </>
+    ),
+    tone: "blue",
+  },
+  {
     title: (
       <>
         What characters are allowed in a{" "}
@@ -52,9 +87,21 @@ const items: FaqItem[] = [
     ),
     body: (
       <>
-        Handles are designed to be easy to type and share. Use letters, numbers,
-        and underscores, typically 2-20 characters. Examples: {NAIRA}mama_ijebu,
-        {NAIRA}mikki, {NAIRA}fioso.
+        Handles are designed to be easy to type and share. Use 2-32 characters
+        made up of letters, numbers, underscores, or periods. Examples:{" "}
+        {NAIRA}mama_ijebu, {NAIRA}mikki, {NAIRA}fioso, {NAIRA}team.ng.
+      </>
+    ),
+    tone: "gray",
+  },
+  {
+    title: "Is NairaTag a bank or a wallet?",
+    body: (
+      <>
+        No. NairaTag is an identity layer. Money can still move through your
+        bank, fintech, card processor, or crypto wallet. NairaTag adds a
+        human-readable <NairaTermBadge term="handle" tone="neutral" /> and
+        policy-aware recipient verification before payment is confirmed.
       </>
     ),
     tone: "gray",
@@ -64,9 +111,9 @@ const items: FaqItem[] = [
     body: (
       <>
         Fintechs can resolve <NairaTermBadge term="handles" tone="neutral" />{" "}
-        via a simple API call (for example: GET /resolve?handle=victor) and
-        display the recipient preview inside existing send flows, invoices, and
-        payouts.
+        via API, display recipient verification, and route payment collection
+        or payouts inside their own flows. The same namespace and policy layer
+        also powers premium names, reserved names, and marketplace listings.
       </>
     ),
     tone: "black",
@@ -92,11 +139,36 @@ export function FaqSection() {
             </p>
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-              <ButtonLink href="#developers">Developer section</ButtonLink>
+              <ButtonLink href="/name-policy">View name policy</ButtonLink>
               <ButtonLink href="#claim" variant="secondary">
                 Claim a <NairaTermBadge term="handle" tone="orange" />
               </ButtonLink>
             </div>
+
+            <p className="mt-5 max-w-xl text-sm leading-7 text-zinc-600 dark:text-zinc-300">
+              Legal pages:{" "}
+              <Link
+                href="/terms"
+                className="font-semibold underline decoration-zinc-300 underline-offset-4 transition hover:decoration-zinc-500 dark:decoration-zinc-700 dark:hover:decoration-zinc-300"
+              >
+                Terms
+              </Link>
+              ,{" "}
+              <Link
+                href="/privacy"
+                className="font-semibold underline decoration-zinc-300 underline-offset-4 transition hover:decoration-zinc-500 dark:decoration-zinc-700 dark:hover:decoration-zinc-300"
+              >
+                Privacy
+              </Link>
+              , and{" "}
+              <Link
+                href="/name-policy"
+                className="font-semibold underline decoration-zinc-300 underline-offset-4 transition hover:decoration-zinc-500 dark:decoration-zinc-700 dark:hover:decoration-zinc-300"
+              >
+                Name policy
+              </Link>
+              .
+            </p>
           </div>
 
           <div className="lg:col-span-6">

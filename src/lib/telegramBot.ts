@@ -1,4 +1,5 @@
 import {
+  classifyHandleAvailability,
   claimHandleForUser,
   getPublicHandleProfile,
   getTelegramBotAccount,
@@ -873,22 +874,48 @@ async function handleClaimHandleInput(
   if (resolved.status === "invalid") {
     await sendMessage(
       context.chatId,
-      "That handle format is invalid. Use letters, numbers, or underscore only.",
+      "That handle format is invalid. Use letters, numbers, underscores, or periods only.",
       { inlineKeyboard: [[{ text: "Try again", callback_data: "claim" }]] }
     );
     return;
   }
 
-  if (resolved.status === "claimed") {
+  const availability = await classifyHandleAvailability(input);
+
+  if (availability.status === "taken" || resolved.status === "claimed") {
     const suggestions = await listSuggestedHandles({ seed: input, limit: 3 });
     const suggestionText = suggestions.length
       ? `\n\nTry instead:\n${suggestions.map((entry) => `• ₦${entry.handle}`).join("\n")}`
       : "";
     await sendMessage(
       context.chatId,
-      `₦${resolved.handle} is already claimed.${suggestionText}`,
+      `₦${input} is already claimed.${suggestionText}`,
       { inlineKeyboard: [[{ text: "Try another", callback_data: "claim" }]] }
     );
+    return;
+  }
+
+  if (availability.status === "premium" || availability.status === "protected") {
+    const marketplaceUrl = appUrl(
+      `/marketplace?catalog=${availability.status === "premium" ? "premium" : "protected"}&q=${encodeURIComponent(input)}`
+    );
+    await sendMessage(
+      context.chatId,
+      `${availability.message}\n\nOpen the marketplace to review this system name properly.`,
+      {
+        inlineKeyboard: [
+          marketplaceUrl ? [{ text: "Open marketplace", url: marketplaceUrl }] : [],
+          [{ text: "Try another", callback_data: "claim" }],
+        ].filter((row) => row.length > 0),
+      }
+    );
+    return;
+  }
+
+  if (availability.status === "blocked") {
+    await sendMessage(context.chatId, availability.message, {
+      inlineKeyboard: [[{ text: "Try another", callback_data: "claim" }]],
+    });
     return;
   }
 

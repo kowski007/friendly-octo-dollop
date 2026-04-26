@@ -18,8 +18,11 @@ type ResolvedProfile = {
 
 type ResolveResponse =
   | {
-      status: "claimed";
+      status: "taken";
       handle: string;
+      display_handle?: string;
+      message?: string;
+      badge?: string | null;
       displayName: string;
       bank: string;
       verification: Verification;
@@ -27,10 +30,23 @@ type ResolveResponse =
   | {
       status: "available";
       handle: string;
+      display_handle?: string;
+      message?: string;
+      badge?: string | null;
+    }
+  | {
+      status: "premium" | "protected" | "blocked";
+      handle: string;
+      display_handle: string;
+      message: string;
+      badge?: string | null;
+      price?: number | null;
+      currency?: "NGN" | "USD" | "USDC" | null;
     }
   | {
       status: "invalid";
       reason: string;
+      message?: string;
     };
 
 type SuggestionsResponse =
@@ -47,6 +63,7 @@ type SuggestionsResponse =
 function normalizeHandle(input: string) {
   return input
     .trim()
+    .replace(/\s+/g, "")
     .replace(/^\u20A6/u, "")
     .replace(/^â‚¦/u, "")
     .replace(/^@/u, "")
@@ -54,7 +71,7 @@ function normalizeHandle(input: string) {
 }
 
 function isValidHandle(handle: string) {
-  return /^[a-z0-9_]{2,20}$/.test(handle);
+  return /^[a-z0-9_.]{2,32}$/u.test(handle);
 }
 
 function verificationLabel(verification: Verification) {
@@ -69,17 +86,24 @@ function StatusBadge({
   normalized,
   profile,
   available,
+  status,
+  badge,
 }: {
   loading: boolean;
   valid: boolean;
   normalized: string;
   profile: ResolvedProfile | null;
   available: boolean;
+  status?: ResolveResponse["status"];
+  badge?: string | null;
 }) {
   if (loading) return <Badge tone="orange">Checking</Badge>;
   if (!normalized) return <Badge>Ready</Badge>;
   if (!valid) return <Badge>Invalid</Badge>;
   if (profile) return <Badge tone="verify">{verificationLabel(profile.verification)}</Badge>;
+  if (status === "premium") return <Badge tone="orange">{badge ?? "Premium"}</Badge>;
+  if (status === "protected") return <Badge tone="verify">{badge ?? "Reserved"}</Badge>;
+  if (status === "blocked") return <Badge>Unavailable</Badge>;
   if (available) return <Badge tone="orange">Available</Badge>;
   return <Badge>Resolve</Badge>;
 }
@@ -124,6 +148,9 @@ function ResultCard({
   available,
   loading,
   resolved,
+  status,
+  message,
+  badge,
   compact = false,
 }: {
   profile: ResolvedProfile | null;
@@ -132,6 +159,9 @@ function ResultCard({
   available: boolean;
   loading: boolean;
   resolved: boolean;
+  status?: ResolveResponse["status"];
+  message?: string;
+  badge?: string | null;
   compact?: boolean;
 }) {
   if (!normalized) {
@@ -154,14 +184,14 @@ function ResultCard({
     if (compact) {
       return (
         <div className="text-xs font-semibold text-orange-700 dark:text-orange-200">
-          Use letters, numbers, and underscores only.
+          Use letters, numbers, underscores, or periods only.
         </div>
       );
     }
 
     return (
       <div className="rounded-[1.6rem] border border-orange-200/70 bg-orange-50 p-4 text-sm text-orange-950 dark:border-orange-900/60 dark:bg-orange-950/25 dark:text-orange-100 sm:p-5">
-        Use 2-20 characters: letters, numbers, and underscores only.
+        Use 2-32 characters: letters, numbers, underscores, or periods only.
       </div>
     );
   }
@@ -244,21 +274,51 @@ function ResultCard({
 
   if (compact) {
     return (
-      <div className="rounded-2xl bg-orange-50/80 p-3 dark:bg-orange-950/25">
+      <div
+        className={cn(
+          "rounded-2xl p-3",
+          status === "premium"
+            ? "bg-orange-50/80 dark:bg-orange-950/25"
+            : status === "protected"
+              ? "bg-sky-50/80 dark:bg-sky-950/20"
+              : status === "blocked"
+                ? "bg-zinc-100/80 dark:bg-zinc-900/60"
+                : "bg-orange-50/80 dark:bg-orange-950/25"
+        )}
+      >
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-orange-950 dark:text-orange-100">
+            <div
+              className={cn(
+                "truncate text-sm font-semibold",
+                status === "protected"
+                  ? "text-sky-950 dark:text-sky-100"
+                  : status === "blocked"
+                    ? "text-zinc-950 dark:text-zinc-100"
+                    : "text-orange-950 dark:text-orange-100"
+              )}
+            >
               {NAIRA}
               {normalized}
             </div>
-            <div className="mt-0.5 text-xs font-medium text-orange-800/80 dark:text-orange-200">
+            <div
+              className={cn(
+                "mt-0.5 text-xs font-medium",
+                status === "protected"
+                  ? "text-sky-800/80 dark:text-sky-200"
+                  : status === "blocked"
+                    ? "text-zinc-700 dark:text-zinc-300"
+                    : "text-orange-800/80 dark:text-orange-200"
+              )}
+            >
               {loading
                 ? "Checking live registry..."
-                : available
-                  ? "Available to claim"
-                  : resolved
-                    ? "Not claimed yet"
-                    : "Press Resolve to check"}
+                : message ||
+                  (available
+                    ? "Available to claim"
+                    : resolved
+                      ? "Already in use"
+                      : "Press Resolve to check")}
             </div>
           </div>
           {available ? (
@@ -275,26 +335,58 @@ function ResultCard({
   }
 
   return (
-    <div className="overflow-hidden rounded-[1.8rem] border border-orange-200/70 bg-orange-50/85 shadow-sm dark:border-orange-900/60 dark:bg-orange-950/25">
+    <div
+      className={cn(
+        "overflow-hidden rounded-[1.8rem] border shadow-sm",
+        status === "premium"
+          ? "border-orange-200/70 bg-orange-50/85 dark:border-orange-900/60 dark:bg-orange-950/25"
+          : status === "protected"
+            ? "border-sky-200/70 bg-sky-50/85 dark:border-sky-900/60 dark:bg-sky-950/25"
+            : status === "blocked"
+              ? "border-zinc-200/70 bg-zinc-50/90 dark:border-zinc-800/60 dark:bg-zinc-900/55"
+              : "border-orange-200/70 bg-orange-50/85 dark:border-orange-900/60 dark:bg-orange-950/25"
+      )}
+    >
       <div className="p-4 sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <div className="truncate text-2xl font-semibold tracking-tight text-orange-950 dark:text-orange-100">
+            <div
+              className={cn(
+                "truncate text-2xl font-semibold tracking-tight",
+                status === "protected"
+                  ? "text-sky-950 dark:text-sky-100"
+                  : status === "blocked"
+                    ? "text-zinc-950 dark:text-zinc-100"
+                    : "text-orange-950 dark:text-orange-100"
+              )}
+            >
               {NAIRA}
               {normalized}
             </div>
-            <div className="mt-2 text-sm font-semibold text-orange-900/85 dark:text-orange-200">
+            <div
+              className={cn(
+                "mt-2 text-sm font-semibold",
+                status === "protected"
+                  ? "text-sky-900/85 dark:text-sky-200"
+                  : status === "blocked"
+                    ? "text-zinc-700 dark:text-zinc-300"
+                    : "text-orange-900/85 dark:text-orange-200"
+              )}
+            >
               {loading
                 ? "Checking the live registry..."
-                : available
-                  ? "This handle looks available."
-                  : resolved
-                    ? "This handle is not claimed yet."
-                    : "Press Resolve to check this handle."}
+                : message ||
+                  (available
+                    ? "This handle looks available."
+                    : resolved
+                      ? "This handle is already in use."
+                      : "Press Resolve to check this handle.")}
             </div>
           </div>
-          <Badge tone="orange">
-            {loading ? "Checking" : available ? "Claimable" : "Live check"}
+          <Badge tone={status === "protected" ? "verify" : status === "blocked" ? "neutral" : "orange"}>
+            {loading
+              ? "Checking"
+              : badge || (available ? "Claimable" : status === "blocked" ? "Unavailable" : "Live check")}
           </Badge>
         </div>
       </div>
@@ -345,7 +437,7 @@ export function HandleDemo({
 
       try {
         const response = await fetch(
-          `/api/resolve?handle=${encodeURIComponent(handle)}`,
+          `/api/handles/availability?handle=${encodeURIComponent(handle)}`,
           {
             headers: { "Cache-Control": "no-store" },
             signal: combinedSignal,
@@ -428,7 +520,7 @@ export function HandleDemo({
   }
 
   const remoteProfile =
-    remote?.status === "claimed"
+    remote?.status === "taken"
       ? {
           handle: remote.handle,
           displayName: remote.displayName,
@@ -438,7 +530,7 @@ export function HandleDemo({
       : null;
   const profile = remoteProfile;
   const available = remote?.status === "available";
-  const resolved = remote?.status === "claimed" || remote?.status === "available";
+  const resolved = remote?.status === "taken" || remote?.status === "available";
 
   return (
     <div
@@ -471,6 +563,8 @@ export function HandleDemo({
             normalized={normalized}
             profile={profile}
             available={available}
+            status={remote?.status}
+            badge={remote && "badge" in remote ? remote.badge : null}
           />
         </div>
       ) : null}
@@ -559,6 +653,9 @@ export function HandleDemo({
           available={available}
           loading={loading}
           resolved={resolved}
+          status={remote?.status}
+          message={remote && "message" in remote ? remote.message : undefined}
+          badge={remote && "badge" in remote ? remote.badge : null}
           compact={compact}
         />
       </div>

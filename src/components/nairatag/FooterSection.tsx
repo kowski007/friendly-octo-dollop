@@ -30,6 +30,14 @@ const linkGroups: Array<{ label: string; links: FooterLink[] }> = [
       { label: "Contact", href: "#claim" },
     ],
   },
+  {
+    label: "Legal",
+    links: [
+      { label: "Terms", href: "/terms" },
+      { label: "Privacy", href: "/privacy" },
+      { label: "Name Policy", href: "/name-policy" },
+    ],
+  },
 ];
 
 function FooterNavLink({ link }: { link: FooterLink }) {
@@ -68,7 +76,7 @@ export function FooterSection() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 sm:gap-8">
+        <div className="grid grid-cols-2 gap-6 sm:grid-cols-4 sm:gap-8">
           {linkGroups.map((group) => (
             <div key={group.label}>
               <div className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400 dark:text-zinc-500">
