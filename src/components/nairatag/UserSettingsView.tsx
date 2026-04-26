@@ -19,6 +19,7 @@ import type {
 } from "@/lib/adminTypes";
 import { AppPageHeader } from "./AppPageHeader";
 import { CopyButton } from "./CopyButton";
+import { TelegramLinkingCard } from "./TelegramLinkingCard";
 import { useToast } from "./ToastProvider";
 import { Badge, Container, cn } from "./ui";
 
@@ -626,6 +627,24 @@ export function UserSettingsView({
                     detail="Hosted pay links and shareable payment pages"
                   />
                   <SettingsLinkRow
+                    href="#telegram-linking"
+                    icon={
+                      <RowIcon tone="verify">
+                        <svg viewBox="0 0 24 24" fill="none" className="h-4.5 w-4.5" aria-hidden="true">
+                          <path
+                            d="m20.5 4.6-2.8 13.1c-.2.9-.8 1.1-1.6.7l-4.2-3.1-2 1.9c-.2.2-.4.4-.8.4l.3-4.4 8-7.2c.4-.3-.1-.5-.5-.2l-9.9 6.2-4.2-1.3c-.9-.3-.9-.9.2-1.3l16.4-6.3c.8-.3 1.4.2 1.1 1.5Z"
+                            stroke="currentColor"
+                            strokeWidth="1.7"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </RowIcon>
+                    }
+                    label="Telegram"
+                    detail="Link a verified Telegram username to your handle"
+                    trailing={<StatusPill tone="verify">social</StatusPill>}
+                  />
+                  <SettingsLinkRow
                     href={publicPath}
                     icon={
                       <RowIcon>
@@ -788,6 +807,8 @@ export function UserSettingsView({
                   />
                 </div>
               </SectionCard>
+
+              <TelegramLinkingCard claim={claim} />
 
               <SectionCard
                 title="Payments & transfers"

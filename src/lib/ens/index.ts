@@ -1,5 +1,12 @@
-import { createPublicClient, getAddress, http, isAddress } from "viem";
-import { mainnet } from "viem/chains";
+import {
+  createPublicClient,
+  encodeFunctionData,
+  getAddress,
+  http,
+  isAddress,
+  zeroAddress,
+} from "viem";
+import { mainnet, sepolia } from "viem/chains";
 import {
   getEnsAddress,
   getEnsAvatar,
@@ -8,6 +15,7 @@ import {
   getEnsText,
   normalize,
 } from "viem/ens";
+import { namehash } from "ethers";
 
 import { BASE_CHAIN_ID } from "@/lib/cryptoConfig";
 import type {
@@ -20,6 +28,70 @@ import type {
 
 const DEFAULT_MAINNET_RPC_URL = "https://ethereum-rpc.publicnode.com";
 const DEFAULT_SUBGRAPH_URL = "https://api.thegraph.com/subgraphs/name/ensdomains/ens";
+type EnsAddress = `0x${string}`;
+type EnsHex = `0x${string}`;
+const DEFAULT_ENS_CHAIN_ID = 1;
+const DEFAULT_MAINNET_REGISTRY_ADDRESS = "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e";
+const DEFAULT_MAINNET_NAME_WRAPPER_ADDRESS =
+  "0xD4416b13d2b3a9dB0FEA0676aA55C4BfE4A26D0d";
+const DEFAULT_SEPOLIA_REGISTRY_ADDRESS = "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e";
+const DEFAULT_SEPOLIA_NAME_WRAPPER_ADDRESS =
+  "0x0635513f179D50A207757E05759CbD106d7dFcE8";
+const ENS_TEXT_INTERFACE_ID = "0x59d1d43c";
+
+const ENS_REGISTRY_ABI = [
+  {
+    type: "function",
+    name: "owner",
+    stateMutability: "view",
+    inputs: [{ name: "node", type: "bytes32" }],
+    outputs: [{ name: "", type: "address" }],
+  },
+] as const;
+
+const NAME_WRAPPER_ABI = [
+  {
+    type: "function",
+    name: "ownerOf",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [{ name: "", type: "address" }],
+  },
+] as const;
+
+const ERC165_ABI = [
+  {
+    type: "function",
+    name: "supportsInterface",
+    stateMutability: "view",
+    inputs: [{ name: "interfaceID", type: "bytes4" }],
+    outputs: [{ name: "", type: "bool" }],
+  },
+] as const;
+
+const TEXT_RESOLVER_ABI = [
+  {
+    type: "function",
+    name: "text",
+    stateMutability: "view",
+    inputs: [
+      { name: "node", type: "bytes32" },
+      { name: "key", type: "string" },
+    ],
+    outputs: [{ name: "", type: "string" }],
+  },
+  {
+    type: "function",
+    name: "setText",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "node", type: "bytes32" },
+      { name: "key", type: "string" },
+      { name: "value", type: "string" },
+    ],
+    outputs: [],
+  },
+] as const;
 
 type GraphQlResponse<T> = {
   data?: T;
@@ -33,6 +105,44 @@ function configuredRpcUrl() {
     process.env.NEXT_PUBLIC_ENS_MAINNET_RPC_URL ||
     DEFAULT_MAINNET_RPC_URL
   ).trim();
+}
+
+function configuredEnsChainId() {
+  const raw =
+    process.env.NT_ENS_CHAIN_ID ||
+    process.env.ENS_CHAIN_ID ||
+    process.env.NEXT_PUBLIC_ENS_CHAIN_ID ||
+    "";
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_ENS_CHAIN_ID;
+}
+
+function ensChainConfig() {
+  return configuredEnsChainId() === sepolia.id ? sepolia : mainnet;
+}
+
+function configuredRegistryAddress() {
+  const raw =
+    process.env.NT_ENS_REGISTRY_ADDRESS ||
+    process.env.ENS_REGISTRY_ADDRESS ||
+    process.env.NEXT_PUBLIC_ENS_REGISTRY_ADDRESS ||
+    "";
+  if (isAddress(raw)) return getAddress(raw);
+  return configuredEnsChainId() === sepolia.id
+    ? (DEFAULT_SEPOLIA_REGISTRY_ADDRESS as EnsAddress)
+    : (DEFAULT_MAINNET_REGISTRY_ADDRESS as EnsAddress);
+}
+
+function configuredNameWrapperAddress() {
+  const raw =
+    process.env.NT_ENS_NAME_WRAPPER_ADDRESS ||
+    process.env.ENS_NAME_WRAPPER_ADDRESS ||
+    process.env.NEXT_PUBLIC_ENS_NAME_WRAPPER_ADDRESS ||
+    "";
+  if (isAddress(raw)) return getAddress(raw);
+  return configuredEnsChainId() === sepolia.id
+    ? (DEFAULT_SEPOLIA_NAME_WRAPPER_ADDRESS as EnsAddress)
+    : (DEFAULT_MAINNET_NAME_WRAPPER_ADDRESS as EnsAddress);
 }
 
 function configuredSubgraphUrl() {
@@ -70,7 +180,7 @@ function configuredParentName() {
 
 function ensClient() {
   return createPublicClient({
-    chain: mainnet,
+    chain: ensChainConfig(),
     transport: http(configuredRpcUrl()),
   });
 }
@@ -101,6 +211,178 @@ export function nairaTagEnsName(handle: string) {
   if (!cleanHandle) return null;
 
   return normalizeEnsNameSafe(`${cleanHandle}.${parent}`);
+}
+
+export function ensSyncChainId() {
+  return configuredEnsChainId();
+}
+
+export function ensRegistryAddress() {
+  return configuredRegistryAddress();
+}
+
+export function ensNameWrapperAddress() {
+  return configuredNameWrapperAddress();
+}
+
+export function ensTextRecordKeyTelegram() {
+  return "org.telegram";
+}
+
+export type ENSOnchainTextRecordStatus = {
+  name: string;
+  node: EnsHex;
+  ownerAddress: EnsAddress | null;
+  resolverAddress: EnsAddress | null;
+  supportsTextRecords: boolean;
+  currentValue: string | null;
+};
+
+export type ENSPreparedSetTextTransaction = {
+  chainId: number;
+  name: string;
+  node: EnsHex;
+  resolverAddress: EnsAddress;
+  ownerAddress: EnsAddress | null;
+  key: string;
+  value: string;
+  data: EnsHex;
+};
+
+async function resolveEffectiveEnsOwner(name: string): Promise<EnsAddress | null> {
+  const normalized = normalizeEnsNameSafe(name);
+  if (!normalized) return null;
+
+  const client = ensClient();
+  const node = namehash(normalized) as EnsHex;
+  const registryOwner = await client
+    .readContract({
+      address: configuredRegistryAddress(),
+      abi: ENS_REGISTRY_ABI,
+      functionName: "owner",
+      args: [node],
+    })
+    .catch(() => null);
+
+  if (!registryOwner || registryOwner === zeroAddress || !isAddress(registryOwner)) {
+    return null;
+  }
+
+  const ownerAddress = getAddress(registryOwner);
+  const wrapperAddress = configuredNameWrapperAddress();
+  if (ownerAddress.toLowerCase() !== wrapperAddress.toLowerCase()) {
+    return ownerAddress;
+  }
+
+  const wrappedOwner = await client
+    .readContract({
+      address: wrapperAddress,
+      abi: NAME_WRAPPER_ABI,
+      functionName: "ownerOf",
+      args: [BigInt(node)],
+    })
+    .catch(() => null);
+
+  return wrappedOwner && isAddress(wrappedOwner) ? getAddress(wrappedOwner) : ownerAddress;
+}
+
+export async function inspectEnsTextRecord({
+  name,
+  key,
+}: {
+  name: string;
+  key: string;
+}): Promise<ENSOnchainTextRecordStatus | null> {
+  const normalized = normalizeEnsNameSafe(name);
+  if (!normalized) return null;
+
+  const client = ensClient();
+  const node = namehash(normalized) as EnsHex;
+  const resolver = await getEnsResolver(client, { name: normalized }).catch(() => null);
+  const resolverAddress =
+    resolver && isAddress(resolver) ? getAddress(resolver) : null;
+  const ownerAddress = await resolveEffectiveEnsOwner(normalized);
+
+  if (!resolverAddress) {
+    return {
+      name: normalized,
+      node,
+      ownerAddress,
+      resolverAddress: null,
+      supportsTextRecords: false,
+      currentValue: null,
+    };
+  }
+
+  const supportsTextRecords = await client
+    .readContract({
+      address: resolverAddress,
+      abi: ERC165_ABI,
+      functionName: "supportsInterface",
+      args: [ENS_TEXT_INTERFACE_ID],
+    })
+    .catch(() => false);
+
+  const currentValue = supportsTextRecords
+    ? await client
+        .readContract({
+          address: resolverAddress,
+          abi: TEXT_RESOLVER_ABI,
+          functionName: "text",
+          args: [node, key],
+        })
+        .catch(() => null)
+    : null;
+
+  return {
+    name: normalized,
+    node,
+    ownerAddress,
+    resolverAddress,
+    supportsTextRecords,
+    currentValue: typeof currentValue === "string" ? currentValue : null,
+  };
+}
+
+export async function prepareEnsSetTextTransaction({
+  name,
+  key,
+  value,
+}: {
+  name: string;
+  key: string;
+  value: string;
+}): Promise<ENSPreparedSetTextTransaction | null> {
+  const status = await inspectEnsTextRecord({ name, key });
+  if (!status || !status.resolverAddress || !status.supportsTextRecords) {
+    return null;
+  }
+
+  return {
+    chainId: configuredEnsChainId(),
+    name: status.name,
+    node: status.node,
+    resolverAddress: status.resolverAddress,
+    ownerAddress: status.ownerAddress,
+    key,
+    value,
+    data: encodeFunctionData({
+      abi: TEXT_RESOLVER_ABI,
+      functionName: "setText",
+      args: [status.node, key, value],
+    }),
+  };
+}
+
+export async function waitForEnsTransactionReceipt(txHash: EnsHex) {
+  return ensClient().waitForTransactionReceipt({
+    hash: txHash,
+    confirmations: 1,
+  });
+}
+
+export async function getEnsTransaction(txHash: EnsHex) {
+  return ensClient().getTransaction({ hash: txHash });
 }
 
 export async function resolveEnsName({

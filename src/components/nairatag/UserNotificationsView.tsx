@@ -63,6 +63,9 @@ function notificationBucket(notification: NotificationRecord): Exclude<Notificat
   ) {
     return "activity";
   }
+  if (notification.type.startsWith("telegram_")) {
+    return "account";
+  }
   return "account";
 }
 

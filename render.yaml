@@ -48,6 +48,28 @@ services:
         sync: false
       - key: NT_PUBLIC_APP_URL
         sync: false
+      - key: NT_ENS_CHAIN_ID
+        sync: false
+      - key: NT_ENS_PARENT_NAME
+        sync: false
+      - key: NT_ENS_MAINNET_RPC_URL
+        sync: false
+      - key: NT_ENS_REGISTRY_ADDRESS
+        sync: false
+      - key: NT_ENS_NAME_WRAPPER_ADDRESS
+        sync: false
+      - key: NT_ENS_SUBGRAPH_URL
+        sync: false
+      - key: NT_TELEGRAM_BOT_USERNAME
+        sync: false
+      - key: NT_TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: NT_TELEGRAM_WEBHOOK_SECRET
+        sync: false
+      - key: NT_TELEGRAM_INGEST_SECRET
+        sync: false
+      - key: NT_TELEGRAM_CHANNEL_ID
+        sync: false
       - key: NEXT_PUBLIC_SUPABASE_URL
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY

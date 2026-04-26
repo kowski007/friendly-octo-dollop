@@ -35,6 +35,9 @@ function toastToneForNotification(notification: NotificationRecord): ToastTone {
     notification.type === "settlement_completed" ||
     notification.type === "handle_claimed" ||
     notification.type === "handle_sold" ||
+    notification.type === "telegram_link_requested" ||
+    notification.type === "telegram_verified" ||
+    notification.type === "telegram_unlinked" ||
     notification.type === "paylink_created" ||
     notification.type === "marketplace_listing_created" ||
     notification.type === "marketplace_listing_updated" ||

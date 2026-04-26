@@ -11,6 +11,9 @@ const REFERRALS_TABLE = "nt_referrals";
 const OTPS_TABLE = "nt_phase0_otps";
 const BANK_ACCOUNTS_TABLE = "nt_phase0_bank_accounts";
 const CRYPTO_WALLETS_TABLE = "crypto_wallets";
+const HANDLE_SOCIALS_TABLE = "nt_handle_socials";
+const TELEGRAM_VERIFICATIONS_TABLE = "nt_telegram_verifications";
+const TELEGRAM_BOT_SESSIONS_TABLE = "nt_telegram_bot_sessions";
 const TRANSACTIONS_TABLE = "nt_phase1_transactions";
 const MARKETPLACE_LISTINGS_TABLE = "nt_marketplace_listings";
 const MARKETPLACE_OFFERS_TABLE = "nt_marketplace_offers";
@@ -66,6 +69,10 @@ async function ensureSchema() {
       privy_linked_at timestamptz,
       email text,
       wallet_address text,
+      telegram_user_id text,
+      telegram_chat_id text,
+      telegram_username text,
+      telegram_linked_at timestamptz,
       full_name text,
       avatar_url text,
       bvn_last4 text,
@@ -96,6 +103,18 @@ async function ensureSchema() {
     `alter table ${USERS_TABLE} add column if not exists wallet_address text`
   );
   await pool.query(
+    `alter table ${USERS_TABLE} add column if not exists telegram_user_id text`
+  );
+  await pool.query(
+    `alter table ${USERS_TABLE} add column if not exists telegram_chat_id text`
+  );
+  await pool.query(
+    `alter table ${USERS_TABLE} add column if not exists telegram_username text`
+  );
+  await pool.query(
+    `alter table ${USERS_TABLE} add column if not exists telegram_linked_at timestamptz`
+  );
+  await pool.query(
     `alter table ${USERS_TABLE} add column if not exists avatar_url text`
   );
   await pool.query(
@@ -109,6 +128,9 @@ async function ensureSchema() {
   );
   await pool.query(
     `create unique index if not exists ${USERS_TABLE}_privy_user_id_idx on ${USERS_TABLE}(privy_user_id) where privy_user_id is not null`
+  );
+  await pool.query(
+    `create unique index if not exists ${USERS_TABLE}_telegram_user_id_idx on ${USERS_TABLE}(telegram_user_id) where telegram_user_id is not null`
   );
   await pool.query(
     `create index if not exists ${USERS_TABLE}_referred_by_idx on ${USERS_TABLE}(referred_by_user_id)`
@@ -304,6 +326,73 @@ async function ensureSchema() {
     `create index if not exists ${CRYPTO_WALLETS_TABLE}_wallet_idx on ${CRYPTO_WALLETS_TABLE}(wallet_address)`
   );
   await pool.query(`
+    create table if not exists ${HANDLE_SOCIALS_TABLE} (
+      id text primary key,
+      handle_id text not null,
+      user_id text not null,
+      handle text not null,
+      platform text not null,
+      username text not null,
+      username_clean text not null,
+      verified boolean not null default false,
+      verified_at timestamptz,
+      verification_code text,
+      verification_expires_at timestamptz,
+      ens_synced boolean not null default false,
+      ens_synced_at timestamptz,
+      ens_tx_hash text,
+      status text not null,
+      created_at timestamptz not null,
+      updated_at timestamptz not null
+    )
+  `);
+  await pool.query(
+    `create index if not exists ${HANDLE_SOCIALS_TABLE}_handle_idx on ${HANDLE_SOCIALS_TABLE}(handle, platform, status)`
+  );
+  await pool.query(
+    `create index if not exists ${HANDLE_SOCIALS_TABLE}_user_idx on ${HANDLE_SOCIALS_TABLE}(user_id, updated_at desc)`
+  );
+  await pool.query(
+    `create unique index if not exists ${HANDLE_SOCIALS_TABLE}_username_active_idx on ${HANDLE_SOCIALS_TABLE}(platform, username_clean) where status = 'active'`
+  );
+  await pool.query(`
+    create table if not exists ${TELEGRAM_VERIFICATIONS_TABLE} (
+      id text primary key,
+      telegram_username text not null,
+      telegram_username_clean text not null,
+      code text not null,
+      message_text text,
+      telegram_user_id text,
+      telegram_chat_id text,
+      created_at timestamptz not null
+    )
+  `);
+  await pool.query(
+    `create index if not exists ${TELEGRAM_VERIFICATIONS_TABLE}_lookup_idx on ${TELEGRAM_VERIFICATIONS_TABLE}(telegram_username_clean, code, created_at desc)`
+  );
+  await pool.query(`
+    create table if not exists ${TELEGRAM_BOT_SESSIONS_TABLE} (
+      id text primary key,
+      telegram_user_id text not null,
+      telegram_chat_id text not null,
+      telegram_username text,
+      telegram_first_name text,
+      telegram_last_name text,
+      state text not null,
+      pending_handle text,
+      pending_display_name text,
+      last_prompt_message_id text,
+      created_at timestamptz not null,
+      updated_at timestamptz not null
+    )
+  `);
+  await pool.query(
+    `create unique index if not exists ${TELEGRAM_BOT_SESSIONS_TABLE}_user_chat_idx on ${TELEGRAM_BOT_SESSIONS_TABLE}(telegram_user_id, telegram_chat_id)`
+  );
+  await pool.query(
+    `create index if not exists ${TELEGRAM_BOT_SESSIONS_TABLE}_updated_at_idx on ${TELEGRAM_BOT_SESSIONS_TABLE}(updated_at desc)`
+  );
+  await pool.query(`
     create table if not exists ${TRANSACTIONS_TABLE} (
       id text primary key,
       handle text not null,
@@ -422,6 +511,9 @@ async function hasNormalizedData(client: PoolClient) {
     await countRows(client, OTPS_TABLE),
     await countRows(client, BANK_ACCOUNTS_TABLE),
     await countRows(client, CRYPTO_WALLETS_TABLE),
+    await countRows(client, HANDLE_SOCIALS_TABLE),
+    await countRows(client, TELEGRAM_VERIFICATIONS_TABLE),
+    await countRows(client, TELEGRAM_BOT_SESSIONS_TABLE),
     await countRows(client, TRANSACTIONS_TABLE),
     await countRows(client, MARKETPLACE_LISTINGS_TABLE),
     await countRows(client, MARKETPLACE_OFFERS_TABLE),
@@ -441,6 +533,13 @@ function normalizeData(data: Partial<AdminData> | null | undefined): AdminData {
     otps: Array.isArray(data?.otps) ? data.otps : [],
     bankAccounts: Array.isArray(data?.bankAccounts) ? data.bankAccounts : [],
     cryptoWallets: Array.isArray(data?.cryptoWallets) ? data.cryptoWallets : [],
+    handleSocials: Array.isArray(data?.handleSocials) ? data.handleSocials : [],
+    telegramVerifications: Array.isArray(data?.telegramVerifications)
+      ? data.telegramVerifications
+      : [],
+    telegramBotSessions: Array.isArray(data?.telegramBotSessions)
+      ? data.telegramBotSessions
+      : [],
     transactions: Array.isArray(data?.transactions) ? data.transactions : [],
     marketplaceListings: Array.isArray(data?.marketplaceListings)
       ? data.marketplaceListings
@@ -493,6 +592,10 @@ async function replaceSnapshot(client: PoolClient, data: AdminData) {
       "privy_linked_at",
       "email",
       "wallet_address",
+      "telegram_user_id",
+      "telegram_chat_id",
+      "telegram_username",
+      "telegram_linked_at",
       "referral_code",
       "referred_by_user_id",
       "referred_at",
@@ -514,6 +617,10 @@ async function replaceSnapshot(client: PoolClient, data: AdminData) {
       user.privyLinkedAt ?? null,
       user.email ?? null,
       user.walletAddress ?? null,
+      user.telegramUserId ?? null,
+      user.telegramChatId ?? null,
+      user.telegramUsername ?? null,
+      user.telegramLinkedAt ?? null,
       user.referralCode ?? null,
       user.referredByUserId ?? null,
       user.referredAt ?? null,
@@ -746,6 +853,107 @@ async function replaceSnapshot(client: PoolClient, data: AdminData) {
 
   await replaceTable(
     client,
+    HANDLE_SOCIALS_TABLE,
+    [
+      "id",
+      "handle_id",
+      "user_id",
+      "handle",
+      "platform",
+      "username",
+      "username_clean",
+      "verified",
+      "verified_at",
+      "verification_code",
+      "verification_expires_at",
+      "ens_synced",
+      "ens_synced_at",
+      "ens_tx_hash",
+      "status",
+      "created_at",
+      "updated_at",
+    ],
+    data.handleSocials.map((social) => [
+      social.id,
+      social.handleId,
+      social.userId,
+      social.handle,
+      social.platform,
+      social.username,
+      social.usernameClean,
+      social.verified,
+      social.verifiedAt ?? null,
+      social.verificationCode ?? null,
+      social.verificationExpiresAt ?? null,
+      social.ensSynced,
+      social.ensSyncedAt ?? null,
+      social.ensTxHash ?? null,
+      social.status,
+      social.createdAt,
+      social.updatedAt,
+    ])
+  );
+
+  await replaceTable(
+    client,
+    TELEGRAM_VERIFICATIONS_TABLE,
+    [
+      "id",
+      "telegram_username",
+      "telegram_username_clean",
+      "code",
+      "message_text",
+      "telegram_user_id",
+      "telegram_chat_id",
+      "created_at",
+    ],
+    data.telegramVerifications.map((verification) => [
+      verification.id,
+      verification.telegramUsername,
+      verification.telegramUsernameClean,
+      verification.code,
+      verification.messageText ?? null,
+      verification.telegramUserId ?? null,
+      verification.telegramChatId ?? null,
+      verification.createdAt,
+    ])
+  );
+
+  await replaceTable(
+    client,
+    TELEGRAM_BOT_SESSIONS_TABLE,
+    [
+      "id",
+      "telegram_user_id",
+      "telegram_chat_id",
+      "telegram_username",
+      "telegram_first_name",
+      "telegram_last_name",
+      "state",
+      "pending_handle",
+      "pending_display_name",
+      "last_prompt_message_id",
+      "created_at",
+      "updated_at",
+    ],
+    data.telegramBotSessions.map((session) => [
+      session.id,
+      session.telegramUserId,
+      session.telegramChatId,
+      session.telegramUsername ?? null,
+      session.telegramFirstName ?? null,
+      session.telegramLastName ?? null,
+      session.state,
+      session.pendingHandle ?? null,
+      session.pendingDisplayName ?? null,
+      session.lastPromptMessageId ?? null,
+      session.createdAt,
+      session.updatedAt,
+    ])
+  );
+
+  await replaceTable(
+    client,
     TRANSACTIONS_TABLE,
     [
       "id",
@@ -937,6 +1145,10 @@ function mapRowsToSnapshot(rows: {
     privy_linked_at: string | null;
     email: string | null;
     wallet_address: string | null;
+    telegram_user_id: string | null;
+    telegram_chat_id: string | null;
+    telegram_username: string | null;
+    telegram_linked_at: string | null;
     referral_code: string | null;
     referred_by_user_id: string | null;
     referred_at: string | null;
@@ -954,7 +1166,7 @@ function mapRowsToSnapshot(rows: {
     bank: string;
     verification: AdminData["claims"][number]["verification"];
     claimed_at: string;
-    source: "web" | "api";
+    source: "web" | "api" | "telegram";
     user_id: string | null;
     phone: string | null;
     verified_at: string | null;
@@ -1039,6 +1251,49 @@ function mapRowsToSnapshot(rows: {
     wallet_verified: boolean;
     signature_hash: string;
     nonce: string;
+    created_at: string;
+    updated_at: string;
+  }>;
+  handleSocials: Array<{
+    id: string;
+    handle_id: string;
+    user_id: string;
+    handle: string;
+    platform: AdminData["handleSocials"][number]["platform"];
+    username: string;
+    username_clean: string;
+    verified: boolean;
+    verified_at: string | null;
+    verification_code: string | null;
+    verification_expires_at: string | null;
+    ens_synced: boolean;
+    ens_synced_at: string | null;
+    ens_tx_hash: string | null;
+    status: AdminData["handleSocials"][number]["status"];
+    created_at: string;
+    updated_at: string;
+  }>;
+  telegramVerifications: Array<{
+    id: string;
+    telegram_username: string;
+    telegram_username_clean: string;
+    code: string;
+    message_text: string | null;
+    telegram_user_id: string | null;
+    telegram_chat_id: string | null;
+    created_at: string;
+  }>;
+  telegramBotSessions: Array<{
+    id: string;
+    telegram_user_id: string;
+    telegram_chat_id: string;
+    telegram_username: string | null;
+    telegram_first_name: string | null;
+    telegram_last_name: string | null;
+    state: AdminData["telegramBotSessions"][number]["state"];
+    pending_handle: string | null;
+    pending_display_name: string | null;
+    last_prompt_message_id: string | null;
     created_at: string;
     updated_at: string;
   }>;
@@ -1129,6 +1384,10 @@ function mapRowsToSnapshot(rows: {
       privyLinkedAt: toIso(user.privy_linked_at),
       email: user.email ?? undefined,
       walletAddress: user.wallet_address ?? undefined,
+      telegramUserId: user.telegram_user_id ?? undefined,
+      telegramChatId: user.telegram_chat_id ?? undefined,
+      telegramUsername: user.telegram_username ?? undefined,
+      telegramLinkedAt: toIso(user.telegram_linked_at),
       referralCode: user.referral_code ?? undefined,
       referredByUserId: user.referred_by_user_id ?? undefined,
       referredAt: toIso(user.referred_at),
@@ -1243,6 +1502,49 @@ function mapRowsToSnapshot(rows: {
       createdAt: toIso(wallet.created_at) ?? new Date().toISOString(),
       updatedAt: toIso(wallet.updated_at) ?? new Date().toISOString(),
     })),
+    handleSocials: rows.handleSocials.map((social) => ({
+      id: social.id,
+      handleId: social.handle_id,
+      userId: social.user_id,
+      handle: social.handle,
+      platform: social.platform,
+      username: social.username,
+      usernameClean: social.username_clean,
+      verified: social.verified,
+      verifiedAt: toIso(social.verified_at),
+      verificationCode: social.verification_code ?? undefined,
+      verificationExpiresAt: toIso(social.verification_expires_at),
+      ensSynced: social.ens_synced,
+      ensSyncedAt: toIso(social.ens_synced_at),
+      ensTxHash: social.ens_tx_hash ?? undefined,
+      status: social.status,
+      createdAt: toIso(social.created_at) ?? new Date().toISOString(),
+      updatedAt: toIso(social.updated_at) ?? new Date().toISOString(),
+    })),
+    telegramVerifications: rows.telegramVerifications.map((verification) => ({
+      id: verification.id,
+      telegramUsername: verification.telegram_username,
+      telegramUsernameClean: verification.telegram_username_clean,
+      code: verification.code,
+      messageText: verification.message_text ?? undefined,
+      telegramUserId: verification.telegram_user_id ?? undefined,
+      telegramChatId: verification.telegram_chat_id ?? undefined,
+      createdAt: toIso(verification.created_at) ?? new Date().toISOString(),
+    })),
+    telegramBotSessions: rows.telegramBotSessions.map((session) => ({
+      id: session.id,
+      telegramUserId: session.telegram_user_id,
+      telegramChatId: session.telegram_chat_id,
+      telegramUsername: session.telegram_username ?? undefined,
+      telegramFirstName: session.telegram_first_name ?? undefined,
+      telegramLastName: session.telegram_last_name ?? undefined,
+      state: session.state,
+      pendingHandle: session.pending_handle ?? undefined,
+      pendingDisplayName: session.pending_display_name ?? undefined,
+      lastPromptMessageId: session.last_prompt_message_id ?? undefined,
+      createdAt: toIso(session.created_at) ?? new Date().toISOString(),
+      updatedAt: toIso(session.updated_at) ?? new Date().toISOString(),
+    })),
     transactions: rows.transactions.map((transaction) => ({
       id: transaction.id,
       handle: transaction.handle,
@@ -1340,6 +1642,10 @@ export async function readAdminStateFromDatabase(): Promise<AdminData | null> {
       privy_linked_at: string | null;
       email: string | null;
       wallet_address: string | null;
+      telegram_user_id: string | null;
+      telegram_chat_id: string | null;
+      telegram_username: string | null;
+      telegram_linked_at: string | null;
       referral_code: string | null;
       referred_by_user_id: string | null;
       referred_at: string | null;
@@ -1357,7 +1663,7 @@ export async function readAdminStateFromDatabase(): Promise<AdminData | null> {
       bank: string;
       verification: AdminData["claims"][number]["verification"];
       claimed_at: string;
-      source: "web" | "api";
+      source: "web" | "api" | "telegram";
       user_id: string | null;
       phone: string | null;
       verified_at: string | null;
@@ -1445,6 +1751,49 @@ export async function readAdminStateFromDatabase(): Promise<AdminData | null> {
       created_at: string;
       updated_at: string;
     }>(`select * from ${CRYPTO_WALLETS_TABLE} order by updated_at desc`);
+    const handleSocials = await client.query<{
+      id: string;
+      handle_id: string;
+      user_id: string;
+      handle: string;
+      platform: AdminData["handleSocials"][number]["platform"];
+      username: string;
+      username_clean: string;
+      verified: boolean;
+      verified_at: string | null;
+      verification_code: string | null;
+      verification_expires_at: string | null;
+      ens_synced: boolean;
+      ens_synced_at: string | null;
+      ens_tx_hash: string | null;
+      status: AdminData["handleSocials"][number]["status"];
+      created_at: string;
+      updated_at: string;
+    }>(`select * from ${HANDLE_SOCIALS_TABLE} order by updated_at desc`);
+    const telegramVerifications = await client.query<{
+      id: string;
+      telegram_username: string;
+      telegram_username_clean: string;
+      code: string;
+      message_text: string | null;
+      telegram_user_id: string | null;
+      telegram_chat_id: string | null;
+      created_at: string;
+    }>(`select * from ${TELEGRAM_VERIFICATIONS_TABLE} order by created_at desc`);
+    const telegramBotSessions = await client.query<{
+      id: string;
+      telegram_user_id: string;
+      telegram_chat_id: string;
+      telegram_username: string | null;
+      telegram_first_name: string | null;
+      telegram_last_name: string | null;
+      state: AdminData["telegramBotSessions"][number]["state"];
+      pending_handle: string | null;
+      pending_display_name: string | null;
+      last_prompt_message_id: string | null;
+      created_at: string;
+      updated_at: string;
+    }>(`select * from ${TELEGRAM_BOT_SESSIONS_TABLE} order by updated_at desc`);
     const transactions = await client.query<{
       id: string;
       handle: string;
@@ -1520,6 +1869,9 @@ export async function readAdminStateFromDatabase(): Promise<AdminData | null> {
       otps: otps.rows,
       bankAccounts: bankAccounts.rows,
       cryptoWallets: cryptoWallets.rows,
+      handleSocials: handleSocials.rows,
+      telegramVerifications: telegramVerifications.rows,
+      telegramBotSessions: telegramBotSessions.rows,
       transactions: transactions.rows,
       marketplaceListings: marketplaceListings.rows,
       marketplaceOffers: marketplaceOffers.rows,

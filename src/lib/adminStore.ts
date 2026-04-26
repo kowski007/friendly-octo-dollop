@@ -12,7 +12,13 @@ import {
   type CryptoResolveError,
   type CryptoResolveSuccess,
 } from "./cryptoConfig";
-import { resolveEnsExecutionTarget } from "./ens";
+import {
+  ensTextRecordKeyTelegram,
+  inspectEnsTextRecord,
+  nairaTagEnsName,
+  resolveEnsExecutionTarget,
+} from "./ens";
+import { queueTelegramChannelEvent } from "./telegramChannel";
 import type {
   AdminMetrics,
   ApiLogRecord,
@@ -23,6 +29,7 @@ import type {
   CryptoWalletRecord,
   CreditProfile,
   HandleReputation,
+  HandleSocialRecord,
   MarketplaceEligibility,
   MarketplaceListingDetail,
   MarketplaceListingRecord,
@@ -42,6 +49,9 @@ import type {
   PublicReferralShare,
   ReferralRecord,
   ReferralSource,
+  SocialPlatform,
+  TelegramBotSessionRecord,
+  TelegramVerificationRecord,
   TransactionRecord,
   UserRecord,
   Verification,
@@ -55,6 +65,9 @@ export type AdminData = {
   otps: OtpRecord[];
   bankAccounts: BankAccountRecord[];
   cryptoWallets: CryptoWalletRecord[];
+  handleSocials: HandleSocialRecord[];
+  telegramVerifications: TelegramVerificationRecord[];
+  telegramBotSessions: TelegramBotSessionRecord[];
   transactions: TransactionRecord[];
   marketplaceListings: MarketplaceListingRecord[];
   marketplaceOffers: MarketplaceOfferRecord[];
@@ -82,6 +95,9 @@ function emptyData(): AdminData {
     otps: [],
     bankAccounts: [],
     cryptoWallets: [],
+    handleSocials: [],
+    telegramVerifications: [],
+    telegramBotSessions: [],
     transactions: [],
     marketplaceListings: [],
     marketplaceOffers: [],
@@ -164,6 +180,15 @@ function normalizeData(parsed: Partial<AdminData> | null | undefined): AdminData
       : [],
     cryptoWallets: Array.isArray(parsed?.cryptoWallets)
       ? (parsed!.cryptoWallets as CryptoWalletRecord[])
+      : [],
+    handleSocials: Array.isArray(parsed?.handleSocials)
+      ? (parsed!.handleSocials as HandleSocialRecord[])
+      : [],
+    telegramVerifications: Array.isArray(parsed?.telegramVerifications)
+      ? (parsed!.telegramVerifications as TelegramVerificationRecord[])
+      : [],
+    telegramBotSessions: Array.isArray(parsed?.telegramBotSessions)
+      ? (parsed!.telegramBotSessions as TelegramBotSessionRecord[])
       : [],
     transactions: Array.isArray(parsed?.transactions)
       ? (parsed!.transactions as TransactionRecord[])
@@ -629,7 +654,7 @@ function addWelcomeRewardUnsafe({
 }: {
   data: AdminData;
   user: UserRecord;
-  source: "otp" | "privy";
+  source: "otp" | "privy" | "telegram";
 }) {
   if (user.welcomeRewardedAt) {
     return user.pointsBalance ?? 0;
@@ -772,6 +797,30 @@ function findUserByPhone(data: AdminData, phone: string | undefined) {
   const normalizedPhone = normalizePhone(phone);
   if (!normalizedPhone) return null;
   return data.users.find((user) => user.phone === normalizedPhone) ?? null;
+}
+
+function findUserByTelegramUserId(
+  data: AdminData,
+  telegramUserId: string | undefined
+) {
+  const normalized = telegramUserId?.trim();
+  if (!normalized) return null;
+  return data.users.find((user) => user.telegramUserId === normalized) ?? null;
+}
+
+function telegramDisplayName({
+  firstName,
+  lastName,
+  username,
+}: {
+  firstName?: string;
+  lastName?: string;
+  username?: string;
+}) {
+  const value = [firstName?.trim(), lastName?.trim()].filter(Boolean).join(" ").trim();
+  if (value) return value;
+  const normalizedUsername = username?.trim().replace(/^@/u, "");
+  return normalizedUsername ? `@${normalizedUsername}` : undefined;
 }
 
 function buildHandleReputation(
@@ -1134,6 +1183,32 @@ function absoluteOrRelativeUrl(pathname: string) {
   return base ? `${base}${pathname}` : pathname;
 }
 
+function publicHandleProfileUrl(handle: string) {
+  return absoluteOrRelativeUrl(`/h/${handle}`);
+}
+
+function marketplaceListingUrl(handle: string) {
+  return absoluteOrRelativeUrl(`/marketplace/${handle}`);
+}
+
+function buildPublicSocials(data: AdminData, handle: string) {
+  return data.handleSocials
+    .filter(
+      (entry) =>
+        entry.handle === handle &&
+        entry.platform === "telegram" &&
+        entry.status === "active" &&
+        entry.verified &&
+        entry.ensSynced
+    )
+    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+    .map((entry) => ({
+      platform: entry.platform,
+      username: entry.username,
+      url: telegramProfileUrl(entry.usernameClean),
+    }));
+}
+
 function creditScoreRange(score?: number) {
   if (!score || score < 700) return undefined;
   const floor = Math.max(700, Math.floor(score / 50) * 50);
@@ -1226,6 +1301,7 @@ function buildPublicHandleProfile(
           ? 0
           : Math.round(totalVolume / settledTransactions.length),
     },
+    socials: buildPublicSocials(data, claim.handle),
     shareUrl: absoluteOrRelativeUrl(sharePath),
     payUrl: absoluteOrRelativeUrl(payPath),
     qrPayload: absoluteOrRelativeUrl(payPath),
@@ -1652,6 +1728,130 @@ function displayHandleFor(handle: string) {
   return `\u20A6${handle}`;
 }
 
+function telegramBotUsername() {
+  return (
+    process.env.NT_TELEGRAM_BOT_USERNAME ||
+    process.env.NEXT_PUBLIC_NT_TELEGRAM_BOT_USERNAME ||
+    "NairaTagBot"
+  )
+    .trim()
+    .replace(/^@/u, "");
+}
+
+function normalizeTelegramUsername(input: string) {
+  const trimmed = input.trim();
+  if (!trimmed) return "";
+
+  const withoutScheme = trimmed.replace(/^https?:\/\//iu, "");
+  const withoutHost = withoutScheme
+    .replace(/^t\.me\//iu, "")
+    .replace(/^telegram\.me\//iu, "")
+    .replace(/^telegram\.dog\//iu, "");
+  const withoutQuery = withoutHost.split(/[/?#]/u)[0] ?? "";
+
+  return withoutQuery.replace(/^@/u, "").toLowerCase().trim();
+}
+
+function isValidTelegramUsername(username: string) {
+  return /^[a-z][a-z0-9_]{4,31}$/u.test(username);
+}
+
+function displayTelegramUsername(username: string) {
+  return `@${normalizeTelegramUsername(username)}`;
+}
+
+function telegramProfileUrl(username: string) {
+  return `https://t.me/${normalizeTelegramUsername(username)}`;
+}
+
+function generateTelegramVerificationCode() {
+  return `nairatag-${crypto.randomBytes(4).toString("hex")}`;
+}
+
+function applyTelegramIdentityToUserUnsafe(
+  user: UserRecord,
+  {
+    telegramUserId,
+    telegramChatId,
+    telegramUsername,
+    firstName,
+    lastName,
+    nowIso,
+  }: {
+    telegramUserId: string;
+    telegramChatId: string;
+    telegramUsername?: string;
+    firstName?: string;
+    lastName?: string;
+    nowIso: string;
+  }
+) {
+  user.telegramUserId = telegramUserId.trim();
+  user.telegramChatId = telegramChatId.trim();
+  user.telegramUsername = normalizeTelegramUsername(telegramUsername || "") || undefined;
+  user.telegramLinkedAt = user.telegramLinkedAt || nowIso;
+
+  if (!user.fullName) {
+    user.fullName = telegramDisplayName({
+      firstName,
+      lastName,
+      username: user.telegramUsername,
+    });
+  }
+}
+
+function ensureTelegramBotSessionUnsafe(
+  data: AdminData,
+  {
+    telegramUserId,
+    telegramChatId,
+    telegramUsername,
+    telegramFirstName,
+    telegramLastName,
+  }: {
+    telegramUserId: string;
+    telegramChatId: string;
+    telegramUsername?: string;
+    telegramFirstName?: string;
+    telegramLastName?: string;
+  }
+) {
+  const normalizedUserId = telegramUserId.trim();
+  const normalizedChatId = telegramChatId.trim();
+  const normalizedUsername = normalizeTelegramUsername(telegramUsername || "") || undefined;
+  const nowIso = new Date().toISOString();
+
+  const existing =
+    data.telegramBotSessions.find(
+      (entry) =>
+        entry.telegramUserId === normalizedUserId &&
+        entry.telegramChatId === normalizedChatId
+    ) ?? null;
+
+  if (existing) {
+    existing.telegramUsername = normalizedUsername;
+    existing.telegramFirstName = telegramFirstName?.trim() || existing.telegramFirstName;
+    existing.telegramLastName = telegramLastName?.trim() || existing.telegramLastName;
+    existing.updatedAt = nowIso;
+    return existing;
+  }
+
+  const created: TelegramBotSessionRecord = {
+    id: newId("tgs"),
+    telegramUserId: normalizedUserId,
+    telegramChatId: normalizedChatId,
+    telegramUsername: normalizedUsername,
+    telegramFirstName: telegramFirstName?.trim() || undefined,
+    telegramLastName: telegramLastName?.trim() || undefined,
+    state: "idle",
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+  data.telegramBotSessions.unshift(created);
+  data.telegramBotSessions = data.telegramBotSessions.slice(0, 3000);
+  return created;
+}
+
 function signatureAuditHash(signature: string) {
   return crypto.createHash("sha256").update(signature.trim().toLowerCase()).digest("hex");
 }
@@ -1980,10 +2180,249 @@ export async function getUserById(userId: string) {
   });
 }
 
+export async function getUserByTelegramUserId(telegramUserId: string) {
+  const normalizedUserId = telegramUserId.trim();
+  if (!normalizedUserId) return null;
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    return findUserByTelegramUserId(data, normalizedUserId);
+  });
+}
+
+export async function upsertTelegramBotUser({
+  telegramUserId,
+  telegramChatId,
+  telegramUsername,
+  firstName,
+  lastName,
+  phone,
+}: {
+  telegramUserId: string;
+  telegramChatId: string;
+  telegramUsername?: string;
+  firstName?: string;
+  lastName?: string;
+  phone: string;
+}) {
+  const normalizedUserId = telegramUserId.trim();
+  const normalizedChatId = telegramChatId.trim();
+  const normalizedPhone = normalizePhone(phone);
+  if (!normalizedUserId || !normalizedChatId) {
+    throw new Error("invalid_telegram_identity");
+  }
+  if (!normalizedPhone) throw new Error("invalid_phone");
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const nowIso = new Date().toISOString();
+
+    let user =
+      findUserByTelegramUserId(data, normalizedUserId) ??
+      findUserByPhone(data, normalizedPhone) ??
+      null;
+
+    if (!user) {
+      user = {
+        id: newId("usr"),
+        phone: normalizedPhone,
+        createdAt: nowIso,
+        phoneVerifiedAt: nowIso,
+        pointsBalance: 0,
+        fullName: telegramDisplayName({ firstName, lastName, username: telegramUsername }),
+      };
+      applyTelegramIdentityToUserUnsafe(user, {
+        telegramUserId: normalizedUserId,
+        telegramChatId: normalizedChatId,
+        telegramUsername,
+        firstName,
+        lastName,
+        nowIso,
+      });
+      data.users.unshift(user);
+      addWelcomeRewardUnsafe({ data, user, source: "telegram" });
+    } else {
+      user.phone = normalizedPhone;
+      user.phoneVerifiedAt = user.phoneVerifiedAt || nowIso;
+      user.pointsBalance = user.pointsBalance ?? 0;
+      applyTelegramIdentityToUserUnsafe(user, {
+        telegramUserId: normalizedUserId,
+        telegramChatId: normalizedChatId,
+        telegramUsername,
+        firstName,
+        lastName,
+        nowIso,
+      });
+      if (!user.fullName) {
+        user.fullName = telegramDisplayName({
+          firstName,
+          lastName,
+          username: telegramUsername,
+        });
+      }
+    }
+
+    ensureTelegramBotSessionUnsafe(data, {
+      telegramUserId: normalizedUserId,
+      telegramChatId: normalizedChatId,
+      telegramUsername,
+      telegramFirstName: firstName,
+      telegramLastName: lastName,
+    });
+
+    await writeDataUnsafe(data);
+    return user;
+  });
+}
+
+export async function getTelegramBotSession({
+  telegramUserId,
+  telegramChatId,
+  telegramUsername,
+  telegramFirstName,
+  telegramLastName,
+}: {
+  telegramUserId: string;
+  telegramChatId: string;
+  telegramUsername?: string;
+  telegramFirstName?: string;
+  telegramLastName?: string;
+}) {
+  const normalizedUserId = telegramUserId.trim();
+  const normalizedChatId = telegramChatId.trim();
+  if (!normalizedUserId || !normalizedChatId) {
+    throw new Error("invalid_telegram_identity");
+  }
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const session = ensureTelegramBotSessionUnsafe(data, {
+      telegramUserId: normalizedUserId,
+      telegramChatId: normalizedChatId,
+      telegramUsername,
+      telegramFirstName,
+      telegramLastName,
+    });
+    await writeDataUnsafe(data);
+    return session;
+  });
+}
+
+export async function updateTelegramBotSession({
+  telegramUserId,
+  telegramChatId,
+  telegramUsername,
+  telegramFirstName,
+  telegramLastName,
+  state,
+  pendingHandle,
+  pendingDisplayName,
+  lastPromptMessageId,
+}: {
+  telegramUserId: string;
+  telegramChatId: string;
+  telegramUsername?: string;
+  telegramFirstName?: string;
+  telegramLastName?: string;
+  state?: TelegramBotSessionRecord["state"];
+  pendingHandle?: string | null;
+  pendingDisplayName?: string | null;
+  lastPromptMessageId?: string | null;
+}) {
+  const normalizedUserId = telegramUserId.trim();
+  const normalizedChatId = telegramChatId.trim();
+  if (!normalizedUserId || !normalizedChatId) {
+    throw new Error("invalid_telegram_identity");
+  }
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const session = ensureTelegramBotSessionUnsafe(data, {
+      telegramUserId: normalizedUserId,
+      telegramChatId: normalizedChatId,
+      telegramUsername,
+      telegramFirstName,
+      telegramLastName,
+    });
+    if (state) session.state = state;
+    if (pendingHandle !== undefined) session.pendingHandle = pendingHandle || undefined;
+    if (pendingDisplayName !== undefined) {
+      session.pendingDisplayName = pendingDisplayName || undefined;
+    }
+    if (lastPromptMessageId !== undefined) {
+      session.lastPromptMessageId = lastPromptMessageId || undefined;
+    }
+    session.updatedAt = new Date().toISOString();
+    await writeDataUnsafe(data);
+    return session;
+  });
+}
+
+export async function getDefaultCryptoWalletForHandle(
+  userId: string,
+  handle: string,
+  chain?: CryptoChain
+) {
+  const normalizedHandle = normalizeHandle(handle);
+  if (!normalizedHandle) return null;
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const wallets = data.cryptoWallets
+      .filter(
+        (entry) =>
+          entry.userId === userId &&
+          entry.handle === normalizedHandle &&
+          (!chain || entry.chain === chain)
+      )
+      .sort((a, b) => {
+        if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
+        return Date.parse(b.updatedAt) - Date.parse(a.updatedAt);
+      });
+
+    return wallets[0] ?? null;
+  });
+}
+
 export async function getClaimByUserId(userId: string) {
   return enqueue(async () => {
     const data = await readDataUnsafe();
     return data.claims.find((claim) => claim.userId === userId) ?? null;
+  });
+}
+
+export async function getTelegramBotAccount({
+  telegramUserId,
+  telegramChatId,
+  telegramUsername,
+  telegramFirstName,
+  telegramLastName,
+}: {
+  telegramUserId: string;
+  telegramChatId: string;
+  telegramUsername?: string;
+  telegramFirstName?: string;
+  telegramLastName?: string;
+}) {
+  const normalizedUserId = telegramUserId.trim();
+  const normalizedChatId = telegramChatId.trim();
+  if (!normalizedUserId || !normalizedChatId) {
+    throw new Error("invalid_telegram_identity");
+  }
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const session = ensureTelegramBotSessionUnsafe(data, {
+      telegramUserId: normalizedUserId,
+      telegramChatId: normalizedChatId,
+      telegramUsername,
+      telegramFirstName,
+      telegramLastName,
+    });
+    const user = findUserByTelegramUserId(data, normalizedUserId);
+    const claim = user ? data.claims.find((entry) => entry.userId === user.id) ?? null : null;
+    await writeDataUnsafe(data);
+    return { session, user, claim };
   });
 }
 
@@ -2563,7 +3002,696 @@ export async function getPublicHandleProfile(handle: string) {
   return enqueue(async () => {
     const data = await readDataUnsafe();
     const claim = data.claims.find((entry) => entry.handle === normalized) ?? null;
-    return buildPublicHandleProfile(data, claim);
+    const profile = buildPublicHandleProfile(data, claim);
+    if (!profile) return null;
+
+    const ensName = nairaTagEnsName(profile.handle);
+    if (ensName) {
+      const telegramRecord = await inspectEnsTextRecord({
+        name: ensName,
+        key: ensTextRecordKeyTelegram(),
+      }).catch(() => null);
+      const telegramUsername = telegramRecord?.currentValue?.trim();
+      if (telegramUsername) {
+        const normalizedUsername = telegramUsername
+          .replace(/^@/u, "")
+          .trim()
+          .toLowerCase();
+        if (normalizedUsername) {
+          profile.socials = [
+            {
+              platform: "telegram",
+              username: `@${normalizedUsername}`,
+              url: telegramProfileUrl(normalizedUsername),
+            },
+          ];
+        }
+      }
+    }
+
+    return profile;
+  });
+}
+
+function telegramVerificationInstruction(handle: string, code: string, expiresAt: string) {
+  const bot = telegramBotUsername();
+  return {
+    required: true,
+    method: "bot_message" as const,
+    code,
+    instruction: `Send this exact message to @${bot} on Telegram: "verify ${code}"`,
+    help: "Open Telegram, message the NairaTag bot, then come back here. NairaTag will detect it automatically.",
+    expiresAt,
+    botUsername: `@${bot}`,
+    deepLink: `https://t.me/${bot}?start=${encodeURIComponent(`verify_${handle}_${code}`)}`,
+  };
+}
+
+function hydrateTelegramSocialResponse(entry: HandleSocialRecord) {
+  return {
+    ...entry,
+    instruction:
+      !entry.verified && entry.verificationCode && entry.verificationExpiresAt
+        ? telegramVerificationInstruction(
+            entry.handle,
+            entry.verificationCode,
+            entry.verificationExpiresAt
+          )
+        : null,
+  };
+}
+
+function findTelegramVerificationForSocialUnsafe(
+  data: AdminData,
+  social: HandleSocialRecord
+) {
+  const expiresAtMs = social.verificationExpiresAt
+    ? Date.parse(social.verificationExpiresAt)
+    : 0;
+  if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
+    return null;
+  }
+
+  return (
+    data.telegramVerifications.find(
+      (entry) =>
+        entry.telegramUsernameClean === social.usernameClean &&
+        entry.code === social.verificationCode &&
+        Date.parse(entry.createdAt) <= expiresAtMs
+    ) ?? null
+  );
+}
+
+function completeTelegramSocialVerificationUnsafe(
+  data: AdminData,
+  social: HandleSocialRecord
+) {
+  if (social.verified) return social;
+
+  const nowIso = new Date().toISOString();
+  social.verified = true;
+  social.verifiedAt = nowIso;
+  social.verificationCode = undefined;
+  social.verificationExpiresAt = undefined;
+  social.ensSynced = false;
+  social.ensSyncedAt = undefined;
+  social.ensTxHash = undefined;
+  social.updatedAt = nowIso;
+
+  addNotificationUnsafe(data, {
+    userId: social.userId,
+    handle: social.handle,
+    type: "telegram_verified",
+    title: "Telegram verified",
+    body: `${social.username} is now linked to your ${displayHandleFor(
+      social.handle
+    )} identity.`,
+    metadata: {
+      socialId: social.id,
+      platform: social.platform,
+      username: social.username,
+      ensSynced: social.ensSynced,
+    },
+  });
+
+  return social;
+}
+
+function maybeAutoVerifyTelegramSocialUnsafe(
+  data: AdminData,
+  social: HandleSocialRecord
+) {
+  if (social.verified) return false;
+  const matchedVerification = findTelegramVerificationForSocialUnsafe(data, social);
+  if (!matchedVerification) return false;
+
+  completeTelegramSocialVerificationUnsafe(data, social);
+  return true;
+}
+
+function socialLinkConflict(
+  social: HandleSocialRecord,
+  nowMs: number,
+  targetHandle: string
+) {
+  if (social.status !== "active") return false;
+  if (social.handle === targetHandle) return false;
+  if (social.verified) return true;
+  const expiryMs = social.verificationExpiresAt
+    ? Date.parse(social.verificationExpiresAt)
+    : 0;
+  return Number.isFinite(expiryMs) && expiryMs > nowMs;
+}
+
+export async function listHandleSocialsForUser({
+  userId,
+  handle,
+}: {
+  userId: string;
+  handle: string;
+}) {
+  const normalizedHandle = normalizeHandle(handle);
+  if (!normalizedHandle) throw new Error("missing_handle");
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const claim =
+      data.claims.find(
+        (entry) => entry.userId === userId && entry.handle === normalizedHandle
+      ) ?? null;
+    if (!claim) throw new Error("handle_not_owned");
+
+    const socials = data.handleSocials
+      .filter(
+        (entry) =>
+          entry.userId === userId &&
+          entry.handle === normalizedHandle &&
+          entry.platform === "telegram" &&
+          entry.status === "active"
+      )
+      .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+
+    let changed = false;
+    for (const social of socials) {
+      if (maybeAutoVerifyTelegramSocialUnsafe(data, social)) {
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      await writeDataUnsafe(data);
+    }
+
+    return socials.map(hydrateTelegramSocialResponse);
+  });
+}
+
+export async function getHandleSocialForUser({
+  userId,
+  handle,
+  socialId,
+}: {
+  userId: string;
+  handle: string;
+  socialId: string;
+}) {
+  const normalizedHandle = normalizeHandle(handle);
+  if (!normalizedHandle) throw new Error("missing_handle");
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const claim =
+      data.claims.find(
+        (entry) => entry.userId === userId && entry.handle === normalizedHandle
+      ) ?? null;
+    if (!claim) throw new Error("handle_not_owned");
+
+    const social =
+      data.handleSocials.find(
+        (entry) =>
+          entry.id === socialId &&
+          entry.userId === userId &&
+          entry.handle === normalizedHandle &&
+          entry.platform === "telegram" &&
+          entry.status === "active"
+      ) ?? null;
+    if (!social) throw new Error("social_not_found");
+
+    if (maybeAutoVerifyTelegramSocialUnsafe(data, social)) {
+      await writeDataUnsafe(data);
+    }
+
+    return hydrateTelegramSocialResponse(social);
+  });
+}
+
+export async function createTelegramSocialLink({
+  userId,
+  handle,
+  username,
+}: {
+  userId: string;
+  handle: string;
+  username: string;
+}) {
+  const normalizedHandle = normalizeHandle(handle);
+  const usernameClean = normalizeTelegramUsername(username);
+  if (!normalizedHandle) throw new Error("missing_handle");
+  if (!isValidTelegramUsername(usernameClean)) throw new Error("invalid_telegram_username");
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const claim =
+      data.claims.find(
+        (entry) => entry.userId === userId && entry.handle === normalizedHandle
+      ) ?? null;
+    if (!claim) throw new Error("handle_not_owned");
+
+    const nowMs = Date.now();
+    const conflicting = data.handleSocials.find(
+      (entry) =>
+        entry.platform === "telegram" &&
+        entry.usernameClean === usernameClean &&
+        socialLinkConflict(entry, nowMs, normalizedHandle)
+    );
+    if (conflicting) throw new Error("telegram_username_claimed");
+
+    const existing =
+      data.handleSocials.find(
+        (entry) =>
+          entry.userId === userId &&
+          entry.handle === normalizedHandle &&
+          entry.platform === "telegram" &&
+          entry.status === "active"
+      ) ?? null;
+
+    const nowIso = new Date(nowMs).toISOString();
+    const expiresAt = new Date(nowMs + 60 * 60 * 1000).toISOString();
+    const code = generateTelegramVerificationCode();
+
+    const social: HandleSocialRecord = existing
+      ? {
+          ...existing,
+          username: displayTelegramUsername(usernameClean),
+          usernameClean,
+          verified: false,
+          verifiedAt: undefined,
+          verificationCode: code,
+          verificationExpiresAt: expiresAt,
+          ensSynced: false,
+          ensSyncedAt: undefined,
+          ensTxHash: undefined,
+          status: "active",
+          updatedAt: nowIso,
+        }
+      : {
+          id: newId("social"),
+          handleId: claim.id,
+          userId,
+          handle: normalizedHandle,
+          platform: "telegram",
+          username: displayTelegramUsername(usernameClean),
+          usernameClean,
+          verified: false,
+          verificationCode: code,
+          verificationExpiresAt: expiresAt,
+          ensSynced: false,
+          status: "active",
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        };
+
+    if (existing) {
+      const index = data.handleSocials.findIndex((entry) => entry.id === existing.id);
+      if (index >= 0) data.handleSocials.splice(index, 1, social);
+    } else {
+      data.handleSocials.unshift(social);
+    }
+
+    addNotificationUnsafe(data, {
+      userId,
+      handle: normalizedHandle,
+      type: "telegram_link_requested",
+      title: "Telegram linking started",
+      body: `${social.username} is waiting for verification on your ${displayHandleFor(
+        normalizedHandle
+      )} identity.`,
+      metadata: {
+        socialId: social.id,
+        platform: social.platform,
+        username: social.username,
+      },
+    });
+
+    await writeDataUnsafe(data);
+    return {
+      ...social,
+      instruction: telegramVerificationInstruction(normalizedHandle, code, expiresAt),
+    };
+  });
+}
+
+export async function recordTelegramVerificationEvent({
+  username,
+  code,
+  messageText,
+  telegramUserId,
+  telegramChatId,
+}: {
+  username: string;
+  code: string;
+  messageText?: string;
+  telegramUserId?: string;
+  telegramChatId?: string;
+}) {
+  const usernameClean = normalizeTelegramUsername(username);
+  const normalizedCode = code.trim().toLowerCase();
+  if (!isValidTelegramUsername(usernameClean)) throw new Error("invalid_telegram_username");
+  if (!/^nairatag-[a-f0-9]{8}$/u.test(normalizedCode)) {
+    throw new Error("invalid_verification_code");
+  }
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const record: TelegramVerificationRecord = {
+      id: newId("tgvr"),
+      telegramUsername: displayTelegramUsername(usernameClean),
+      telegramUsernameClean: usernameClean,
+      code: normalizedCode,
+      messageText: messageText?.trim() || undefined,
+      telegramUserId: telegramUserId?.trim() || undefined,
+      telegramChatId: telegramChatId?.trim() || undefined,
+      createdAt: new Date().toISOString(),
+    };
+
+    data.telegramVerifications.unshift(record);
+    data.telegramVerifications = data.telegramVerifications.slice(0, 3000);
+    await writeDataUnsafe(data);
+    return record;
+  });
+}
+
+export async function verifyTelegramSocialLink({
+  userId,
+  handle,
+  socialId,
+}: {
+  userId: string;
+  handle: string;
+  socialId: string;
+}) {
+  const normalizedHandle = normalizeHandle(handle);
+  if (!normalizedHandle) throw new Error("missing_handle");
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const social =
+      data.handleSocials.find(
+        (entry) =>
+          entry.id === socialId &&
+          entry.userId === userId &&
+          entry.handle === normalizedHandle &&
+          entry.platform === "telegram" &&
+          entry.status === "active"
+      ) ?? null;
+    if (!social) throw new Error("social_not_found");
+    if (social.verified) return social;
+
+    const expiresAtMs = social.verificationExpiresAt
+      ? Date.parse(social.verificationExpiresAt)
+      : 0;
+    if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
+      throw new Error("verification_code_expired");
+    }
+
+    const matchedVerification = findTelegramVerificationForSocialUnsafe(data, social);
+    if (!matchedVerification) throw new Error("telegram_verification_not_found");
+
+    completeTelegramSocialVerificationUnsafe(data, social);
+
+    await writeDataUnsafe(data);
+    return social;
+  });
+}
+
+export async function markTelegramSocialEnsSynced({
+  userId,
+  handle,
+  socialId,
+  txHash,
+}: {
+  userId: string;
+  handle: string;
+  socialId: string;
+  txHash?: string;
+}) {
+  const normalizedHandle = normalizeHandle(handle);
+  const normalizedHash = txHash?.trim();
+  if (!normalizedHandle) throw new Error("missing_handle");
+  if (normalizedHash && !/^0x[a-fA-F0-9]{64}$/u.test(normalizedHash)) {
+    throw new Error("invalid_transaction_hash");
+  }
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const social =
+      data.handleSocials.find(
+        (entry) =>
+          entry.id === socialId &&
+          entry.userId === userId &&
+          entry.handle === normalizedHandle &&
+          entry.platform === "telegram" &&
+          entry.status === "active"
+      ) ?? null;
+    if (!social) throw new Error("social_not_found");
+
+    const nowIso = new Date().toISOString();
+    social.ensSynced = true;
+    social.ensSyncedAt = nowIso;
+    social.ensTxHash = normalizedHash || social.ensTxHash;
+    social.updatedAt = nowIso;
+
+    addNotificationUnsafe(data, {
+      userId,
+      handle: normalizedHandle,
+      type: "telegram_verified",
+      title: "Telegram synced to ENS",
+      body: `${social.username} is now published on ENS for ${displayHandleFor(
+        normalizedHandle
+      )}.`,
+      metadata: {
+        socialId: social.id,
+        platform: social.platform,
+        username: social.username,
+        ensSynced: true,
+        ensTxHash: normalizedHash || social.ensTxHash,
+      },
+    });
+
+    await writeDataUnsafe(data);
+    return social;
+  });
+}
+
+export async function removeTelegramSocialLink({
+  userId,
+  handle,
+  socialId,
+}: {
+  userId: string;
+  handle: string;
+  socialId: string;
+}) {
+  const normalizedHandle = normalizeHandle(handle);
+  if (!normalizedHandle) throw new Error("missing_handle");
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const social =
+      data.handleSocials.find(
+        (entry) =>
+          entry.id === socialId &&
+          entry.userId === userId &&
+          entry.handle === normalizedHandle &&
+          entry.platform === "telegram" &&
+          entry.status === "active"
+      ) ?? null;
+    if (!social) throw new Error("social_not_found");
+
+    social.status = "deleted";
+    social.updatedAt = new Date().toISOString();
+
+    addNotificationUnsafe(data, {
+      userId,
+      handle: normalizedHandle,
+      type: "telegram_unlinked",
+      title: "Telegram unlinked",
+      body: `${social.username} is no longer attached to your ${displayHandleFor(
+        normalizedHandle
+      )} identity.`,
+      metadata: {
+        socialId: social.id,
+        platform: social.platform,
+        username: social.username,
+      },
+    });
+
+    await writeDataUnsafe(data);
+    return social;
+  });
+}
+
+export async function linkTelegramAliasFromBot({
+  userId,
+  handle,
+  telegramUsername,
+  telegramUserId,
+  telegramChatId,
+}: {
+  userId: string;
+  handle: string;
+  telegramUsername: string;
+  telegramUserId: string;
+  telegramChatId: string;
+}) {
+  const normalizedHandle = normalizeHandle(handle);
+  const usernameClean = normalizeTelegramUsername(telegramUsername);
+  if (!normalizedHandle) throw new Error("missing_handle");
+  if (!isValidTelegramUsername(usernameClean)) throw new Error("invalid_telegram_username");
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const claim =
+      data.claims.find(
+        (entry) => entry.userId === userId && entry.handle === normalizedHandle
+      ) ?? null;
+    if (!claim) throw new Error("handle_not_owned");
+
+    const user = data.users.find((entry) => entry.id === userId) ?? null;
+    if (user) {
+      applyTelegramIdentityToUserUnsafe(user, {
+        telegramUserId,
+        telegramChatId,
+        telegramUsername: usernameClean,
+        nowIso: new Date().toISOString(),
+      });
+    }
+
+    const nowMs = Date.now();
+    const conflicting = data.handleSocials.find(
+      (entry) =>
+        entry.platform === "telegram" &&
+        entry.usernameClean === usernameClean &&
+        socialLinkConflict(entry, nowMs, normalizedHandle)
+    );
+    if (conflicting) throw new Error("telegram_username_claimed");
+
+    const nowIso = new Date(nowMs).toISOString();
+    const existing =
+      data.handleSocials.find(
+        (entry) =>
+          entry.userId === userId &&
+          entry.handle === normalizedHandle &&
+          entry.platform === "telegram" &&
+          entry.status === "active"
+      ) ?? null;
+
+    const social: HandleSocialRecord = existing
+      ? {
+          ...existing,
+          username: displayTelegramUsername(usernameClean),
+          usernameClean,
+          verified: true,
+          verifiedAt: existing.verifiedAt || nowIso,
+          verificationCode: undefined,
+          verificationExpiresAt: undefined,
+          ensSynced: existing.ensSynced ?? false,
+          ensSyncedAt: existing.ensSynced ? existing.ensSyncedAt : undefined,
+          ensTxHash: existing.ensSynced ? existing.ensTxHash : undefined,
+          status: "active",
+          updatedAt: nowIso,
+        }
+      : {
+          id: newId("social"),
+          handleId: claim.id,
+          userId,
+          handle: normalizedHandle,
+          platform: "telegram",
+          username: displayTelegramUsername(usernameClean),
+          usernameClean,
+          verified: true,
+          verifiedAt: nowIso,
+          ensSynced: false,
+          status: "active",
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        };
+
+    const verificationRecord: TelegramVerificationRecord = {
+      id: newId("tgvr"),
+      telegramUsername: displayTelegramUsername(usernameClean),
+      telegramUsernameClean: usernameClean,
+      code: `nairatag-bot-${crypto.randomBytes(4).toString("hex")}`,
+      messageText: "bot_identity_verified",
+      telegramUserId: telegramUserId.trim(),
+      telegramChatId: telegramChatId.trim(),
+      createdAt: nowIso,
+    };
+
+    const existingIndex = existing
+      ? data.handleSocials.findIndex((entry) => entry.id === existing.id)
+      : -1;
+    if (existingIndex >= 0) {
+      data.handleSocials.splice(existingIndex, 1, social);
+    } else {
+      data.handleSocials.unshift(social);
+    }
+
+    data.telegramVerifications.unshift(verificationRecord);
+    data.telegramVerifications = data.telegramVerifications.slice(0, 3000);
+
+    addNotificationUnsafe(data, {
+      userId,
+      handle: normalizedHandle,
+      type: "telegram_verified",
+      title: existing ? "Telegram updated from bot" : "Telegram linked from bot",
+      body: `${social.username} is verified for ${displayHandleFor(
+        normalizedHandle
+      )} from your Telegram bot session.`,
+      metadata: {
+        socialId: social.id,
+        platform: social.platform,
+        username: social.username,
+        ensSynced: social.ensSynced,
+      },
+    });
+
+    await writeDataUnsafe(data);
+    return hydrateTelegramSocialResponse(social);
+  });
+}
+
+export async function resolveHandleBySocial({
+  platform,
+  username,
+}: {
+  platform: SocialPlatform;
+  username: string;
+}) {
+  if (platform !== "telegram") throw new Error("unsupported_social_platform");
+  const usernameClean = normalizeTelegramUsername(username);
+  if (!isValidTelegramUsername(usernameClean)) throw new Error("invalid_telegram_username");
+
+  return enqueue(async () => {
+    const data = await readDataUnsafe();
+    const social =
+      data.handleSocials.find(
+        (entry) =>
+          entry.platform === "telegram" &&
+          entry.usernameClean === usernameClean &&
+          entry.verified &&
+          entry.ensSynced &&
+          entry.status === "active"
+      ) ?? null;
+    if (!social) return null;
+
+    const claim = data.claims.find((entry) => entry.handle === social.handle) ?? null;
+    if (!claim) return null;
+    const bankAccount = latestBankAccountForUser(data, claim.userId);
+
+    return {
+      social,
+      handle: claim.handle,
+      displayName: claim.displayName,
+      verification: claim.verification,
+      bank: bankAccount
+        ? {
+            name: bankAccount.bankName,
+            nuban: decryptSensitiveValue(bankAccount.accountNumberEncrypted),
+          }
+        : null,
+      payUrl: absoluteOrRelativeUrl(`/pay/${claim.handle}`),
+    };
   });
 }
 
@@ -3165,6 +4293,15 @@ export async function createMarketplaceListing({
       },
     });
     await writeDataUnsafe(data);
+    void queueTelegramChannelEvent({
+      type: existingListing ? "marketplace_listing_updated" : "marketplace_listing_created",
+      handle: listing.handle,
+      saleMode: listing.saleMode,
+      askAmount: listing.askAmount ?? null,
+      minOfferAmount: listing.minOfferAmount ?? null,
+      status: listing.status,
+      listingUrl: marketplaceListingUrl(listing.handle),
+    });
 
     return buildMarketplaceListingDetail(data, listing);
   });
@@ -3267,6 +4404,18 @@ export async function updateMarketplaceListing({
     });
 
     await writeDataUnsafe(data);
+    void queueTelegramChannelEvent({
+      type: "marketplace_listing_updated",
+      handle: listing.handle,
+      saleMode: listing.saleMode,
+      askAmount: listing.askAmount ?? null,
+      minOfferAmount: listing.minOfferAmount ?? null,
+      status: listing.status,
+      listingUrl:
+        listing.status === "active" || listing.status === "under_review"
+          ? marketplaceListingUrl(listing.handle)
+          : publicHandleProfileUrl(listing.handle),
+    });
     return buildMarketplaceListingDetail(data, listing);
   });
 }
@@ -3337,6 +4486,13 @@ export async function submitMarketplaceOffer({
         },
       });
       await writeDataUnsafe(data);
+      void queueTelegramChannelEvent({
+        type: "marketplace_offer_updated",
+        handle: listing.handle,
+        amount: normalizedAmount,
+        buyerName: buyerName.trim(),
+        listingUrl: marketplaceListingUrl(listing.handle),
+      });
       return {
         listing: buildMarketplaceListingDetail(data, listing),
         offer: existingPendingOffer,
@@ -3371,6 +4527,13 @@ export async function submitMarketplaceOffer({
       },
     });
     await writeDataUnsafe(data);
+    void queueTelegramChannelEvent({
+      type: "marketplace_offer_submitted",
+      handle: listing.handle,
+      amount: offer.amount,
+      buyerName: offer.buyerName,
+      listingUrl: marketplaceListingUrl(listing.handle),
+    });
 
     return {
       listing: buildMarketplaceListingDetail(data, listing),
@@ -3671,6 +4834,15 @@ export async function reviewMarketplaceTransfer({
     }
 
     await writeDataUnsafe(data);
+    if (action === "approve") {
+      void queueTelegramChannelEvent({
+        type: "handle_sold",
+        handle: transfer.handle,
+        amount: transfer.amount,
+        buyerName: transfer.buyerName,
+        profileUrl: publicHandleProfileUrl(transfer.handle),
+      });
+    }
     return buildMarketplaceTransferDetail(data, transfer);
   });
 }
@@ -3678,9 +4850,11 @@ export async function reviewMarketplaceTransfer({
 export async function claimHandleForUser({
   userId,
   handle,
+  source = "web",
 }: {
   userId: string;
   handle: string;
+  source?: ClaimRecord["source"];
 }) {
   const normalized = normalizeHandle(handle);
   if (!normalized) throw new Error("missing_handle");
@@ -3717,7 +4891,7 @@ export async function claimHandleForUser({
       bank: "Unlinked",
       verification,
       claimedAt,
-      source: "web",
+      source,
       userId,
       phone: user.phone,
       verifiedAt: verification === "pending" ? undefined : claimedAt,
@@ -3777,6 +4951,13 @@ export async function claimHandleForUser({
       });
     }
     await writeDataUnsafe(data);
+    void queueTelegramChannelEvent({
+      type: "handle_claimed",
+      handle: record.handle,
+      verification: record.verification,
+      profileUrl: publicHandleProfileUrl(record.handle),
+      totalClaims: data.claims.length,
+    });
     return record;
   });
 }

@@ -139,6 +139,24 @@ function VerificationSeal({ className }: { className?: string }) {
   );
 }
 
+function TelegramIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className={cn("h-4.5 w-4.5", className)}
+      aria-hidden="true"
+    >
+      <path
+        d="m20.5 4.6-2.8 13.1c-.2.9-.8 1.1-1.6.7l-4.2-3.1-2 1.9c-.2.2-.4.4-.8.4l.3-4.4 8-7.2c.4-.3-.1-.5-.5-.2l-9.9 6.2-4.2-1.3c-.9-.3-.9-.9.2-1.3l16.4-6.3c.8-.3 1.4.2 1.1 1.5Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function SuggestionButton({
   handle,
   active,
@@ -632,7 +650,7 @@ export function ClaimPageView() {
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-sm">
                     <span className="text-lg font-semibold">{NAIRA}</span>
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2 text-base font-semibold text-emerald-800 dark:text-emerald-200">
                       <span>Claim your {NAIRA}NairaTag</span>
                       <VerificationSeal />
@@ -641,6 +659,14 @@ export function ClaimPageView() {
                       Type a name. Preview identity instantly.
                     </div>
                   </div>
+                  <Link
+                    href="/settings#telegram-linking"
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-sky-200/80 bg-sky-50 text-sky-700 shadow-sm transition hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/25 dark:text-sky-200 dark:hover:bg-sky-950/40"
+                    aria-label="Link Telegram"
+                    title="Link Telegram"
+                  >
+                    <TelegramIcon />
+                  </Link>
                 </div>
               </div>
 

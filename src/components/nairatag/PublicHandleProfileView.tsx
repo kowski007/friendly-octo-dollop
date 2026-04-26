@@ -150,6 +150,24 @@ function LockIcon({ className }: { className?: string }) {
   );
 }
 
+function TelegramIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className={cn("h-4 w-4", className)}
+      aria-hidden="true"
+    >
+      <path
+        d="m20.5 4.6-2.8 13.1c-.2.9-.8 1.1-1.6.7l-4.2-3.1-2 1.9c-.2.2-.4.4-.8.4l.3-4.4 8-7.2c.4-.3-.1-.5-.5-.2l-9.9 6.2-4.2-1.3c-.9-.3-.9-.9.2-1.3l16.4-6.3c.8-.3 1.4.2 1.1 1.5Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function QrPreview({ value }: { value: string }) {
   const bits = qrBits(value);
 
@@ -357,6 +375,23 @@ export function PublicHandleProfileView({
                   </Badge>
                   <Badge>{`Since ${formatDate(profile.memberSince)}`}</Badge>
                 </div>
+
+                {profile.socials.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {profile.socials.map((social) => (
+                      <a
+                        key={`${social.platform}:${social.username}`}
+                        href={social.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 rounded-full border border-sky-200/80 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-800 transition hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-200 dark:hover:bg-sky-950/35"
+                      >
+                        <TelegramIcon className="text-sky-600 dark:text-sky-300" />
+                        {social.username}
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
 
                 <div className="mt-5 flex flex-wrap gap-3">
                   <ButtonLink href={profile.payUrl}>Send money</ButtonLink>

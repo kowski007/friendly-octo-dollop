@@ -25,11 +25,16 @@ export type MarketplaceTransferStatus =
   | "approved"
   | "rejected";
 export type CreditRiskBand = "low" | "medium" | "high";
+export type SocialPlatform = "telegram";
+export type SocialLinkStatus = "active" | "deleted";
 export type NotificationType =
   | "otp_requested"
   | "welcome_reward"
   | "handle_claimed"
   | "handle_sold"
+  | "telegram_link_requested"
+  | "telegram_verified"
+  | "telegram_unlinked"
   | "paylink_created"
   | "paylink_updated"
   | "payment_received"
@@ -60,6 +65,13 @@ export type NotificationDeliveryStatus =
   | "failed"
   | "skipped";
 export type ReferralSource = "link" | "unknown";
+export type TelegramBotSessionState =
+  | "idle"
+  | "claim_handle"
+  | "claim_phone"
+  | "connect_phone"
+  | "lookup_handle"
+  | "send_handle";
 
 export type ClaimRecord = {
   id: string;
@@ -68,7 +80,7 @@ export type ClaimRecord = {
   bank: string;
   verification: Verification;
   claimedAt: string; // ISO
-  source: "web" | "api";
+  source: "web" | "api" | "telegram";
   userId?: string;
   phone?: string;
   verifiedAt?: string; // ISO
@@ -116,6 +128,10 @@ export type UserRecord = {
   privyLinkedAt?: string; // ISO
   email?: string;
   walletAddress?: string;
+  telegramUserId?: string;
+  telegramChatId?: string;
+  telegramUsername?: string;
+  telegramLinkedAt?: string; // ISO
   fullName?: string;
   avatarUrl?: string;
   bvnLast4?: string;
@@ -172,6 +188,52 @@ export type CryptoWalletRecord = {
   walletVerified: boolean;
   signatureHash: string;
   nonce: string;
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
+};
+
+export type HandleSocialRecord = {
+  id: string;
+  handleId: string;
+  userId: string;
+  handle: string;
+  platform: SocialPlatform;
+  username: string;
+  usernameClean: string;
+  verified: boolean;
+  verifiedAt?: string; // ISO
+  verificationCode?: string;
+  verificationExpiresAt?: string; // ISO
+  ensSynced: boolean;
+  ensSyncedAt?: string; // ISO
+  ensTxHash?: string;
+  status: SocialLinkStatus;
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
+};
+
+export type TelegramVerificationRecord = {
+  id: string;
+  telegramUsername: string;
+  telegramUsernameClean: string;
+  code: string;
+  messageText?: string;
+  telegramUserId?: string;
+  telegramChatId?: string;
+  createdAt: string; // ISO
+};
+
+export type TelegramBotSessionRecord = {
+  id: string;
+  telegramUserId: string;
+  telegramChatId: string;
+  telegramUsername?: string;
+  telegramFirstName?: string;
+  telegramLastName?: string;
+  state: TelegramBotSessionState;
+  pendingHandle?: string;
+  pendingDisplayName?: string;
+  lastPromptMessageId?: string;
   createdAt: string; // ISO
   updatedAt: string; // ISO
 };
@@ -401,6 +463,11 @@ export type PublicHandleProfile = {
     chargebackRate: number;
     averageTransactionSize: number;
   };
+  socials: Array<{
+    platform: SocialPlatform;
+    username: string;
+    url: string;
+  }>;
   shareUrl: string;
   payUrl: string;
   qrPayload: string;
