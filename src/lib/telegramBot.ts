@@ -4,7 +4,9 @@ import {
   getTelegramBotAccount,
   linkTelegramAliasFromBot,
   listMarketplaceListings,
+  listNotifications,
   listSuggestedHandles,
+  listTransactions,
   logApiUsage,
   normalizeHandle,
   recordTelegramVerificationEvent,
@@ -13,6 +15,7 @@ import {
   upsertTelegramBotUser,
   updateTelegramBotSession,
 } from "./adminStore";
+import { getPaylinksDashboard } from "./paylinks/db";
 
 type TelegramUser = {
   id: number;
@@ -81,6 +84,8 @@ type TelegramContext = {
   lastName?: string;
 };
 
+const NAIRA = "\u20A6";
+
 function botToken() {
   return (process.env.NT_TELEGRAM_BOT_TOKEN || "").trim();
 }
@@ -102,6 +107,27 @@ function appUrl(pathname: string) {
 
 function hasBotToken() {
   return Boolean(botToken());
+}
+
+function formatHandle(handle: string) {
+  return `${NAIRA}${handle}`;
+}
+
+function formatNairaWhole(amount: number) {
+  return `${NAIRA}${Math.max(0, amount).toLocaleString("en-NG")}`;
+}
+
+function relativeTime(value?: string) {
+  if (!value) return "just now";
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return "recently";
+  const diffMs = Date.now() - timestamp;
+  const diffMinutes = Math.max(1, Math.round(diffMs / 60000));
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.round(diffHours / 24);
+  return `${diffDays}d ago`;
 }
 
 export function authorizeTelegramWebhook(headers: Headers) {
@@ -164,18 +190,49 @@ async function answerCallbackQuery(callbackQueryId: string, text?: string) {
   });
 }
 
-function mainMenuKeyboard(hasClaim: boolean): InlineButton[][] {
-  return [
+function mainMenuKeyboard(claimHandle?: string | null): InlineButton[][] {
+  if (!claimHandle) {
+    return [
+      [
+        { text: `Claim ${NAIRA}handle`, callback_data: "claim" },
+        { text: "Lookup", callback_data: "lookup" },
+      ],
+      [{ text: "Send money", callback_data: "send" }],
+      [{ text: "Marketplace", callback_data: "market" }],
+      [{ text: "Link Telegram", callback_data: "linktg" }],
+    ];
+  }
+
+  const keyboard: InlineButton[][] = [
     [
-      { text: hasClaim ? "My ₦handle" : "Claim ₦handle", callback_data: hasClaim ? "me" : "claim" },
+      { text: `My ${NAIRA}handle`, callback_data: "me" },
+      { text: "Receive money", callback_data: "receive" },
+    ],
+    [
+      { text: "Share my pay link", callback_data: "sharepay" },
       { text: "Send money", callback_data: "send" },
     ],
     [
       { text: "Lookup", callback_data: "lookup" },
-      { text: "Marketplace", callback_data: "market" },
+      { text: "Recent activity", callback_data: "activity" },
     ],
-    [{ text: "Link Telegram", callback_data: "linktg" }],
+    [{ text: "Marketplace", callback_data: "market" }],
   ];
+
+  const payUrl = appUrl(`/pay/${claimHandle}`);
+  if (payUrl) {
+    keyboard.push([{ text: "Open my pay page", url: payUrl }]);
+  }
+
+  const settingsUrl = appUrl("/settings#telegram-linking");
+  keyboard.push([
+    settingsUrl
+      ? { text: "Publish to ENS", url: settingsUrl }
+      : { text: "Publish to ENS", callback_data: "publishens" },
+  ]);
+
+  keyboard.push([{ text: "Link Telegram", callback_data: "linktg" }]);
+  return keyboard;
 }
 
 function sharePhoneKeyboard(): ReplyButton[][] {
@@ -217,6 +274,31 @@ function messageContext(message: TelegramMessage): TelegramContext | null {
   };
 }
 
+async function getPrimaryPaylinkUrl(ownerId: string, handle: string) {
+  const dashboard = await getPaylinksDashboard(ownerId).catch(() => null);
+  const activePaylink =
+    dashboard?.paylinks.find((entry) => entry.status === "active") ?? dashboard?.paylinks[0];
+
+  if (activePaylink) {
+    return appUrl(`/pay/${handle}/${activePaylink.shortCode}`);
+  }
+
+  return "";
+}
+
+async function buildAccountLinks(userId: string, handle: string) {
+  const payUrl = appUrl(`/pay/${handle}`);
+  const profileUrl = appUrl(`/h/${handle}`);
+  const paylinkUrl = await getPrimaryPaylinkUrl(userId, handle);
+  const settingsUrl = appUrl("/settings#telegram-linking");
+  return {
+    payUrl,
+    profileUrl,
+    paylinkUrl,
+    settingsUrl,
+  };
+}
+
 async function sendHome(context: TelegramContext) {
   const account = await getTelegramBotAccount({
     telegramUserId: context.telegramUserId,
@@ -246,7 +328,7 @@ async function sendHome(context: TelegramContext) {
     context.chatId,
     `Hi ${name}.\n\n${summary}`,
     {
-      inlineKeyboard: mainMenuKeyboard(Boolean(account.claim)),
+      inlineKeyboard: mainMenuKeyboard(account.claim?.handle),
     }
   );
 }
@@ -331,33 +413,303 @@ async function sendMyHandle(context: TelegramContext) {
   }
 
   const profile = await getPublicHandleProfile(account.claim.handle);
+  const { payUrl, profileUrl, paylinkUrl, settingsUrl } = await buildAccountLinks(
+    account.user.id,
+    account.claim.handle
+  );
   const lines = [
     `₦${account.claim.handle}`,
     profile?.displayName || account.claim.displayName,
     `Verification: ${account.claim.verification}`,
     `Trust: ${profile?.reputation.trustScore ?? 0}/100`,
+    paylinkUrl ? "Saved pay link ready to share." : "Direct pay page ready now.",
   ];
 
   const buttons: InlineButton[][] = [];
-  const payUrl = appUrl(`/pay/${account.claim.handle}`);
-  const profileUrl = appUrl(`/h/${account.claim.handle}`);
-  const settingsUrl = appUrl("/settings#telegram-linking");
-
-  if (payUrl || profileUrl) {
+  if (paylinkUrl || payUrl) {
     buttons.push(
       [
-        payUrl ? { text: "Pay page", url: payUrl } : null,
-        profileUrl ? { text: "Public profile", url: profileUrl } : null,
+        paylinkUrl ? { text: "Share pay link", callback_data: "sharepay" } : null,
+        payUrl ? { text: "Open pay page", url: payUrl } : null,
       ].filter(Boolean) as InlineButton[]
     );
   }
-  buttons.push([{ text: "Link Telegram", callback_data: "linktg" }]);
-  if (settingsUrl) {
-    buttons.push([{ text: "Publish to ENS", url: settingsUrl }]);
+  if (profileUrl || settingsUrl) {
+    buttons.push(
+      [
+        profileUrl ? { text: "Public profile", url: profileUrl } : null,
+        settingsUrl ? { text: "Publish to ENS", url: settingsUrl } : null,
+      ].filter(Boolean) as InlineButton[]
+    );
   }
+  buttons.push(
+    [
+      { text: "Receive money", callback_data: "receive" },
+      { text: "Recent activity", callback_data: "activity" },
+    ],
+    [{ text: "Link Telegram", callback_data: "linktg" }]
+  );
   buttons.push([{ text: "Back to menu", callback_data: "home" }]);
 
   await sendMessage(context.chatId, lines.join("\n"), { inlineKeyboard: buttons });
+}
+
+async function sendReceiveMoney(context: TelegramContext) {
+  const account = await getTelegramBotAccount({
+    telegramUserId: context.telegramUserId,
+    telegramChatId: context.chatId,
+    telegramUsername: context.telegramUsername,
+    telegramFirstName: context.firstName,
+    telegramLastName: context.lastName,
+  });
+
+  if (!account.user) {
+    await updateTelegramBotSession({
+      telegramUserId: context.telegramUserId,
+      telegramChatId: context.chatId,
+      telegramUsername: context.telegramUsername,
+      telegramFirstName: context.firstName,
+      telegramLastName: context.lastName,
+      state: "connect_phone",
+    });
+    await sendMessage(
+      context.chatId,
+      "Share your phone number once so I can connect this chat to your NairaTag account first.",
+      { replyKeyboard: sharePhoneKeyboard() }
+    );
+    return;
+  }
+
+  if (!account.claim) {
+    await sendMessage(
+      context.chatId,
+      `Claim a ${NAIRA}handle first, then I can open your receive surfaces here.`,
+      {
+        inlineKeyboard: [
+          [{ text: `Claim ${NAIRA}handle`, callback_data: "claim" }],
+          [{ text: "Back to menu", callback_data: "home" }],
+        ],
+      }
+    );
+    return;
+  }
+
+  const { payUrl, profileUrl, paylinkUrl, settingsUrl } = await buildAccountLinks(
+    account.user.id,
+    account.claim.handle
+  );
+  const builderUrl = appUrl("/payments/payment-links/builder");
+  const lines = [
+    `Receive with ${formatHandle(account.claim.handle)}`,
+    paylinkUrl
+      ? "Your saved pay link is ready for hosted checkout."
+      : "Your direct pay page is live. Create a saved pay link anytime for richer checkout.",
+    paylinkUrl ? `Saved pay link: ${paylinkUrl}` : null,
+    payUrl ? `Direct pay page: ${payUrl}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const buttons: InlineButton[][] = [];
+  if (paylinkUrl || payUrl) {
+    buttons.push(
+      [
+        paylinkUrl ? { text: "Share pay link", callback_data: "sharepay" } : null,
+        payUrl ? { text: "Open pay page", url: payUrl } : null,
+      ].filter(Boolean) as InlineButton[]
+    );
+  }
+  if (builderUrl && !paylinkUrl) {
+    buttons.push([{ text: "Create saved pay link", url: builderUrl }]);
+  }
+  if (profileUrl || settingsUrl) {
+    buttons.push(
+      [
+        profileUrl ? { text: "Public profile", url: profileUrl } : null,
+        settingsUrl ? { text: "Publish to ENS", url: settingsUrl } : null,
+      ].filter(Boolean) as InlineButton[]
+    );
+  }
+  buttons.push([{ text: "Back to menu", callback_data: "home" }]);
+
+  await sendMessage(context.chatId, lines, {
+    inlineKeyboard: buttons,
+    disablePreview: false,
+  });
+}
+
+async function sendSharePayLink(context: TelegramContext) {
+  const account = await getTelegramBotAccount({
+    telegramUserId: context.telegramUserId,
+    telegramChatId: context.chatId,
+    telegramUsername: context.telegramUsername,
+    telegramFirstName: context.firstName,
+    telegramLastName: context.lastName,
+  });
+
+  if (!account.claim || !account.user) {
+    await sendMessage(
+      context.chatId,
+      `Claim your ${NAIRA}handle first, then I can give you a shareable payment link.`,
+      {
+        inlineKeyboard: [
+          [{ text: `Claim ${NAIRA}handle`, callback_data: "claim" }],
+          [{ text: "Back to menu", callback_data: "home" }],
+        ],
+      }
+    );
+    return;
+  }
+
+  const { payUrl, paylinkUrl } = await buildAccountLinks(account.user.id, account.claim.handle);
+  const shareUrl = paylinkUrl || payUrl;
+  const buttons: InlineButton[][] = [];
+  if (shareUrl) {
+    buttons.push([{ text: "Open link", url: shareUrl }]);
+  }
+  if (payUrl && payUrl !== shareUrl) {
+    buttons.push([{ text: "Open pay page", url: payUrl }]);
+  }
+  buttons.push(
+    [{ text: "Receive money", callback_data: "receive" }],
+    [{ text: "Back to menu", callback_data: "home" }]
+  );
+
+  await sendMessage(
+    context.chatId,
+    shareUrl
+      ? `Share this NairaTag payment link for ${formatHandle(account.claim.handle)}:\n\n${shareUrl}`
+      : `I could not find a public pay surface for ${formatHandle(account.claim.handle)} yet.`,
+    {
+      inlineKeyboard: buttons,
+      disablePreview: false,
+    }
+  );
+}
+
+async function sendPublishEns(context: TelegramContext) {
+  const account = await getTelegramBotAccount({
+    telegramUserId: context.telegramUserId,
+    telegramChatId: context.chatId,
+    telegramUsername: context.telegramUsername,
+    telegramFirstName: context.firstName,
+    telegramLastName: context.lastName,
+  });
+
+  if (!account.claim || !account.user) {
+    await sendMessage(
+      context.chatId,
+      `Claim your ${NAIRA}handle first, then I can route you into the ENS publish flow.`,
+      {
+        inlineKeyboard: [
+          [{ text: `Claim ${NAIRA}handle`, callback_data: "claim" }],
+          [{ text: "Back to menu", callback_data: "home" }],
+        ],
+      }
+    );
+    return;
+  }
+
+  const settingsUrl = appUrl("/settings#telegram-linking");
+  const username = context.telegramUsername || account.user.telegramUsername;
+  const lines = [
+    `Publish Telegram to ENS for ${formatHandle(account.claim.handle)}`,
+    username
+      ? `Telegram on file: @${username.replace(/^@/u, "")}`
+      : "Set a public Telegram username first so ENS has something to publish.",
+    `The final step happens on the web app because your wallet must sign the real ENS text record update for ${account.claim.handle}.nairatag.eth.`,
+  ];
+
+  const buttons: InlineButton[][] = [];
+  if (!account.user.telegramLinkedAt) {
+    buttons.push([{ text: "Link Telegram", callback_data: "linktg" }]);
+  }
+  if (settingsUrl) {
+    buttons.push([{ text: "Open ENS publish flow", url: settingsUrl }]);
+  }
+  buttons.push([{ text: "Back to menu", callback_data: "home" }]);
+
+  await sendMessage(context.chatId, lines.join("\n\n"), {
+    inlineKeyboard: buttons,
+    disablePreview: false,
+  });
+}
+
+async function sendRecentActivity(context: TelegramContext) {
+  const account = await getTelegramBotAccount({
+    telegramUserId: context.telegramUserId,
+    telegramChatId: context.chatId,
+    telegramUsername: context.telegramUsername,
+    telegramFirstName: context.firstName,
+    telegramLastName: context.lastName,
+  });
+
+  if (!account.claim || !account.user) {
+    await sendMessage(
+      context.chatId,
+      `Claim your ${NAIRA}handle first, then I can show recent payments and updates here.`,
+      {
+        inlineKeyboard: [
+          [{ text: `Claim ${NAIRA}handle`, callback_data: "claim" }],
+          [{ text: "Back to menu", callback_data: "home" }],
+        ],
+      }
+    );
+    return;
+  }
+
+  const [transactionsResult, notificationsResult] = await Promise.all([
+    listTransactions({ userId: account.user.id, limit: 4 }),
+    listNotifications({ userId: account.user.id, limit: 4 }),
+  ]);
+
+  const transactions = [...transactionsResult.items]
+    .sort(
+      (a, b) =>
+        new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+    )
+    .slice(0, 3);
+  const notifications = [...notificationsResult.items]
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )
+    .slice(0, 3);
+  const dashboardUrl = appUrl("/dashboard");
+
+  const paymentLines = transactions.length
+    ? transactions.map(
+        (entry) =>
+          `• ${entry.status} ${formatNairaWhole(entry.amount)} via ${entry.channel.replace(/_/g, " ")} · ${relativeTime(entry.recordedAt)}`
+      )
+    : ["• No payment activity yet."];
+  const notificationLines = notifications.length
+    ? notifications.map(
+        (entry) => `• ${entry.title} · ${relativeTime(entry.createdAt)}`
+      )
+    : ["• No inbox updates yet."];
+
+  await sendMessage(
+    context.chatId,
+    [
+      `Recent activity for ${formatHandle(account.claim.handle)}`,
+      "",
+      "Payments",
+      ...paymentLines,
+      "",
+      "Updates",
+      ...notificationLines,
+    ].join("\n"),
+    {
+      inlineKeyboard: dashboardUrl
+        ? [
+            [{ text: "Open dashboard", url: dashboardUrl }],
+            [{ text: "Back to menu", callback_data: "home" }],
+          ]
+        : [[{ text: "Back to menu", callback_data: "home" }]],
+      disablePreview: false,
+    }
+  );
 }
 
 async function startClaim(context: TelegramContext) {
@@ -607,6 +959,12 @@ async function sendClaimSuccess(
       ].filter(Boolean) as InlineButton[]
     );
   }
+  buttons.push(
+    [
+      { text: "Receive money", callback_data: "receive" },
+      { text: "Share pay link", callback_data: "sharepay" },
+    ].filter(Boolean) as InlineButton[]
+  );
   if (settingsUrl) {
     buttons.push([{ text: "Publish Telegram to ENS", url: settingsUrl }]);
   }
@@ -708,13 +1066,13 @@ async function handleContactMessage(context: TelegramContext, contact: TelegramC
       "Your phone is connected. Use the menu below for your next action.",
       {
         removeKeyboard: true,
-        inlineKeyboard: mainMenuKeyboard(Boolean((await getTelegramBotAccount({
+        inlineKeyboard: mainMenuKeyboard((await getTelegramBotAccount({
           telegramUserId: context.telegramUserId,
           telegramChatId: context.chatId,
           telegramUsername: context.telegramUsername,
           telegramFirstName: context.firstName,
           telegramLastName: context.lastName,
-        })).claim)),
+        })).claim?.handle),
       }
     );
     return;
@@ -897,8 +1255,24 @@ async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
     await startLookup(context, "send_handle");
     return;
   }
+  if (data === "receive") {
+    await sendReceiveMoney(context);
+    return;
+  }
+  if (data === "sharepay") {
+    await sendSharePayLink(context);
+    return;
+  }
   if (data === "market") {
     await sendMarketplacePreview(context);
+    return;
+  }
+  if (data === "activity") {
+    await sendRecentActivity(context);
+    return;
+  }
+  if (data === "publishens") {
+    await sendPublishEns(context);
     return;
   }
   if (data === "linktg") {
@@ -947,6 +1321,22 @@ async function handleTextMessage(message: TelegramMessage, context: TelegramCont
   }
   if (/^\/send/iu.test(text)) {
     await startLookup(context, "send_handle");
+    return;
+  }
+  if (/^\/receive/iu.test(text)) {
+    await sendReceiveMoney(context);
+    return;
+  }
+  if (/^\/activity/iu.test(text)) {
+    await sendRecentActivity(context);
+    return;
+  }
+  if (/^\/(paylink|sharepay)/iu.test(text)) {
+    await sendSharePayLink(context);
+    return;
+  }
+  if (/^\/ens/iu.test(text)) {
+    await sendPublishEns(context);
     return;
   }
 
