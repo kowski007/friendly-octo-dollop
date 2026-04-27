@@ -392,7 +392,7 @@ function FiatPaymentCard({
               {note ? <div className="mt-1 text-xs text-zinc-500">{note}</div> : null}
             </div>
             <Link
-              href="/payments/payment-links"
+              href="/paylink"
               className="text-xs font-semibold text-violet-600 hover:underline"
             >
               Change

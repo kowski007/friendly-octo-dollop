@@ -8,25 +8,12 @@ function Naira({ className }: { className?: string }) {
   );
 }
 
-function MetricBox({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-}) {
+function TrustPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[1.7rem] bg-zinc-50 p-5 dark:bg-zinc-950/45">
-      <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-        {label}
-      </div>
-      <div className="mt-6 text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+    <div className="min-w-[12rem] shrink-0 snap-center rounded-[1.4rem] bg-zinc-50 p-4 dark:bg-zinc-950/45 sm:min-w-0 sm:rounded-[1.7rem] sm:p-5">
+      <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">{label}</div>
+      <div className="mt-3 text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-lg">
         {value}
-      </div>
-      <div className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
-        {detail}
       </div>
     </div>
   );
@@ -34,68 +21,60 @@ function MetricBox({
 
 export function TrustSection() {
   return (
-    <section id="trust" className="py-10 sm:py-16">
+    <section id="trust" className="py-8 sm:py-16">
       <Container>
-        <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
+        <div className="grid gap-6 sm:gap-8 lg:grid-cols-12 lg:items-center">
           <div className="lg:col-span-5">
-            <Badge tone="verify">Trust & verification</Badge>
-            <div className="mt-7 text-sm font-semibold text-zinc-500 dark:text-zinc-400">
-              Identity confidence
+            <Badge tone="verify">Trust</Badge>
+            <div className="mt-4 text-4xl font-semibold leading-tight tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-6xl">
+              Let people feel safe before they send.
             </div>
-            <div className="mt-5 text-7xl font-semibold leading-none tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-8xl">
-              86
-            </div>
+            <p className="mt-4 max-w-md text-sm leading-6 text-zinc-700 dark:text-zinc-200 sm:text-base sm:leading-7">
+              The tag is not just cute. It carries the signals people need before
+              money moves.
+            </p>
             <div className="mt-5 flex flex-wrap gap-2">
               <Badge tone="verify">BVN linked</Badge>
               <Badge tone="orange">Bank matched</Badge>
               <Badge>Public profile</Badge>
             </div>
-            <p className="mt-6 max-w-md text-base leading-7 text-zinc-700 dark:text-zinc-200">
-              Trust is shown where it matters: before the user confirms the
-              transfer, offer, or payout.
-            </p>
           </div>
 
           <div className="lg:col-span-7">
-            <div className="rounded-[2rem] bg-white/80 p-5 shadow-sm backdrop-blur dark:bg-zinc-950/35 sm:p-6">
-              <div className="rounded-[1.7rem] bg-gradient-to-r from-orange-300 via-orange-100 to-zinc-100 p-5 dark:from-orange-600/70 dark:via-orange-950/35 dark:to-zinc-900">
+            <div className="rounded-[1.7rem] bg-white/80 p-4 shadow-sm backdrop-blur dark:bg-zinc-950/35 sm:rounded-[2rem] sm:p-6">
+              <div className="rounded-[1.4rem] bg-gradient-to-r from-orange-300 via-orange-100 to-zinc-100 p-4 dark:from-orange-600/70 dark:via-orange-950/35 dark:to-zinc-900 sm:rounded-[1.7rem] sm:p-5">
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <div className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">
-                      Deployed signal
+                      What people see
                     </div>
-                    <div className="mt-4 text-5xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                      68%
+                    <div className="mt-3 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-3xl">
+                      Name, bank, and trust signals before they confirm.
                     </div>
                   </div>
-                  <div className="text-right text-xs font-semibold text-zinc-500 dark:text-zinc-300">
-                    Target 2030
-                  </div>
+                  <Badge tone="verify">Verified</Badge>
                 </div>
               </div>
 
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <MetricBox label="Wrong-transfer risk" value="-42%" detail="with preview" />
-                <MetricBox label="Verified handles" value="150+" detail="demo records" />
+              <div className="-mx-1 mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:mt-4 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0">
+                <TrustPill label="Identity" value="Real recipient preview" />
+                <TrustPill label="Payout" value="Linked destination" />
+                <TrustPill label="Confidence" value="Safer to confirm" />
               </div>
 
-              <div className="mt-4 rounded-[1.7rem] bg-zinc-950 p-5 text-white">
+              <div className="mt-3 rounded-[1.4rem] bg-zinc-950 p-4 text-white sm:mt-4 sm:rounded-[1.7rem] sm:p-5">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <div className="text-xs font-semibold text-white/55">
-                      Example payment
-                    </div>
-                    <div className="mt-3 text-2xl font-semibold">
+                    <div className="text-xs font-semibold text-white/55">Example</div>
+                    <div className="mt-2 text-xl font-semibold sm:text-2xl">
                       <Naira />
                       victor
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-xs font-semibold text-white/55">
-                      Status
-                    </div>
-                    <div className="mt-3 text-sm font-semibold text-emerald-300">
-                      Safe to confirm
+                    <div className="text-xs font-semibold text-white/55">Status</div>
+                    <div className="mt-2 text-xs font-semibold text-emerald-300 sm:text-sm">
+                      Good to send
                     </div>
                   </div>
                 </div>

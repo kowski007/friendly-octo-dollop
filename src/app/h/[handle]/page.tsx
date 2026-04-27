@@ -21,20 +21,32 @@ export async function generateMetadata({
     };
   }
 
+  const imageUrl =
+    `/h/${profile.handle}/opengraph-image?` +
+    new URLSearchParams({
+      display: profile.displayName,
+      verification: profile.verification.status,
+      bank: profile.bank.name,
+      trust: `${profile.reputation.trustScore}/100`,
+    }).toString();
+
   return {
     title: `\u20A6${profile.handle}`,
     description: `${profile.displayName} on NairaTag. Verified public handle profile with privacy-safe trust signals.`,
+    alternates: {
+      canonical: `/h/${profile.handle}`,
+    },
     openGraph: {
       title: `\u20A6${profile.handle} on NairaTag`,
       description: `${profile.displayName} public handle profile.`,
       type: "profile",
-      images: [{ url: `/h/${profile.handle}/opengraph-image`, width: 1200, height: 630 }],
+      images: [{ url: imageUrl, width: 1200, height: 630, alt: `${profile.handle} handle card` }],
     },
     twitter: {
       card: "summary_large_image",
       title: `\u20A6${profile.handle} on NairaTag`,
       description: `${profile.displayName} public handle profile.`,
-      images: [`/h/${profile.handle}/opengraph-image`],
+      images: [imageUrl],
     },
   };
 }

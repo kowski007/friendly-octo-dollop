@@ -42,11 +42,6 @@ function BrandLockup({ mobile = false }: { mobile?: boolean }) {
         >
           NairaTag
         </div>
-        {mobile ? (
-          <div className="truncate text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
-            Handles, pay links, and crypto
-          </div>
-        ) : null}
       </div>
     </a>
   );
@@ -76,9 +71,10 @@ function LiveClaimsButton({ mobile = false }: { mobile?: boolean }) {
     }
 
     void loadClaimsCount();
+    const intervalMs = process.env.NODE_ENV === "development" ? 180000 : 45000;
     const interval = window.setInterval(() => {
       void loadClaimsCount();
-    }, 45000);
+    }, intervalMs);
 
     return () => {
       active = false;
@@ -94,7 +90,7 @@ function LiveClaimsButton({ mobile = false }: { mobile?: boolean }) {
       className={cn(
         "inline-flex items-center gap-2 rounded-full border border-zinc-200/80 bg-white/90 text-xs font-semibold text-zinc-800 shadow-sm backdrop-blur transition hover:border-orange-200 hover:text-zinc-950 dark:border-zinc-800/80 dark:bg-zinc-950/75 dark:text-zinc-100 dark:hover:border-zinc-700 dark:hover:text-white",
         mobile
-          ? "mt-2.5 w-full justify-center px-3 py-2"
+          ? "px-2.5 py-1.5 text-[11px]"
           : "px-3.5 py-2.5"
       )}
       aria-label={`${count.toLocaleString()} claimed NairaTag handles`}
@@ -134,10 +130,9 @@ const navGroups: Array<{ label: string; items: NavItem[] }> = [
         requiresAuth: true,
         unauthenticatedLabel: "Get Started",
       },
-      { href: "/payments/payment-links", label: "Payment Links" },
+      { href: "/paylink", label: "Payment Links" },
       { href: "/marketplace", label: "Marketplace" },
       { href: "/map", label: "Live map" },
-      { href: "/referrals", label: "Referrals" },
     ],
   },
   {
@@ -251,16 +246,18 @@ function NavGroup({
       <div
         id={panelId}
         className={cn(
-          "absolute top-full z-50 mt-2 w-48 rounded-2xl border border-zinc-200/80 bg-white/95 p-1.5 shadow-xl shadow-zinc-950/10 backdrop-blur transition dark:border-zinc-800/80 dark:bg-zinc-950/95 dark:shadow-black/30",
+          "absolute top-full z-50 w-48 pt-2 transition",
           align === "right" ? "right-0" : "left-0"
         )}
         hidden={!open}
       >
-        {group.items.map((item) => (
-          <div key={`${item.href}:${item.label}`} onClick={() => setOpen(false)}>
-            <NavMenuItem item={item} />
-          </div>
-        ))}
+        <div className="rounded-2xl border border-zinc-200/80 bg-white/95 p-1.5 shadow-xl shadow-zinc-950/10 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/95 dark:shadow-black/30">
+          {group.items.map((item) => (
+            <div key={`${item.href}:${item.label}`} onClick={() => setOpen(false)}>
+              <NavMenuItem item={item} />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -288,7 +285,7 @@ function MobileMenuItem({
   onSelect: () => void;
 }) {
   const rowClass =
-    "flex min-h-[2.6rem] items-center justify-between gap-3 rounded-[1rem] px-3 py-2.5 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900 dark:hover:text-white";
+    "flex min-h-[2.25rem] items-center justify-between gap-3 rounded-[0.95rem] px-3 py-2 text-[13px] font-semibold text-zinc-800 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900 dark:hover:text-white";
 
   if (item.requiresAuth) {
     return (
@@ -345,7 +342,7 @@ function MobileMenu() {
 
   return (
     <details ref={detailsRef} className="group relative md:hidden">
-      <summary className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-full bg-nt-orange text-white shadow-[0_8px_18px_rgba(249,115,22,0.24)] transition hover:brightness-110 dark:bg-white dark:text-zinc-950 dark:shadow-[0_8px_18px_rgba(255,255,255,0.14)] [&::-webkit-details-marker]:hidden">
+      <summary className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-900 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900 [&::-webkit-details-marker]:hidden">
         <span className="sr-only">Open menu</span>
         <span className="flex w-3.5 flex-col gap-[3px]">
           <span className="h-px rounded-full bg-current transition group-open:translate-y-1 group-open:rotate-45" />
@@ -362,9 +359,9 @@ function MobileMenu() {
         className="pointer-events-none fixed inset-0 z-40 bg-zinc-950/18 opacity-0 transition duration-150 group-open:pointer-events-auto group-open:opacity-100 dark:bg-black/48"
       />
 
-      <div className="absolute right-0 top-full z-50 mt-2 w-[min(calc(100vw-3rem),17.5rem)] overflow-hidden rounded-[1.5rem] border border-zinc-200 bg-white shadow-[0_18px_42px_rgba(15,23,42,0.14)] ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-950 dark:ring-white/10 dark:shadow-[0_18px_46px_rgba(0,0,0,0.34)]">
-        <div className="flex items-center justify-between border-b border-zinc-200 px-3.5 py-3 dark:border-zinc-800">
-          <div className="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+      <div className="absolute right-0 top-full z-50 mt-2 w-[min(calc(100vw-1.25rem),16rem)] overflow-hidden rounded-[1.25rem] border border-zinc-200 bg-white shadow-[0_18px_42px_rgba(15,23,42,0.14)] ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-950 dark:ring-white/10 dark:shadow-[0_18px_46px_rgba(0,0,0,0.34)]">
+        <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-2.5 dark:border-zinc-800">
+          <div className="text-sm font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
             Menu
           </div>
           <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400 dark:text-zinc-500">
@@ -372,7 +369,7 @@ function MobileMenu() {
           </div>
         </div>
 
-        <div className="max-h-[68vh] overflow-y-auto px-2.5 py-2.5">
+        <div className="max-h-[68vh] overflow-y-auto px-2 py-2">
           {navGroups.map((group) => (
             <div key={group.label} className="pb-2 last:pb-0">
               <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400 dark:text-zinc-500">
@@ -415,16 +412,16 @@ function MobileMenu() {
                   </span>
                 </span>
               </AuthModalButton>
-              <a
-                href="#claim"
+              <Link
+                href="/claim"
                 onClick={closeMenu}
                 className="flex min-h-[2.6rem] items-center justify-between gap-3 rounded-[1rem] px-3 py-2.5 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900 dark:hover:text-white"
               >
-                <span>Claim your name</span>
+                <span>Claim</span>
                 <span className="text-zinc-400">
                   <MobileMenuArrow />
                 </span>
-              </a>
+              </Link>
             </div>
           </div>
         </div>
@@ -436,11 +433,12 @@ function MobileMenu() {
 export function HeaderNav() {
   return (
     <header className="sticky top-0 z-50 bg-white/70 backdrop-blur dark:bg-black/40 md:border-b md:border-zinc-200/60 md:dark:border-zinc-800/60">
-      <Container className="py-3 md:py-4">
-        <div className="rounded-[1.6rem] border border-zinc-200 bg-white px-3 py-2.5 shadow-[0_16px_40px_rgba(15,23,42,0.08)] dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-[0_18px_44px_rgba(0,0,0,0.3)] md:hidden">
-          <div className="flex items-center justify-between">
+      <Container className="py-2.5 md:py-4">
+        <div className="rounded-[1.25rem] border border-zinc-200 bg-white px-3 py-2 shadow-[0_12px_30px_rgba(15,23,42,0.08)] dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-[0_18px_40px_rgba(0,0,0,0.28)] md:hidden">
+          <div className="flex items-center gap-2">
             <BrandLockup mobile />
-            <div className="ml-3 flex shrink-0 items-center gap-1.5">
+            <div className="ml-auto flex shrink-0 items-center gap-1.5">
+              <LiveClaimsButton mobile />
               <ThemeToggle
                 size="compact"
                 className="border-zinc-200 bg-zinc-50 text-zinc-700 shadow-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
@@ -448,7 +446,6 @@ export function HeaderNav() {
               <MobileMenu />
             </div>
           </div>
-          <LiveClaimsButton mobile />
         </div>
 
         <div className="hidden items-center justify-between md:flex">
@@ -477,8 +474,8 @@ export function HeaderNav() {
             >
               Dashboard
             </AuthModalButton>
-            <ButtonLink href="#claim" className="px-4 py-2.5">
-              Claim your name
+            <ButtonLink href="/claim" className="px-3.5 py-2 text-sm">
+              Claim
             </ButtonLink>
           </div>
         </div>

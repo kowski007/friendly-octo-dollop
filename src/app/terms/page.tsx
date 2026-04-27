@@ -19,13 +19,21 @@ export default function TermsPage() {
               <p>
                 NairaTag provides a handle-based identity layer, payment
                 discovery surfaces, marketplace tooling, public trust pages, and
-                supporting APIs. We may block, reserve, review, or reclassify
-                handles to reduce impersonation, fraud, abuse, or legal risk.
+                supporting APIs. This can include web flows, pay pages,
+                Telegram-bot product surfaces, and ENS-linked identity records
+                where a user chooses to publish public metadata onchain. We may
+                block, reserve, review, or reclassify handles to reduce
+                impersonation, fraud, abuse, or legal risk.
               </p>
               <p>
                 By using the service, you agree to follow the live namespace and
                 verification rules published in the product and in the name
                 policy.
+              </p>
+              <p>
+                Where a user signs an ENS text-record transaction, that onchain
+                publication becomes part of the user’s public identity surface
+                and may be read by compatible apps, wallets, or indexers.
               </p>
             </>
           ),

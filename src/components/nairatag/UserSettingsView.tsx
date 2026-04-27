@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   type ChangeEvent,
   type FormEvent,
   type ReactNode,
+  useEffect,
   useState,
   useTransition,
 } from "react";
@@ -17,6 +19,12 @@ import type {
   CryptoWalletRecord,
   UserRecord,
 } from "@/lib/adminTypes";
+import {
+  DEFAULT_SETTINGS_NOTIFICATION_PREFERENCES,
+  readSettingsNotificationPreferences,
+  writeSettingsNotificationPreferences,
+  type SettingsNotificationPreferences,
+} from "@/lib/settingsPreferences";
 import { AppPageHeader } from "./AppPageHeader";
 import { CopyButton } from "./CopyButton";
 import { TelegramLinkingCard } from "./TelegramLinkingCard";
@@ -37,6 +45,46 @@ export type UserSettingsData = {
   cryptoWallet: CryptoWalletRecord | null;
   notifications: NotificationSummary;
 };
+
+type SettingsTab = "profile" | "notifications" | "payments" | "security" | "telegram";
+
+const SETTINGS_TABS: Array<{
+  id: SettingsTab;
+  label: string;
+  shortLabel: string;
+  description: string;
+}> = [
+  {
+    id: "profile",
+    label: "Profile",
+    shortLabel: "Profile",
+    description: "Name, handle, avatar.",
+  },
+  {
+    id: "notifications",
+    label: "Notifications",
+    shortLabel: "Alerts",
+    description: "Live alerts and inbox.",
+  },
+  {
+    id: "payments",
+    label: "Payments",
+    shortLabel: "Payments",
+    description: "Payouts, wallets, PayLinks.",
+  },
+  {
+    id: "security",
+    label: "Security",
+    shortLabel: "Security",
+    description: "Verification checks.",
+  },
+  {
+    id: "telegram",
+    label: "Telegram",
+    shortLabel: "Telegram",
+    description: "Link and publish.",
+  },
+];
 
 function displayName(user: UserRecord, claim: ClaimRecord | null) {
   if (claim?.displayName && !/^pending verification$/i.test(claim.displayName)) {
@@ -73,6 +121,19 @@ function formatDate(value?: string | null) {
 
 function humanizeError(value: string) {
   return value.replaceAll("_", " ");
+}
+
+function normalizeSettingsTab(hash?: string | null): SettingsTab {
+  const value = (hash || "").replace(/^#/u, "").trim().toLowerCase();
+  if (value === "notifications") return "notifications";
+  if (value === "payments") return "payments";
+  if (value === "security") return "security";
+  if (value === "telegram" || value === "telegram-linking") return "telegram";
+  return "profile";
+}
+
+function tabHash(tab: SettingsTab) {
+  return tab === "telegram" ? "telegram-linking" : tab;
 }
 
 function fileToAvatarDataUrl(file: File) {
@@ -117,188 +178,301 @@ function fileToAvatarDataUrl(file: File) {
   });
 }
 
-function SectionCard({
-  title,
-  description,
+function SectionPanel({
   children,
   className,
+  tone = "white",
   id,
 }: {
-  title: string;
-  description?: string;
   children: ReactNode;
   className?: string;
+  tone?: "white" | "soft";
   id?: string;
 }) {
   return (
     <section
       id={id}
       className={cn(
-        "rounded-[1.7rem] border border-zinc-200/75 bg-white/90 p-4 shadow-[0_16px_42px_rgba(15,23,42,0.06)] dark:border-zinc-800/80 dark:bg-zinc-950/45 dark:shadow-[0_20px_48px_rgba(0,0,0,0.22)]",
+        "rounded-[1.6rem] border shadow-[0_16px_40px_rgba(15,23,42,0.06)] dark:shadow-[0_20px_44px_rgba(0,0,0,0.24)]",
+        tone === "soft"
+          ? "border-zinc-200/65 bg-[#f7f8fc] dark:border-zinc-800/80 dark:bg-zinc-900/55"
+          : "border-zinc-200/75 bg-white/92 dark:border-zinc-800/80 dark:bg-zinc-950/50",
         className
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-            {title}
-          </h2>
-          {description ? (
-            <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-300">
-              {description}
-            </p>
-          ) : null}
-        </div>
-      </div>
-      <div className="mt-4">{children}</div>
+      {children}
     </section>
   );
 }
 
-function RowIcon({
-  children,
-  tone = "neutral",
+function SectionTitle({
+  eyebrow,
+  title,
+  description,
+  trailing,
 }: {
-  children: ReactNode;
-  tone?: "neutral" | "orange" | "verify";
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  trailing?: ReactNode;
 }) {
   return (
-    <div
-      className={cn(
-        "grid h-10 w-10 shrink-0 place-items-center rounded-2xl",
-        tone === "orange"
-          ? "bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-200"
-          : tone === "verify"
-            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200"
-            : "bg-zinc-100 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
-      )}
-    >
-      {children}
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
+        {eyebrow ? (
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
+            {eyebrow}
+          </div>
+        ) : null}
+        <h2 className="mt-1 text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-xl">
+          {title}
+        </h2>
+        {description ? (
+          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+            {description}
+          </p>
+        ) : null}
+      </div>
+      {trailing}
     </div>
   );
 }
 
-function RowChevron() {
+function SidebarNavButton({
+  active,
+  label,
+  detail,
+  onClick,
+  badge,
+}: {
+  active: boolean;
+  label: string;
+  detail?: string;
+  onClick: () => void;
+  badge?: ReactNode;
+}) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
-      <path
-        d="m9 6 6 6-6 6"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "w-full rounded-2xl border px-3.5 py-3 text-left transition",
+        active
+          ? "border-zinc-200 bg-white text-zinc-950 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+          : "border-transparent bg-transparent text-zinc-600 hover:border-zinc-200 hover:bg-white/70 hover:text-zinc-950 dark:text-zinc-300 dark:hover:border-zinc-800 dark:hover:bg-zinc-950/60 dark:hover:text-zinc-50"
+      )}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold">{label}</div>
+          {detail && active ? (
+            <div className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{detail}</div>
+          ) : null}
+        </div>
+        {badge}
+      </div>
+    </button>
   );
 }
 
-function SettingsLinkRow({
-  href,
-  icon,
+function TopTabButton({
+  active,
   label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex h-9 shrink-0 items-center rounded-xl px-3 text-sm font-semibold transition",
+        active
+          ? "bg-zinc-950 text-white dark:bg-white dark:text-zinc-950"
+          : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-zinc-50"
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+function ToggleSwitch({
+  checked,
+  onChange,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={onChange}
+      className={cn(
+        "relative inline-flex h-7 w-12 items-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-50",
+        checked
+          ? "bg-indigo-500 shadow-[inset_0_0_0_1px_rgba(79,70,229,0.2)]"
+          : "bg-zinc-200 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:bg-zinc-800"
+      )}
+    >
+      <span
+        className={cn(
+          "ml-1 block h-5 w-5 rounded-full bg-white shadow-sm transition",
+          checked ? "translate-x-5" : "translate-x-0"
+        )}
+      />
+    </button>
+  );
+}
+
+function ToggleRow({
+  label,
+  detail,
+  checked,
+  onChange,
+  disabled,
+  badge,
+}: {
+  label: string;
+  detail: string;
+  checked: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+  badge?: ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-[1.35rem] border border-zinc-200/75 bg-white/85 px-4 py-4 dark:border-zinc-800/80 dark:bg-zinc-950/35">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">{label}</div>
+          {badge}
+        </div>
+        <div className="mt-1 max-w-xl text-xs leading-5 text-zinc-600 dark:text-zinc-300">
+          {detail}
+        </div>
+      </div>
+      <ToggleSwitch checked={checked} onChange={onChange} disabled={disabled} />
+    </div>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
   detail,
   trailing,
 }: {
-  href: string;
-  icon: ReactNode;
   label: string;
+  value: string;
   detail?: string;
   trailing?: ReactNode;
 }) {
   return (
-    <a
-      href={href}
-      className="flex items-center gap-3 rounded-2xl px-3 py-3 transition hover:bg-zinc-50 dark:hover:bg-zinc-900/70"
-    >
-      {icon}
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">{label}</div>
+    <div className="flex flex-wrap items-start justify-between gap-3 rounded-[1.35rem] border border-zinc-200/75 bg-white/85 px-4 py-4 dark:border-zinc-800/80 dark:bg-zinc-950/35">
+      <div className="min-w-0">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
+          {label}
+        </div>
+        <div className="mt-1 text-sm font-semibold text-zinc-950 dark:text-zinc-50">{value}</div>
         {detail ? (
-          <div className="mt-0.5 truncate text-xs text-zinc-600 dark:text-zinc-300">
-            {detail}
-          </div>
+          <div className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-300">{detail}</div>
         ) : null}
       </div>
-      <div className="flex items-center gap-2 text-xs font-semibold text-zinc-500 dark:text-zinc-300">
-        {trailing}
-        <RowChevron />
-      </div>
-    </a>
-  );
-}
-
-function SettingsValueRow({
-  icon,
-  label,
-  detail,
-  trailing,
-}: {
-  icon: ReactNode;
-  label: string;
-  detail: string;
-  trailing?: ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-3 rounded-2xl px-3 py-3">
-      {icon}
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">{label}</div>
-        <div className="mt-0.5 truncate text-xs text-zinc-600 dark:text-zinc-300">
-          {detail}
-        </div>
-      </div>
-      {trailing ? (
-        <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-300">{trailing}</div>
-      ) : null}
+      {trailing ? <div className="shrink-0">{trailing}</div> : null}
     </div>
   );
 }
 
-function StatusPill({
-  children,
-  tone = "neutral",
+function QuickLink({
+  href,
+  label,
+  detail,
 }: {
-  children: ReactNode;
-  tone?: "neutral" | "verify" | "orange";
+  href: string;
+  label: string;
+  detail: string;
 }) {
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em]",
-        tone === "verify"
-          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200"
-          : tone === "orange"
-            ? "bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-200"
-            : "bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300"
-      )}
+    <Link
+      href={href}
+      className="flex items-center justify-between gap-3 rounded-2xl border border-transparent px-3 py-3 transition hover:border-zinc-200 hover:bg-white/80 dark:hover:border-zinc-800 dark:hover:bg-zinc-950/45"
     >
-      {children}
-    </span>
+      <div className="min-w-0">
+        <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">{label}</div>
+        <div className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{detail}</div>
+      </div>
+      <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 text-zinc-400" aria-hidden="true">
+        <path
+          d="m9 6 6 6-6 6"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </Link>
+  );
+}
+
+function MobileTabSelect({
+  value,
+  onChange,
+}: {
+  value: SettingsTab;
+  onChange: (tab: SettingsTab) => void;
+}) {
+  return (
+    <label className="block xl:hidden">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
+        Open section
+      </span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value as SettingsTab)}
+        className="mt-2 h-11 w-full rounded-2xl border border-zinc-200/80 bg-white px-3.5 text-sm font-semibold text-zinc-950 outline-none dark:border-zinc-800/80 dark:bg-zinc-950/55 dark:text-zinc-50"
+      >
+        {SETTINGS_TABS.map((tab) => (
+          <option key={tab.id} value={tab.id}>
+            {tab.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
 function SignInState() {
   return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-950 transition-colors dark:bg-zinc-950 dark:text-zinc-50">
-      <AppPageHeader ctaHref="/claim" ctaLabel="Claim a ₦handle" />
-      <main className="py-6 sm:py-8">
+    <div className="min-h-screen bg-[#eef1f7] text-zinc-950 transition-colors dark:bg-zinc-950 dark:text-zinc-50">
+      <AppPageHeader ctaHref="/claim" ctaLabel={`Claim ${NAIRA}handle`} />
+      <main className="py-5 sm:py-7">
         <Container className="max-w-3xl">
-          <SectionCard
-            title="Settings"
-            description="Sign in to manage your account, notifications, and payment preferences."
-          >
-            <div className="flex flex-col gap-2 sm:flex-row">
+          <SectionPanel className="p-5 sm:p-6">
+        <SectionTitle
+          eyebrow="Settings"
+          title="Sign in to manage your account."
+          description="Profile, payouts, Telegram, and alerts live here."
+        />
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row">
               <AuthModalButton afterAuthHref="/settings" variant="primary">
                 Sign in
               </AuthModalButton>
-              <a
+              <Link
                 href="/dashboard"
                 className="inline-flex h-10 items-center justify-center rounded-xl border border-zinc-300/70 bg-white/80 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-white dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50"
               >
                 Dashboard
-              </a>
+              </Link>
             </div>
-          </SectionCard>
+          </SectionPanel>
         </Container>
       </main>
     </div>
@@ -312,20 +486,69 @@ export function UserSettingsView({
 }) {
   const router = useRouter();
   const { toast } = useToast();
-  const [fullName, setFullName] = useState(
-    data ? displayName(data.user, data.claim) : ""
-  );
+  const [fullName, setFullName] = useState(data ? displayName(data.user, data.claim) : "");
   const [handle, setHandle] = useState(data?.claim?.handle ?? "");
   const [avatarUrl, setAvatarUrl] = useState(data?.user.avatarUrl ?? "");
+  const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
+  const [notificationPrefs, setNotificationPrefs] = useState<SettingsNotificationPreferences>(
+    DEFAULT_SETTINGS_NOTIFICATION_PREFERENCES
+  );
+  const [prefsReady, setPrefsReady] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const applyHashTab = () => {
+      setActiveTab(normalizeSettingsTab(window.location.hash));
+    };
+
+    applyHashTab();
+    window.addEventListener("hashchange", applyHashTab);
+    return () => window.removeEventListener("hashchange", applyHashTab);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setNotificationPrefs(readSettingsNotificationPreferences(window.localStorage));
+    setPrefsReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!prefsReady || typeof window === "undefined") return;
+    writeSettingsNotificationPreferences(notificationPrefs, window.localStorage);
+  }, [notificationPrefs, prefsReady]);
 
   if (!data) return <SignInState />;
 
   const { user, claim, bankAccount, cryptoWallet, notifications } = data;
   const name = displayName(user, claim);
-  const publicPath = claim ? `/h/${claim.handle}` : "/claim";
-  const payPath = claim ? `/pay/${claim.handle}` : "/payments/payment-links";
   const claimLabel = claim ? `${NAIRA}${claim.handle}` : "Handle not claimed";
+  const publicPath = claim ? `/h/${claim.handle}` : "/claim";
+  const payPagePath = claim ? `/pay/${claim.handle}` : "/claim";
+  const createPayLinkPath = "/pay/create";
+  const paylinksDashboardPath = "/dashboard/paylinks";
+  const walletLabel = maskWallet(cryptoWallet?.walletAddress);
+  const currentTabMeta =
+    SETTINGS_TABS.find((tab) => tab.id === activeTab) ?? SETTINGS_TABS[0];
+
+  function selectTab(tab: SettingsTab) {
+    setActiveTab(tab);
+    if (typeof window !== "undefined") {
+      const next = `#${tabHash(tab)}`;
+      window.history.replaceState(null, "", next);
+    }
+  }
+
+  function updateNotificationPref<K extends keyof SettingsNotificationPreferences>(
+    key: K,
+    value: SettingsNotificationPreferences[K]
+  ) {
+    setNotificationPrefs((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
 
   async function selectAvatarFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -393,119 +616,539 @@ export function UserSettingsView({
     });
   }
 
-  return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-950 transition-colors dark:bg-zinc-950 dark:text-zinc-50">
-      <AppPageHeader ctaHref="/dashboard" ctaLabel="Dashboard" />
-      <main className="py-5 sm:py-6">
-        <Container className="max-w-6xl space-y-4">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="min-w-0">
-              <Badge tone="neutral" className="px-2 py-0.5 text-[11px]">
-                {claimLabel}
-              </Badge>
-              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                Settings
-              </h1>
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                Keep profile, notifications, and payments tight across desktop and mobile.
-              </p>
+  const profilePanel = (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <SectionPanel className="p-5 sm:p-6">
+        <SectionTitle
+          eyebrow="Public profile"
+          title="Edit the identity people pay."
+          description="This controls the name, handle, and image that appear across your public handle card and payment surfaces."
+        />
+
+        <form onSubmit={saveProfile} className="mt-5 space-y-4">
+          <label className="block">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
+              Handle
+            </span>
+            <div className="mt-2 flex h-12 rounded-2xl border border-zinc-200/80 bg-white/85 dark:border-zinc-800/80 dark:bg-zinc-950/40">
+              <span className="grid w-11 place-items-center border-r border-zinc-200/70 text-sm font-semibold text-emerald-700 dark:border-zinc-800/70 dark:text-emerald-300">
+                {NAIRA}
+              </span>
+              <input
+                value={handle}
+                onChange={(event) =>
+                  setHandle(event.target.value.replace(/[^\w.]/g, "").toLowerCase())
+                }
+                maxLength={32}
+                placeholder="yourname"
+                disabled={!claim || isPending}
+                className="min-w-0 flex-1 bg-transparent px-3.5 text-sm font-semibold text-zinc-950 outline-none placeholder:text-zinc-400 disabled:opacity-60 dark:text-zinc-50"
+              />
+            </div>
+          </label>
+
+          <label className="block">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
+              Public name
+            </span>
+            <input
+              value={fullName}
+              onChange={(event) => setFullName(event.target.value)}
+              maxLength={80}
+              placeholder="Your public name"
+              disabled={isPending}
+              className="mt-2 h-12 w-full rounded-2xl border border-zinc-200/80 bg-white/85 px-3.5 text-sm font-semibold text-zinc-950 outline-none placeholder:text-zinc-400 disabled:opacity-60 dark:border-zinc-800/80 dark:bg-zinc-950/40 dark:text-zinc-50"
+            />
+          </label>
+
+          <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)]">
+            <div className="grid h-20 w-20 place-items-center overflow-hidden rounded-[1.4rem] bg-zinc-950 text-lg font-semibold text-white dark:bg-white dark:text-zinc-950">
+              {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                initials(user, claim)
+              )}
+            </div>
+            <div className="space-y-3">
+              <label className="block">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
+                  Avatar
+                </span>
+                <input
+                  value={avatarUrl}
+                  onChange={(event) => setAvatarUrl(event.target.value)}
+                  placeholder="Image URL or upload"
+                  disabled={isPending}
+                  className="mt-2 h-12 w-full rounded-2xl border border-zinc-200/80 bg-white/85 px-3.5 text-sm font-semibold text-zinc-950 outline-none placeholder:text-zinc-400 disabled:opacity-60 dark:border-zinc-800/80 dark:bg-zinc-950/40 dark:text-zinc-50"
+                />
+              </label>
+
+              <div className="flex flex-wrap gap-2">
+                <label className="inline-flex h-9 cursor-pointer items-center justify-center rounded-xl border border-zinc-300/70 bg-white/80 px-3.5 text-xs font-semibold text-zinc-950 transition hover:bg-white dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50">
+                  Upload
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={selectAvatarFile}
+                    disabled={isPending}
+                    className="sr-only"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setAvatarUrl("")}
+                  disabled={isPending || !avatarUrl}
+                  className="h-9 rounded-xl border border-zinc-300/70 bg-white/80 px-3.5 text-xs font-semibold text-zinc-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50"
+                >
+                  Remove
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
-            <div className="space-y-4">
-              <section className="overflow-hidden rounded-[1.8rem] border border-zinc-200/75 bg-white/92 shadow-[0_20px_52px_rgba(15,23,42,0.08)] dark:border-zinc-800/80 dark:bg-zinc-950/45 dark:shadow-[0_22px_56px_rgba(0,0,0,0.26)]">
-                <div className="h-24 bg-gradient-to-r from-orange-500 via-orange-100 to-emerald-100 dark:from-orange-600 dark:via-orange-950 dark:to-emerald-950" />
-                <div className="px-4 pb-4">
-                  <div className="-mt-10 flex items-end gap-3">
-                    <div className="grid h-20 w-20 place-items-center overflow-hidden rounded-[1.7rem] border-4 border-white bg-zinc-950 text-lg font-semibold text-white dark:border-zinc-950 dark:bg-white dark:text-zinc-950">
-                      {avatarUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        initials(user, claim)
-                      )}
-                    </div>
-                    <div className="min-w-0 pb-1">
-                      <div className="truncate text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                        {name}
-                      </div>
-                      <div className="mt-1 truncate text-sm text-zinc-600 dark:text-zinc-300">
-                        {user.email || user.phone}
-                      </div>
-                    </div>
-                  </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+            <div className="text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+              Changes sync to your account card, public handle, and share surfaces together.
+            </div>
+            <button
+              type="submit"
+              disabled={isPending}
+              className="h-10 rounded-xl bg-nt-orange px-4 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isPending ? "Saving..." : "Save changes"}
+            </button>
+          </div>
+        </form>
+      </SectionPanel>
 
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <StatusPill tone={claim ? "verify" : "orange"}>
-                      {claim ? claim.verification : "claim handle"}
-                    </StatusPill>
-                    <StatusPill tone={bankAccount ? "verify" : "orange"}>
-                      {bankAccount ? "payout linked" : "payout needed"}
-                    </StatusPill>
-                    <StatusPill tone={cryptoWallet?.walletVerified ? "verify" : "neutral"}>
-                      {cryptoWallet?.walletVerified ? "wallet verified" : "wallet pending"}
-                    </StatusPill>
-                  </div>
+      <div className="space-y-4">
+        <SectionPanel tone="soft" className="p-5">
+        <SectionTitle
+          eyebrow="Live surfaces"
+          title="Where this identity shows up."
+          description="Open the main public touchpoints tied to your handle."
+        />
+          <div className="mt-4 space-y-3">
+            <InfoRow
+              label="Public profile"
+              value={claim ? publicPath : "Claim your handle first"}
+              detail="Your trust card, QR, and public handle page."
+              trailing={
+                <Link
+                  href={publicPath}
+                  className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-300/70 bg-white/80 px-3 text-xs font-semibold text-zinc-950 transition hover:bg-white dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50"
+                >
+                  Open
+                </Link>
+              }
+            />
+            <InfoRow
+              label="Pay page"
+              value={claim ? payPagePath : "Claim your handle first"}
+              detail="The direct payment page behind your identity."
+              trailing={
+                <Link
+                  href={payPagePath}
+                  className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-300/70 bg-white/80 px-3 text-xs font-semibold text-zinc-950 transition hover:bg-white dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50"
+                >
+                  Open
+                </Link>
+              }
+            />
+            <InfoRow
+              label="Theme"
+              value="Light / dark"
+              detail="Switch the full product feel instantly."
+              trailing={
+                <ThemeToggle
+                  size="compact"
+                  className="border-zinc-200 bg-white text-zinc-700 shadow-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                />
+              }
+            />
+          </div>
+        </SectionPanel>
 
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <CopyButton value={claim ? `${NAIRA}${claim.handle}` : user.phone} label="Copy ID" />
-                    <a
-                      href={publicPath}
-                      className="inline-flex h-10 items-center justify-center rounded-xl border border-zinc-300/70 bg-white/80 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-white dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50"
-                    >
-                      {claim ? "Open public profile" : "Claim handle"}
-                    </a>
-                  </div>
-                </div>
-              </section>
+        <SectionPanel tone="soft" className="p-5">
+        <SectionTitle
+          eyebrow="Compact facts"
+          title="Your account at a glance."
+          description="What is already linked and live."
+        />
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <InfoRow
+              label="Member since"
+              value={formatDate(user.createdAt)}
+              detail="When this NairaTag account first went live."
+            />
+            <InfoRow
+              label="Points"
+              value={`${(user.pointsBalance ?? 0).toLocaleString()} pts`}
+              detail="Welcome rewards and referral bonuses."
+            />
+          </div>
+        </SectionPanel>
+      </div>
+    </div>
+  );
 
-              <SectionCard
-                title="Manage profile"
-                description="Update the public details that power your handle, pay page, and account identity."
+  const notificationsPanel = (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <SectionPanel className="p-5 sm:p-6" id="notifications">
+        <SectionTitle
+          eyebrow="Notification settings"
+          title="Keep live alerts useful, not noisy."
+          description="Control the floating toasts you see while NairaTag is open."
+        />
+
+        <div className="mt-5 space-y-3">
+          <ToggleRow
+            label="Live toasts"
+            detail="Master switch for floating notifications across the signed-in app."
+            checked={notificationPrefs.liveToasts}
+            onChange={() =>
+              updateNotificationPref("liveToasts", !notificationPrefs.liveToasts)
+            }
+            badge={<Badge tone="neutral">app-wide</Badge>}
+          />
+          <ToggleRow
+            label="Payment alerts"
+            detail="PayLink creation, receipts, refunds, payout movement, and settlement changes."
+            checked={notificationPrefs.paymentToasts}
+            disabled={!notificationPrefs.liveToasts}
+            onChange={() =>
+              updateNotificationPref("paymentToasts", !notificationPrefs.paymentToasts)
+            }
+          />
+          <ToggleRow
+            label="Activity alerts"
+            detail="Marketplace offers, listing changes, sales, and referral progress."
+            checked={notificationPrefs.activityToasts}
+            disabled={!notificationPrefs.liveToasts}
+            onChange={() =>
+              updateNotificationPref("activityToasts", !notificationPrefs.activityToasts)
+            }
+          />
+          <ToggleRow
+            label="Account alerts"
+            detail="Handle claims, bank linking, Telegram verification, and account-level updates."
+            checked={notificationPrefs.accountToasts}
+            disabled={!notificationPrefs.liveToasts}
+            onChange={() =>
+              updateNotificationPref("accountToasts", !notificationPrefs.accountToasts)
+            }
+          />
+        </div>
+      </SectionPanel>
+
+      <div className="space-y-4">
+        <SectionPanel tone="soft" className="p-5">
+        <SectionTitle
+          eyebrow="Inbox"
+          title="Stored notifications"
+          description="Your inbox keeps the full notification history."
+        />
+          <div className="mt-4 grid gap-3">
+            <InfoRow
+              label="Unread"
+              value={notifications.unread.toLocaleString()}
+              detail="New alerts waiting in your notifications inbox."
+              trailing={<Badge tone={notifications.unread > 0 ? "orange" : "neutral"}>{notifications.unread > 0 ? "needs review" : "clear"}</Badge>}
+            />
+            <InfoRow
+              label="Stored"
+              value={notifications.total.toLocaleString()}
+              detail="All notification records currently attached to your account."
+            />
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link
+              href="/notifications"
+              className="inline-flex h-9 items-center justify-center rounded-xl bg-zinc-950 px-3.5 text-xs font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+            >
+              Open inbox
+            </Link>
+            <Link
+              href="/notifications"
+              className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-300/70 bg-white/80 px-3.5 text-xs font-semibold text-zinc-950 transition hover:bg-white dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50"
+            >
+              Manage read status
+            </Link>
+          </div>
+        </SectionPanel>
+
+      </div>
+    </div>
+  );
+
+  const paymentsPanel = (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <SectionPanel className="p-5 sm:p-6">
+        <SectionTitle
+          eyebrow="Payments"
+          title="Everything tied to getting paid."
+          description="Banks, wallets, pay pages, and PayLinks."
+        />
+
+        <div className="mt-5 grid gap-3">
+          <InfoRow
+            label="Payout bank"
+            value={
+              bankAccount
+                ? `${bankAccount.bankName} ${bankAccount.accountNumberMasked}`
+                : "No bank account linked yet"
+            }
+            detail="This destination powers fiat settlement and hosted PayLink payouts."
+            trailing={
+              <Badge tone={bankAccount ? "verify" : "orange"}>
+                {bankAccount ? "ready" : "needed"}
+              </Badge>
+            }
+          />
+          <InfoRow
+            label="Base wallet"
+            value={walletLabel}
+            detail="Used for ENS-aware flows, crypto sends, and wallet-linked identity."
+            trailing={
+              <Badge tone={cryptoWallet?.walletVerified ? "verify" : "neutral"}>
+                {cryptoWallet?.walletVerified ? "verified" : "pending"}
+              </Badge>
+            }
+          />
+          <InfoRow
+            label="Pay page"
+            value={claim ? payPagePath : "Claim your handle first"}
+            detail="Share this when you want someone to pay your handle directly."
+            trailing={
+              <Link
+                href={payPagePath}
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-300/70 bg-white/80 px-3 text-xs font-semibold text-zinc-950 transition hover:bg-white dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50"
               >
-                <form onSubmit={saveProfile} className="space-y-3">
-                  <label className="block">
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">
-                      Handle
-                    </span>
-                    <div className="mt-1 flex rounded-2xl border border-zinc-200/80 bg-white/80 text-sm dark:border-zinc-800/80 dark:bg-zinc-950/40">
-                      <span className="grid w-10 place-items-center border-r border-zinc-200/70 text-zinc-500 dark:border-zinc-800/70">
-                        {NAIRA}
-                      </span>
-                      <input
-                        value={handle}
-                        onChange={(event) =>
-                          setHandle(event.target.value.replace(/[^\w]/g, "").toLowerCase())
-                        }
-                        maxLength={20}
-                        placeholder="your_handle"
-                        disabled={!claim || isPending}
-                        className="min-w-0 flex-1 bg-transparent px-3 py-3 text-sm font-semibold text-zinc-950 outline-none placeholder:text-zinc-400 disabled:opacity-60 dark:text-zinc-50"
-                      />
-                    </div>
-                  </label>
+                Open
+              </Link>
+            }
+          />
+        </div>
+      </SectionPanel>
 
-                  <label className="block">
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">
-                      Public name
-                    </span>
-                    <input
-                      value={fullName}
-                      onChange={(event) => setFullName(event.target.value)}
-                      maxLength={80}
-                      placeholder="Your name"
-                      disabled={isPending}
-                      className="mt-1 h-11 w-full rounded-2xl border border-zinc-200/80 bg-white/80 px-3 text-sm font-semibold text-zinc-950 outline-none placeholder:text-zinc-400 disabled:opacity-60 dark:border-zinc-800/80 dark:bg-zinc-950/40 dark:text-zinc-50"
-                    />
-                  </label>
+      <div className="space-y-4">
+        <SectionPanel tone="soft" className="p-5">
+        <SectionTitle
+          eyebrow="PayLinks"
+          title="Create or manage links."
+          description="Jump into create or manager."
+        />
+          <div className="mt-4 space-y-2">
+            <QuickLink
+              href={createPayLinkPath}
+              label="Create PayLink"
+              detail="The quick creator with QR, share, and copy actions."
+            />
+            <QuickLink
+              href={paylinksDashboardPath}
+              label="PayLinks dashboard"
+              detail="Receipts, refunds, settlements, and link management."
+            />
+          </div>
+        </SectionPanel>
 
-                  <label className="block">
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">
-                      Avatar
-                    </span>
-                    <div className="mt-1 flex items-center gap-2">
-                      <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-2xl bg-zinc-950 text-sm font-semibold text-white dark:bg-white dark:text-zinc-950">
+        <SectionPanel tone="soft" className="p-5">
+        <SectionTitle
+          eyebrow="More routes"
+          title="Payment shortcuts"
+          description="Other money surfaces connected to your account."
+        />
+          <div className="mt-4 space-y-2">
+            <QuickLink
+              href="/send/crypto"
+              label="Send crypto"
+              detail="Resolve wallets, handles, and ENS destinations."
+            />
+            <QuickLink
+              href="/notifications"
+              label="Recent payments"
+              detail="Check the inbox for receipts, settlement, and payout movement."
+            />
+          </div>
+        </SectionPanel>
+      </div>
+    </div>
+  );
+
+  const securityPanel = (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <SectionPanel className="p-5 sm:p-6">
+        <SectionTitle
+          eyebrow="Security"
+          title="See the checks protecting this account."
+          description="Verification signals tied to payouts, handle, and wallet."
+        />
+
+        <div className="mt-5 grid gap-3">
+          <InfoRow
+            label="Phone verification"
+            value={formatDate(user.phoneVerifiedAt)}
+            detail="Your phone session is the base identity layer for sign-in and recovery."
+            trailing={<Badge tone="verify">verified</Badge>}
+          />
+          <InfoRow
+            label="Handle status"
+            value={claim ? `${NAIRA}${claim.handle}` : "Handle not claimed"}
+            detail={
+              claim
+                ? `Verification status: ${claim.verification}`
+                : "Claim a NairaTag handle to go live publicly."
+            }
+            trailing={
+              <Badge tone={claim ? "verify" : "orange"}>
+                {claim ? claim.verification : "needed"}
+              </Badge>
+            }
+          />
+          <InfoRow
+            label="BVN"
+            value={user.bvnLinkedAt ? `Linked ${formatDate(user.bvnLinkedAt)}` : "Not linked"}
+            detail="BVN strengthens payout trust and verification on your handle."
+            trailing={
+              <Badge tone={user.bvnLinkedAt ? "verify" : "orange"}>
+                {user.bvnLinkedAt ? "linked" : "needed"}
+              </Badge>
+            }
+          />
+          <InfoRow
+            label="Linked wallet"
+            value={walletLabel}
+            detail="Wallet ownership matters for ENS publishing and crypto-aware identity flows."
+            trailing={
+              <Badge tone={cryptoWallet?.walletVerified ? "verify" : "neutral"}>
+                {cryptoWallet?.walletVerified ? "verified" : "pending"}
+              </Badge>
+            }
+          />
+          <InfoRow
+            label="Privy session"
+            value={user.privyLinkedAt ? formatDate(user.privyLinkedAt) : "Not linked"}
+            detail="Wallet or email sign-in linked through Privy for easier account access."
+            trailing={
+              <Badge tone={user.privyLinkedAt ? "verify" : "neutral"}>
+                {user.privyLinkedAt ? "linked" : "optional"}
+              </Badge>
+            }
+          />
+        </div>
+      </SectionPanel>
+
+      <div className="space-y-4">
+        <SectionPanel tone="soft" className="p-5">
+        <SectionTitle
+          eyebrow="Quick actions"
+          title="Strengthen the account."
+          description="The next moves that make this identity safer."
+        />
+          <div className="mt-4 space-y-2">
+            {!claim ? (
+              <QuickLink
+                href="/claim"
+                label={`Claim ${NAIRA}handle`}
+                detail="Create the public identity all your settings connect to."
+              />
+            ) : null}
+            {!bankAccount ? (
+              <QuickLink
+                href="/settings#payments"
+                label="Link payout bank"
+                detail="Complete fiat payout routing before sharing PayLinks."
+              />
+            ) : null}
+            {!user.bvnLinkedAt ? (
+              <QuickLink
+                href="/dashboard"
+                label="Complete verification"
+                detail="Finish the stronger trust checks behind your handle."
+              />
+            ) : null}
+            <QuickLink
+              href="/marketplace"
+              label="Open marketplace"
+              detail="Track offers, listings, and recent handle activity."
+            />
+          </div>
+        </SectionPanel>
+      </div>
+    </div>
+  );
+
+  const telegramPanel = (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div id="telegram-linking">
+        <TelegramLinkingCard claim={claim} />
+      </div>
+
+      <div className="space-y-4">
+        <SectionPanel tone="soft" className="p-5">
+        <SectionTitle
+          eyebrow="Telegram flow"
+          title="How this connection works."
+          description="Verify in the bot, then publish into ENS from the right wallet."
+        />
+          <div className="mt-4 space-y-3">
+            <InfoRow
+              label="Bot"
+              value="@MyNairatagbot"
+              detail="Used for verification, claim shortcuts, receive actions, and Telegram-first lookup."
+            />
+            <InfoRow
+              label="ENS text record"
+              value="org.telegram"
+              detail="The public field NairaTag writes once the Telegram alias is verified and wallet-signed."
+            />
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link
+              href="https://t.me/MyNairatagbot"
+              target="_blank"
+              className="inline-flex h-9 items-center justify-center rounded-xl bg-zinc-950 px-3.5 text-xs font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+            >
+              Open bot
+            </Link>
+            <Link
+              href="/claim"
+              className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-300/70 bg-white/80 px-3.5 text-xs font-semibold text-zinc-950 transition hover:bg-white dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50"
+            >
+              Claim on web
+            </Link>
+          </div>
+        </SectionPanel>
+      </div>
+    </div>
+  );
+
+  const activePanel =
+    activeTab === "notifications"
+      ? notificationsPanel
+      : activeTab === "payments"
+        ? paymentsPanel
+        : activeTab === "security"
+          ? securityPanel
+          : activeTab === "telegram"
+            ? telegramPanel
+            : profilePanel;
+
+  return (
+    <div className="min-h-screen bg-[#eef1f7] text-zinc-950 transition-colors dark:bg-zinc-950 dark:text-zinc-50">
+      <AppPageHeader ctaHref="/dashboard" ctaLabel="Dashboard" />
+
+      <main className="py-4 sm:py-6">
+        <Container className="max-w-7xl">
+          <div className="grid gap-4 xl:grid-cols-[18.5rem_minmax(0,1fr)]">
+            <aside className="hidden xl:block">
+              <div className="sticky top-24 space-y-4">
+                <SectionPanel tone="soft" className="overflow-hidden">
+                  <div className="h-24 bg-gradient-to-r from-indigo-200 via-white to-emerald-100 dark:from-indigo-950 dark:via-zinc-950 dark:to-emerald-950" />
+                  <div className="px-4 pb-4">
+                    <div className="-mt-9 flex items-end gap-3">
+                      <div className="grid h-[4.5rem] w-[4.5rem] place-items-center overflow-hidden rounded-[1.45rem] border-4 border-white bg-zinc-950 text-lg font-semibold text-white dark:border-zinc-950 dark:bg-white dark:text-zinc-950">
                         {avatarUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
@@ -513,360 +1156,154 @@ export function UserSettingsView({
                           initials(user, claim)
                         )}
                       </div>
-                      <input
-                        value={avatarUrl}
-                        onChange={(event) => setAvatarUrl(event.target.value)}
-                        placeholder="Image URL or upload"
-                        disabled={isPending}
-                        className="h-11 min-w-0 flex-1 rounded-2xl border border-zinc-200/80 bg-white/80 px-3 text-sm font-semibold text-zinc-950 outline-none placeholder:text-zinc-400 disabled:opacity-60 dark:border-zinc-800/80 dark:bg-zinc-950/40 dark:text-zinc-50"
-                      />
+                      <div className="min-w-0 pb-1">
+                        <div className="truncate text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                          {name}
+                        </div>
+                        <div className="mt-1 truncate text-sm text-zinc-600 dark:text-zinc-300">
+                          {user.email || user.phone}
+                        </div>
+                      </div>
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <label className="inline-flex h-9 cursor-pointer items-center justify-center rounded-xl border border-zinc-300/70 bg-white/80 px-3 text-xs font-semibold text-zinc-950 transition hover:bg-white dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50">
-                        Upload
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={selectAvatarFile}
-                          disabled={isPending}
-                          className="sr-only"
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => setAvatarUrl("")}
-                        disabled={isPending || !avatarUrl}
-                        className="h-9 rounded-xl border border-zinc-300/70 bg-white/80 px-3 text-xs font-semibold text-zinc-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </label>
 
-                  <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                    <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                      Changes update your account and public profile together.
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Badge tone={claim ? "verify" : "orange"}>{claim ? claim.verification : "claim handle"}</Badge>
+                      <Badge tone={bankAccount ? "verify" : "orange"}>
+                        {bankAccount ? "payout linked" : "payout needed"}
+                      </Badge>
                     </div>
-                    <button
-                      type="submit"
-                      disabled={isPending}
-                      className="h-10 rounded-xl bg-nt-orange px-4 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isPending ? "Saving" : "Save changes"}
-                    </button>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <CopyButton
+                        value={claim ? `${NAIRA}${claim.handle}` : user.phone}
+                        label="Copy ID"
+                        copiedLabel="Copied"
+                        className="h-9 rounded-xl px-3 py-0 text-xs"
+                      />
+                      <Link
+                        href={publicPath}
+                        className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-300/70 bg-white/80 px-3 text-xs font-semibold text-zinc-950 transition hover:bg-white dark:border-zinc-700/80 dark:bg-zinc-950/30 dark:text-zinc-50"
+                      >
+                        {claim ? "Open profile" : "Claim handle"}
+                      </Link>
+                    </div>
                   </div>
-                </form>
-              </SectionCard>
-            </div>
+                </SectionPanel>
+
+                <SectionPanel tone="soft" className="p-3">
+                  <div className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
+                    Settings
+                  </div>
+                  <div className="space-y-1">
+                    {SETTINGS_TABS.map((tab) => (
+                      <SidebarNavButton
+                        key={tab.id}
+                        active={activeTab === tab.id}
+                        label={tab.label}
+                        detail={tab.description}
+                        onClick={() => selectTab(tab.id)}
+                        badge={
+                          tab.id === "notifications" && notifications.unread > 0 ? (
+                            <Badge tone="orange" className="px-2 py-0.5 text-[10px]">
+                              {notifications.unread}
+                            </Badge>
+                          ) : null
+                        }
+                      />
+                    ))}
+                  </div>
+                </SectionPanel>
+
+              </div>
+            </aside>
 
             <div className="space-y-4">
-              <SectionCard
-                title="Quick access"
-                description="Jump into the parts of your account you use most often."
-              >
-                <div className="space-y-1">
-                  <SettingsLinkRow
-                    href="/notifications"
-                    icon={
-                      <RowIcon tone={notifications.unread > 0 ? "orange" : "neutral"}>
-                        <svg viewBox="0 0 24 24" fill="none" className="h-4.5 w-4.5" aria-hidden="true">
-                          <path
-                            d="M8 18h8M10.5 21h3M6 18V11a6 6 0 1 1 12 0v7l1.5 1.5H4.5L6 18Z"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </RowIcon>
-                    }
-                    label="Notifications"
-                    detail="Inbox and alert preferences"
-                    trailing={
-                      notifications.unread > 0 ? (
-                        <StatusPill tone="orange">{notifications.unread} unread</StatusPill>
-                      ) : (
-                        <StatusPill>clear</StatusPill>
-                      )
-                    }
-                  />
-                  <SettingsLinkRow
-                    href="/points"
-                    icon={
-                      <RowIcon tone={(user.pointsBalance ?? 0) > 0 ? "verify" : "neutral"}>
-                        <svg viewBox="0 0 24 24" fill="none" className="h-4.5 w-4.5" aria-hidden="true">
-                          <path
-                            d="M12 4 14.2 8.5 19 9.2l-3.5 3.4.8 4.8-4.3-2.3-4.3 2.3.8-4.8L5 9.2l4.8-.7L12 4Z"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </RowIcon>
-                    }
-                    label="Points"
-                    detail="Welcome rewards and referral bonuses"
-                    trailing={<StatusPill>{(user.pointsBalance ?? 0).toLocaleString()} pts</StatusPill>}
-                  />
-                  <SettingsLinkRow
-                    href={payPath}
-                    icon={
-                      <RowIcon tone="verify">
-                        <svg viewBox="0 0 24 24" fill="none" className="h-4.5 w-4.5" aria-hidden="true">
-                          <path
-                            d="M4 8.5h16M6 5h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm9.5 8H18"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </RowIcon>
-                    }
-                    label={claim ? "Pay page" : "Payment links"}
-                    detail="Hosted pay links and shareable payment pages"
-                  />
-                  <SettingsLinkRow
-                    href="#telegram-linking"
-                    icon={
-                      <RowIcon tone="verify">
-                        <svg viewBox="0 0 24 24" fill="none" className="h-4.5 w-4.5" aria-hidden="true">
-                          <path
-                            d="m20.5 4.6-2.8 13.1c-.2.9-.8 1.1-1.6.7l-4.2-3.1-2 1.9c-.2.2-.4.4-.8.4l.3-4.4 8-7.2c.4-.3-.1-.5-.5-.2l-9.9 6.2-4.2-1.3c-.9-.3-.9-.9.2-1.3l16.4-6.3c.8-.3 1.4.2 1.1 1.5Z"
-                            stroke="currentColor"
-                            strokeWidth="1.7"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </RowIcon>
-                    }
-                    label="Telegram"
-                    detail="Link a verified Telegram username to your handle"
-                    trailing={<StatusPill tone="verify">social</StatusPill>}
-                  />
-                  <SettingsLinkRow
-                    href={publicPath}
-                    icon={
-                      <RowIcon>
-                        <svg viewBox="0 0 24 24" fill="none" className="h-4.5 w-4.5" aria-hidden="true">
-                          <path
-                            d="M4 12c2.7-4.2 5.7-6.3 8-6.3s5.3 2.1 8 6.3c-2.7 4.2-5.7 6.3-8 6.3S6.7 16.2 4 12Z"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                          <circle cx="12" cy="12" r="2.5" stroke="currentColor" strokeWidth="1.8" />
-                        </svg>
-                      </RowIcon>
-                    }
-                    label={claim ? "Public profile" : "Claim handle"}
-                    detail={claim ? "What people see when they open your handle" : "Finish setup and go live"}
-                  />
-                  <SettingsLinkRow
-                    href="/marketplace"
-                    icon={
-                      <RowIcon>
-                        <svg viewBox="0 0 24 24" fill="none" className="h-4.5 w-4.5" aria-hidden="true">
-                          <path
-                            d="M4 7h16l-1.5 10a2 2 0 0 1-2 1.7h-9a2 2 0 0 1-2-1.7L4 7Zm3-3 2 3m8-3-2 3"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </RowIcon>
-                    }
-                    label="Marketplace"
-                    detail="Buy, sell, and monitor handle offers"
-                  />
-                </div>
-              </SectionCard>
+              <SectionPanel className="overflow-hidden">
+                <div className="border-b border-zinc-200/75 px-4 py-4 dark:border-zinc-800/80 sm:px-6">
+                  <Link
+                    href="/dashboard"
+                    className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-600 transition hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-zinc-50"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+                      <path
+                        d="m15 6-6 6 6 6"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    Back to dashboard
+                  </Link>
+                  <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge tone="neutral" className="px-2 py-0.5 text-[11px]">
+                          {claimLabel}
+                        </Badge>
+                        <Badge tone="verify" className="px-2 py-0.5 text-[11px]">
+                          {currentTabMeta.shortLabel}
+                        </Badge>
+                      </div>
+                      <h1 className="mt-3 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-3xl">
+                        Settings
+                      </h1>
+                      <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                        {currentTabMeta.description}
+                      </p>
+                    </div>
+                    <div className="hidden shrink-0 items-center gap-2 sm:flex">
+                      <ThemeToggle
+                        size="dense"
+                        className="border-zinc-200 bg-white text-zinc-700 shadow-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                      />
+                    </div>
+                  </div>
 
-              <SectionCard
-                id="notifications"
-                title="Preferences"
-                description="Keep appearance and inbox behavior compact and easy to control."
-              >
-                <div className="space-y-1">
-                  <SettingsValueRow
-                    icon={
-                      <RowIcon tone="orange">
-                        <svg viewBox="0 0 24 24" fill="none" className="h-4.5 w-4.5" aria-hidden="true">
-                          <path
-                            d="M12 3v2.5m0 13V21m7.5-9H21M3 12h2.5M17.3 6.7l1.8-1.8M4.9 19.1l1.8-1.8M6.7 6.7 4.9 4.9M19.1 19.1l-1.8-1.8M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                          />
-                        </svg>
-                      </RowIcon>
-                    }
-                    label="Appearance"
-                    detail="Theme preference updates instantly across the app"
-                    trailing={
+                  <div className="mt-4 rounded-2xl border border-zinc-200/70 bg-[#f6f7fb] p-3 dark:border-zinc-800/80 dark:bg-zinc-900/55 xl:hidden">
+                    <div className="flex items-center gap-3">
+                      <div className="grid h-12 w-12 place-items-center overflow-hidden rounded-[1rem] bg-zinc-950 text-sm font-semibold text-white dark:bg-white dark:text-zinc-950">
+                        {avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          initials(user, claim)
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                          {name}
+                        </div>
+                        <div className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
+                          {user.email || user.phone}
+                        </div>
+                      </div>
                       <ThemeToggle
                         size="compact"
-                        className="border-zinc-200 bg-zinc-50 text-zinc-700 shadow-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                        className="border-zinc-200 bg-white text-zinc-700 shadow-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 sm:hidden"
                       />
-                    }
-                  />
-                  <SettingsLinkRow
-                    href="/notifications"
-                    icon={
-                      <RowIcon>
-                        <svg viewBox="0 0 24 24" fill="none" className="h-4.5 w-4.5" aria-hidden="true">
-                          <path
-                            d="M7 8h10M7 12h10M7 16h6"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                          />
-                        </svg>
-                      </RowIcon>
-                    }
-                    label="Notification center"
-                    detail="Review recent alerts and clear what you've seen"
-                    trailing={<StatusPill>{notifications.total} total</StatusPill>}
-                  />
-                  <SettingsValueRow
-                    icon={
-                      <RowIcon>
-                        <svg viewBox="0 0 24 24" fill="none" className="h-4.5 w-4.5" aria-hidden="true">
-                          <path
-                            d="M12 5v14m7-7H5"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                          />
-                        </svg>
-                      </RowIcon>
-                    }
-                    label="Language"
-                    detail="English"
-                    trailing={<StatusPill>default</StatusPill>}
-                  />
-                </div>
-              </SectionCard>
+                    </div>
+                  </div>
 
-              <SectionCard
-                title="Security"
-                description="A compact view of the checks protecting payouts and wallet activity."
-              >
-                <div className="space-y-1">
-                  <SettingsValueRow
-                    icon={
-                      <RowIcon tone="verify">
-                        <svg viewBox="0 0 24 24" fill="none" className="h-4.5 w-4.5" aria-hidden="true">
-                          <path
-                            d="M20 7 10 17l-5-5"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
+                  <div className="mt-4">
+                    <MobileTabSelect value={activeTab} onChange={selectTab} />
+                    <div className="mt-4 hidden overflow-x-auto xl:block">
+                      <div className="flex min-w-max items-center gap-1 rounded-2xl bg-[#f6f7fb] p-1.5 dark:bg-zinc-900/55">
+                        {SETTINGS_TABS.map((tab) => (
+                          <TopTabButton
+                            key={tab.id}
+                            active={activeTab === tab.id}
+                            label={tab.label}
+                            onClick={() => selectTab(tab.id)}
                           />
-                        </svg>
-                      </RowIcon>
-                    }
-                    label="Phone verification"
-                    detail={formatDate(user.phoneVerifiedAt)}
-                    trailing={<StatusPill tone="verify">verified</StatusPill>}
-                  />
-                  <SettingsValueRow
-                    icon={<RowIcon tone={user.bvnLinkedAt ? "verify" : "orange"}>BVN</RowIcon>}
-                    label="BVN"
-                    detail={user.bvnLinkedAt ? `Linked ${formatDate(user.bvnLinkedAt)}` : "Not linked"}
-                    trailing={
-                      <StatusPill tone={user.bvnLinkedAt ? "verify" : "orange"}>
-                        {user.bvnLinkedAt ? "linked" : "needed"}
-                      </StatusPill>
-                    }
-                  />
-                  <SettingsValueRow
-                    icon={
-                      <RowIcon tone={cryptoWallet?.walletVerified ? "verify" : "neutral"}>
-                        <svg viewBox="0 0 24 24" fill="none" className="h-4.5 w-4.5" aria-hidden="true">
-                          <path
-                            d="M4 8.5h16M6 5h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm10 8h2"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </RowIcon>
-                    }
-                    label="Wallet"
-                    detail={maskWallet(cryptoWallet?.walletAddress)}
-                    trailing={
-                      <StatusPill tone={cryptoWallet?.walletVerified ? "verify" : "neutral"}>
-                        {cryptoWallet?.walletVerified ? "verified" : "pending"}
-                      </StatusPill>
-                    }
-                  />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </SectionCard>
+              </SectionPanel>
 
-              <TelegramLinkingCard claim={claim} />
-
-              <SectionCard
-                title="Payments & transfers"
-                description="Everything tied to payout setup, hosted links, and crypto execution."
-              >
-                <div className="space-y-1">
-                  <SettingsValueRow
-                    icon={
-                      <RowIcon tone={bankAccount ? "verify" : "orange"}>
-                        <svg viewBox="0 0 24 24" fill="none" className="h-4.5 w-4.5" aria-hidden="true">
-                          <path
-                            d="M12 4v16m-4-4h7a3 3 0 1 0 0-6H9a3 3 0 1 1 0-6h7"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </RowIcon>
-                    }
-                    label="Payout account"
-                    detail={
-                      bankAccount
-                        ? `${bankAccount.bankName} ${bankAccount.accountNumberMasked}`
-                        : "No bank account linked yet"
-                    }
-                    trailing={
-                      <StatusPill tone={bankAccount ? "verify" : "orange"}>
-                        {bankAccount ? "ready" : "needed"}
-                      </StatusPill>
-                    }
-                  />
-                  <SettingsLinkRow
-                    href="/payments/payment-links"
-                    icon={<RowIcon>+</RowIcon>}
-                    label="Payment links"
-                    detail="Create and share hosted payment requests"
-                  />
-                  <SettingsLinkRow
-                    href="/send/crypto"
-                    icon={
-                      <RowIcon tone="verify">
-                        <svg viewBox="0 0 24 24" fill="none" className="h-4.5 w-4.5" aria-hidden="true">
-                          <path
-                            d="M7 7h10m0 0-3-3m3 3-3 3M17 17H7m0 0 3 3m-3-3 3-3"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </RowIcon>
-                    }
-                    label="Send crypto"
-                    detail="Resolve wallets, handles, and ENS destinations"
-                  />
-                </div>
-              </SectionCard>
+              {activePanel}
             </div>
           </div>
         </Container>

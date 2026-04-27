@@ -2,13 +2,10 @@ import { ClientsSection } from "./ClientsSection";
 import { HeroRef } from "./HeroRef";
 import { HeaderNav } from "./HeaderNav";
 import { HowItWorksSection } from "./HowItWorksSection";
-import { FeaturesSplitSection } from "./FeaturesSplitSection";
-import { ServicesSection } from "./ServicesSection";
 import { FeaturesGridSection } from "./FeaturesGridSection";
 import { LiveDemoSection } from "./LiveDemoSection";
 import { TrustSection } from "./TrustSection";
-import { DevelopersSection } from "./DevelopersSection";
-import { AboutSection } from "./AboutSection";
+import { IdentityStackSection } from "./IdentityStackSection";
 import { FaqSection } from "./FaqSection";
 import { FinalCtaSection } from "./FinalCtaSection";
 import { FooterSection } from "./FooterSection";
@@ -20,15 +17,12 @@ export function NairaTagLanding() {
       <HeaderNav />
       <main>
         <HeroRef />
-        <ClientsSection />
         <HowItWorksSection />
-        <FeaturesSplitSection />
-        <ServicesSection />
         <FeaturesGridSection />
         <LiveDemoSection />
         <TrustSection />
-        <DevelopersSection />
-        <AboutSection />
+        <ClientsSection />
+        <IdentityStackSection />
         <FaqSection />
         <FinalCtaSection />
       </main>

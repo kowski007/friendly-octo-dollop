@@ -265,7 +265,7 @@ export function AdminDashboard() {
             Bank linked users
           </div>
           <div className="mt-3 text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-            {metrics ? metrics.bankLinkedUsers.toLocaleString() : "â€”"}
+            {metrics ? metrics.bankLinkedUsers.toLocaleString() : "\u2014"}
           </div>
           <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
             Payout destinations saved
@@ -339,7 +339,7 @@ export function AdminDashboard() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                        â‚¦{transfer.handle}
+                        {"\u20A6"}{transfer.handle}
                       </span>
                       <Badge tone="orange">{transfer.status.replace("_", " ")}</Badge>
                       <Badge tone="neutral">{formatCurrency(transfer.amount)}</Badge>

@@ -132,12 +132,26 @@ function extractOtp(input: string) {
   return /\b(\d{6})\b/u.exec(input)?.[1] ?? null;
 }
 
+function stripLeadingSeparators(value: string) {
+  let next = value.trim();
+
+  while (
+    next.startsWith("-") ||
+    next.startsWith(":") ||
+    next.startsWith(",")
+  ) {
+    next = next.slice(1).trimStart();
+  }
+
+  return next.trim();
+}
+
 function extractBvnAndName(input: string) {
   const match = /\b(\d{11})\b/u.exec(input);
   if (!match?.[1]) return null;
 
   const bvn = match[1];
-  const fullName = input.replace(match[0], "").trim().replace(/^[-:,]+/u, "").trim();
+  const fullName = stripLeadingSeparators(input.replace(match[0], ""));
   return {
     bvn,
     fullName: fullName || undefined,

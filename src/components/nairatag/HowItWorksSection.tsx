@@ -1,4 +1,4 @@
-import { Badge, ButtonLink, CheckIcon, Container, NairaTermBadge, cn } from "./ui";
+import { Badge, CheckIcon, Container, NairaTermBadge, cn } from "./ui";
 
 function Naira({ className }: { className?: string }) {
   return (
@@ -122,26 +122,20 @@ export function HowItWorksSection() {
       <Container>
         <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
           <div className="lg:col-span-5">
-            <Badge tone="orange">How it works</Badge>
+            <Badge tone="orange">How it feels</Badge>
             <h2 className="mt-4 max-w-xl font-display text-4xl font-semibold leading-[1.03] tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-5xl">
-              Turn a{" "}
+              Turn your{" "}
               <NairaTermBadge
-                term="handle"
+                term="name"
                 tone="orange"
                 className="relative -top-1 px-3.5 py-1.5 text-base sm:px-4 sm:py-2 sm:text-lg"
               />{" "}
-              into a verified payment identity.
+              into your pay tag.
             </h2>
             <p className="mt-4 max-w-lg text-base leading-7 text-zinc-700 dark:text-zinc-200">
-              The flow is intentionally short: claim the name, link the bank, then
-              show a clear recipient preview before money moves.
+              Claim it, link where money should land, then share one clean tag people
+              can trust.
             </p>
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-              <ButtonLink href="#demo">See live demo</ButtonLink>
-              <ButtonLink href="#features" variant="secondary">
-                Explore features
-              </ButtonLink>
-            </div>
           </div>
 
           <div className="lg:col-span-7">
@@ -151,32 +145,38 @@ export function HowItWorksSection() {
               </div>
 
               <div className="grid gap-4 lg:col-span-2">
-                <MiniStep
+                  <MiniStep
                   index="01"
-                  title="Claim the name"
-                  detail="Choose something memorable like victor or mama_ijebu."
+                  title="Claim the tag"
+                  detail="Pick something people will actually remember."
                 />
                 <ReceiptCard />
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-3 lg:col-span-5">
-                <MiniStep
-                  index="02"
-                  title="Verify identity"
-                  detail="Add bank, BVN, and business signals."
-                />
-                <MiniStep
-                  index="03"
-                  title="Share everywhere"
-                  detail="Use the handle in links, QR, marketplace, and send flows."
-                />
-                <div className="rounded-3xl bg-zinc-950 p-5 text-white shadow-sm dark:bg-white dark:text-zinc-950">
-                  <div className="text-xs font-semibold opacity-70">Result</div>
-                  <div className="mt-5 text-3xl font-semibold tracking-tight">
-                    1 name
+              <div className="-mx-5 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden lg:col-span-5 lg:mx-0 lg:overflow-visible lg:px-0 lg:pb-0">
+                <div className="flex snap-x snap-mandatory gap-4 sm:grid sm:min-w-0 sm:grid-cols-3 lg:flex-none">
+                  <div className="min-w-[15.75rem] snap-start sm:min-w-0">
+                    <MiniStep
+                      index="02"
+                      title="Link your payout"
+                      detail="Add the bank or destination behind the tag."
+                    />
                   </div>
-                  <div className="mt-2 text-sm leading-6 opacity-80">
-                    A cleaner replacement for account-number guessing.
+                  <div className="min-w-[15.75rem] snap-start sm:min-w-0">
+                    <MiniStep
+                      index="03"
+                      title="Use it everywhere"
+                      detail="Share it in links, QR, Telegram, and payment flows."
+                    />
+                  </div>
+                  <div className="min-w-[15.75rem] snap-start rounded-3xl bg-zinc-950 p-5 text-white shadow-sm dark:bg-white dark:text-zinc-950 sm:min-w-0">
+                    <div className="text-xs font-semibold opacity-70">Result</div>
+                    <div className="mt-5 text-3xl font-semibold tracking-tight">
+                      1 name
+                    </div>
+                    <div className="mt-2 text-sm leading-6 opacity-80">
+                      One tag people can actually use.
+                    </div>
                   </div>
                 </div>
               </div>

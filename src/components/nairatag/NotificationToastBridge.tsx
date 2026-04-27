@@ -3,6 +3,10 @@
 import { useEffect, useRef } from "react";
 
 import type { NotificationRecord } from "@/lib/adminTypes";
+import {
+  readSettingsNotificationPreferences,
+  shouldToastNotification,
+} from "@/lib/settingsPreferences";
 import { useToast, type ToastTone } from "./ToastProvider";
 
 type NotificationsResponse =
@@ -58,11 +62,16 @@ export function NotificationToastBridge() {
   const { toast } = useToast();
   const hydratedRef = useRef(false);
   const seenIdsRef = useRef<Set<string>>(new Set());
+  const unauthorizedCooldownUntilRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
 
     async function pullNotifications() {
+      if (Date.now() < unauthorizedCooldownUntilRef.current) {
+        return;
+      }
+
       if (typeof document !== "undefined" && document.visibilityState !== "visible") {
         return;
       }
@@ -73,6 +82,12 @@ export function NotificationToastBridge() {
             "Cache-Control": "no-store",
           },
         });
+
+        if (response.status === 401) {
+          unauthorizedCooldownUntilRef.current =
+            Date.now() + (process.env.NODE_ENV === "development" ? 5 * 60 * 1000 : 60 * 1000);
+          return;
+        }
 
         if (!response.ok) {
           return;
@@ -92,11 +107,15 @@ export function NotificationToastBridge() {
 
         const freshItems = unreadItems.filter((item) => !seenIdsRef.current.has(item.id));
         unreadItems.forEach((item) => seenIdsRef.current.add(item.id));
+        const preferences = readSettingsNotificationPreferences(window.localStorage);
 
         freshItems
           .slice()
           .reverse()
           .forEach((item) => {
+            if (!shouldToastNotification(item, preferences)) {
+              return;
+            }
             toast({
               title: item.title,
               description: item.body,
@@ -112,7 +131,7 @@ export function NotificationToastBridge() {
     void pullNotifications();
     const interval = window.setInterval(() => {
       void pullNotifications();
-    }, 20000);
+    }, process.env.NODE_ENV === "development" ? 60000 : 20000);
 
     return () => {
       cancelled = true;

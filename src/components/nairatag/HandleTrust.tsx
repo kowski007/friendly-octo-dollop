@@ -275,39 +275,54 @@ export function SuggestedHandlesSection({
           <div className="text-sm text-zinc-600 dark:text-zinc-300">{emptyState}</div>
         </Card>
       ) : (
-        <div className="mt-5 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
           {items.map((item) => (
-            <Card key={item.handle} className="p-5">
+            <Card key={item.handle} className="p-3.5 sm:p-4">
               <HandleIdentity
                 handle={item.handle}
                 verification={item.verification}
                 size="sm"
               />
 
-              <div className="mt-4 text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+              <div className="mt-2 text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
                 {item.displayName}
               </div>
-              <div className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+              <div className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-300">
                 {item.reason}
               </div>
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                {item.isListed ? <Badge tone="orange">Listed now</Badge> : null}
-                {item.askAmount != null ? (
-                  <Badge tone="neutral">{formatCurrency(item.askAmount)}</Badge>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {item.isListed ? (
+                  <Badge tone="orange" className="px-2 py-0.5 text-[11px]">
+                    Listed now
+                  </Badge>
                 ) : null}
-                <Badge tone={trustTone(item.trustScore)}>Trust {item.trustScore}</Badge>
+                {item.askAmount != null ? (
+                  <Badge tone="neutral" className="px-2 py-0.5 text-[11px]">
+                    {formatCurrency(item.askAmount)}
+                  </Badge>
+                ) : null}
+                <Badge
+                  tone={trustTone(item.trustScore)}
+                  className="px-2 py-0.5 text-[11px]"
+                >
+                  Trust {item.trustScore}
+                </Badge>
                 {item.badges.slice(0, 1).map((badge) => (
-                  <Badge key={`${item.handle}-${badge}`} tone="neutral">
+                  <Badge
+                    key={`${item.handle}-${badge}`}
+                    tone="neutral"
+                    className="px-2 py-0.5 text-[11px]"
+                  >
                     {badge}
                   </Badge>
                 ))}
               </div>
 
-              <div className="mt-5 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
                 <Link
                   href={`/h/${item.handle}`}
-                  className="inline-flex h-10 items-center justify-center rounded-xl bg-zinc-950 px-4 text-xs font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+                  className="inline-flex h-9 items-center justify-center rounded-lg bg-zinc-950 px-3 text-[11px] font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
                 >
                   View profile
                 </Link>
@@ -317,7 +332,7 @@ export function SuggestedHandlesSection({
                       ? `/marketplace/${item.handle}`
                       : `/pay/${item.handle}`
                   }
-                  className="inline-flex h-10 items-center justify-center rounded-xl border border-zinc-200/80 px-4 text-xs font-semibold text-zinc-950 transition hover:bg-zinc-50 dark:border-zinc-800/80 dark:text-zinc-50 dark:hover:bg-zinc-900"
+                  className="inline-flex h-9 items-center justify-center rounded-lg border border-zinc-200/80 px-3 text-[11px] font-semibold text-zinc-950 transition hover:bg-zinc-50 dark:border-zinc-800/80 dark:text-zinc-50 dark:hover:bg-zinc-900"
                 >
                   {mode === "marketplace" || item.isListed ? "Open listing" : "Open pay page"}
                 </Link>

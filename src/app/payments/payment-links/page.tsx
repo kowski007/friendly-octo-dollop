@@ -1,13 +1,5 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { PaymentLinksProductPage } from "@/components/nairatag/PaymentLinksProductPage";
-
-export const metadata: Metadata = {
-  title: "Payment Links",
-  description:
-    "Create NairaTag PayLinks that accept bank transfers and Base USDC from one hosted link.",
-};
-
-export default function PaymentLinksPage() {
-  return <PaymentLinksProductPage />;
+export default function PaymentLinksLegacyPage() {
+  redirect("/paylink");
 }

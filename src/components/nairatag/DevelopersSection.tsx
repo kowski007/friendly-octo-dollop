@@ -22,10 +22,15 @@ export function DevelopersSection() {
               Resolve <NairaTermBadge term="handles" tone="neutral" /> from your
               send screen, invoice flow, marketplace, or payout tool.
             </p>
+            <p className="mt-3 max-w-lg text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+              The current public stack includes direct NairaTag resolution,
+              ENS-aware wallet execution, and ENS text-record publishing for
+              verified public metadata like Telegram aliases.
+            </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <ButtonLink href="#claim">Start building</ButtonLink>
-              <ButtonLink href="#faq" variant="secondary">
-                Read FAQs
+              <ButtonLink href="#identity-stack" variant="secondary">
+                View identity rails
               </ButtonLink>
             </div>
           </div>

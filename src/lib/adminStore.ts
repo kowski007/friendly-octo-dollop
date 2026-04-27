@@ -1297,7 +1297,12 @@ function buildCreditProfile(
 }
 
 function publicBaseUrl() {
-  return (process.env.NEXT_PUBLIC_APP_URL || process.env.NT_PUBLIC_APP_URL || "")
+  const configuredUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+
+  return configuredUrl
     .trim()
     .replace(/\/+$/, "");
 }

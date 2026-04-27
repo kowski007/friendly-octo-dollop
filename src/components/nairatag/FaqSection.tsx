@@ -66,6 +66,33 @@ const items: FaqItem[] = [
     tone: "orange",
   },
   {
+    title: "How does ENS fit into NairaTag?",
+    body: (
+      <>
+        NairaTag has a direct handle resolver for recipient previews today, and
+        it also supports an ENS path for crypto execution and public metadata.
+        In the live model, a handle can map through an ENS subname like{" "}
+        <span className="font-semibold">victor.nairatag.eth</span>, while
+        verified public metadata such as Telegram can be written to ENS text
+        records like <span className="font-semibold">org.telegram</span>.
+      </>
+    ),
+    tone: "black",
+  },
+  {
+    title: "Do you use DNS resolution today?",
+    body: (
+      <>
+        The public consumer stack does not currently depend on a separate DNS
+        resolver for everyday claims. The live public rails today are the
+        NairaTag handle resolver, ENS subnames where configured, and ENS text
+        records for linked public metadata. DNS-style partner routing is a
+        separate integration surface, not the default public claim path.
+      </>
+    ),
+    tone: "gray",
+  },
+  {
     title: "How do reserved names get approved?",
     body: (
       <>
@@ -74,6 +101,19 @@ const items: FaqItem[] = [
         manually. NairaTag can require documentary proof such as incorporation
         records, official domains, trademark evidence, regulatory approvals, or
         delegated authority before a reserved name is assigned and verified.
+      </>
+    ),
+    tone: "blue",
+  },
+  {
+    title: "Can I use NairaTag from Telegram?",
+    body: (
+      <>
+        Yes. The official Telegram bot can claim a{" "}
+        <NairaTermBadge term="handle" tone="neutral" />, show your linked
+        handle, look up people by handle or Telegram username, open pay pages,
+        share receive links, and guide Telegram linking before you publish the
+        alias to ENS from your wallet.
       </>
     ),
     tone: "blue",

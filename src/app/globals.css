@@ -125,6 +125,15 @@ html.dark .nt-landing-bg::after {
   }
 }
 
+@keyframes nt-client-marquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(calc(-50% - 0.375rem), 0, 0);
+  }
+}
+
 .nt-float {
   animation:
     nt-tag-in 650ms ease-out var(--nt-in-delay, 0ms) both,

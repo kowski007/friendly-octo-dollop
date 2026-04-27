@@ -1,7 +1,5 @@
 import type { CSSProperties } from "react";
 
-import { AuthModalButton } from "@/components/auth/AuthModalButton";
-
 import { HandleDemo } from "./HandleDemo";
 import { ButtonLink, NairaTermBadge, cn } from "./ui";
 
@@ -95,14 +93,6 @@ function FloatingPill({
 }
 
 export function HeroRef() {
-  const samples = [
-    { label: "\u20A6victor", tone: "violet" as const },
-    { label: "\u20A6mama_ijebu", tone: "orange" as const },
-    { label: "\u20A6mikki", tone: "emerald" as const },
-    { label: "\u20A6fioso", tone: "rose" as const },
-    { label: "\u20A6shop", tone: "sky" as const },
-  ];
-
   return (
     <section className="relative isolate overflow-hidden">
       <div className="absolute inset-0 bg-white dark:bg-black" />
@@ -111,9 +101,9 @@ export function HeroRef() {
         <div className="relative mx-auto max-w-5xl text-center">
           <div className="relative mx-auto max-w-[22rem] px-2 pb-8 pt-1 sm:max-w-none sm:px-0 sm:pb-0 sm:pt-0">
             <h1 className="relative z-10 mx-auto max-w-[21rem] font-display text-[54px] font-semibold leading-[0.92] tracking-tight text-zinc-950 dark:text-zinc-50 sm:max-w-none sm:text-[96px]">
-              Send money
+              Put your
               <br />
-              to a name
+              name on money
             </h1>
 
             <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[168px] sm:hidden">
@@ -279,10 +269,8 @@ export function HeroRef() {
           </div>
 
           <p className="mx-auto mt-6 max-w-2xl text-base leading-7 text-zinc-700 dark:text-zinc-200 sm:text-lg">
-            NairaTag lets you send, receive, and request money using simple{" "}
-            <NairaTermBadge term="handles" tone="neutral" /> like{" "}
-            <span className="font-semibold">{samples[0].label}</span>. No more
-            typing 10-digit account numbers.
+            Claim a clean <NairaTermBadge term="handle" tone="neutral" />, get paid with it,
+            and let people find you by name instead of by account number.
           </p>
 
           <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -290,11 +278,8 @@ export function HeroRef() {
               href="#claim"
               className="min-h-10 whitespace-nowrap px-4 py-2 text-xs sm:text-sm"
             >
-              Claim your name
+              Claim yours
             </ButtonLink>
-            <AuthModalButton afterAuthHref="#demo" variant="secondary">
-              Check availability
-            </AuthModalButton>
           </div>
 
           <div className="mt-6">

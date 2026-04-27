@@ -11,7 +11,7 @@ import {
 } from "react";
 
 import { AppPageHeader } from "./AppPageHeader";
-import { Badge, CheckIcon, Container, NairaTermBadge, cn } from "./ui";
+import { Badge, CheckIcon, Container, cn } from "./ui";
 
 const NAIRA = "\u20A6";
 
@@ -140,17 +140,6 @@ function humanizeError(error: string) {
   }
 }
 
-function SignalRow({ label }: { label: string }) {
-  return (
-    <div className="flex items-center justify-between rounded-2xl bg-white/80 px-4 py-3 text-sm font-semibold text-zinc-700 shadow-sm dark:bg-zinc-950/35 dark:text-zinc-200">
-      <span>{label}</span>
-      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
-        <CheckIcon className="h-4 w-4" />
-      </span>
-    </div>
-  );
-}
-
 function VerificationSeal({ className }: { className?: string }) {
   return (
     <span
@@ -209,46 +198,6 @@ function SuggestionButton({
         {handle}
       </span>
     </button>
-  );
-}
-
-function MetricCard({
-  value,
-  label,
-  tone = "default",
-}: {
-  value: string;
-  label: string;
-  tone?: "default" | "verify" | "dark";
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-[1.5rem] p-5 shadow-sm",
-        tone === "verify"
-          ? "bg-emerald-50 dark:bg-emerald-950/25"
-          : tone === "dark"
-            ? "bg-zinc-950 text-white"
-            : "bg-emerald-50 dark:bg-emerald-950/20"
-      )}
-    >
-      <div
-        className={cn(
-          "text-3xl font-semibold",
-          tone === "dark" ? "text-white" : "text-zinc-950 dark:text-zinc-50"
-        )}
-      >
-        {value}
-      </div>
-      <div
-        className={cn(
-          "mt-2 text-sm font-semibold",
-          tone === "dark" ? "text-white/70" : "text-zinc-600 dark:text-zinc-300"
-        )}
-      >
-        {label}
-      </div>
-    </div>
   );
 }
 
@@ -701,11 +650,11 @@ export function ClaimPageView() {
                   </div>
                   <Link
                     href="/settings#telegram-linking"
-                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-sky-200/80 bg-sky-50 text-sky-700 shadow-sm transition hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/25 dark:text-sky-200 dark:hover:bg-sky-950/40"
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-sky-200/80 bg-sky-50 text-sky-700 shadow-sm transition hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/25 dark:text-sky-200 dark:hover:bg-sky-950/40 sm:h-10 sm:w-10"
                     aria-label="Link Telegram"
                     title="Link Telegram"
                   >
-                    <TelegramIcon />
+                    <TelegramIcon className="h-4 w-4 sm:h-[1.05rem] sm:w-[1.05rem]" />
                   </Link>
                 </div>
               </div>
@@ -1097,35 +1046,6 @@ export function ClaimPageView() {
               </div>
             </section>
 
-            <section className="mx-auto max-w-[820px] space-y-6 text-center">
-              <div>
-                <h1 className="mt-4 font-display text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-5xl">
-                  Type a{" "}
-                  <NairaTermBadge
-                    term="handle"
-                    tone="verify"
-                    className="relative -top-1 px-3.5 py-1.5 text-base sm:px-4 sm:py-2 sm:text-lg"
-                  />
-                  . Claim it on the same page.
-                </h1>
-                <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-zinc-700 dark:text-zinc-200">
-                  This is the landing claim box turned into the real claim flow. Check the live registry,
-                  verify your phone, then lock in your {NAIRA}name without leaving the screen.
-                </p>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-3">
-                <SignalRow label="Recipient name" />
-                <SignalRow label="Bank destination" />
-                <SignalRow label="Verification badge" />
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-3">
-                <MetricCard value="2 sec" label="Claim flow" tone="verify" />
-                <MetricCard value="ID" label="Preview first" />
-                <MetricCard value="Claim" label="Confirm on-page" tone="dark" />
-              </div>
-            </section>
           </div>
         </Container>
       </main>

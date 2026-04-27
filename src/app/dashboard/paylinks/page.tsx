@@ -9,5 +9,5 @@ export const metadata: Metadata = {
 };
 
 export default function DashboardPaylinksPage() {
-  return <PaymentLinkBuilder />;
+  return <PaymentLinkBuilder mode="dashboard" />;
 }

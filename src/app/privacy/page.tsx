@@ -20,8 +20,9 @@ export default function PrivacyPage() {
                 Depending on the product surface, NairaTag may collect phone
                 numbers, OTP events, claimed handles, bank-linking metadata,
                 verification state, wallet addresses, social-link records,
-                payment or marketplace activity, referral activity, API logs,
-                device metadata, and support or review notes.
+                Telegram-bot interaction metadata, payment or marketplace
+                activity, referral activity, API logs, device metadata, and
+                support or review notes.
               </p>
               <p>
                 We intentionally limit what appears on public profile surfaces.
@@ -53,6 +54,12 @@ export default function PrivacyPage() {
                 marketplace review, analytics, and identity operations. Public
                 profile surfaces may expose limited trust signals and approved
                 social or ENS-linked metadata.
+              </p>
+              <p>
+                If you explicitly publish a public alias like Telegram to an
+                ENS text record, that record is public onchain by design and
+                should be treated as public identity metadata rather than
+                private account data.
               </p>
               <p>
                 We do not treat reserved-name review, verification, or payment

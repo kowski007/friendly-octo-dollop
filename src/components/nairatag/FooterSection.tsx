@@ -13,14 +13,16 @@ const linkGroups: Array<{ label: string; links: FooterLink[] }> = [
     links: [
       { label: "Services", href: "#services" },
       { label: "FAQ", href: "#faq" },
+      { label: "Identity rails", href: "#identity-stack" },
     ],
   },
   {
     label: "Tools",
     links: [
-      { label: "Pay links", href: "/payments/payment-links" },
+      { label: "Pay links", href: "/paylink" },
       { label: "Marketplace", href: "/marketplace" },
       { label: "Live map", href: "/map" },
+      { label: "Telegram bot", href: "https://t.me/MyNairatagbot" },
     ],
   },
   {
@@ -43,6 +45,19 @@ const linkGroups: Array<{ label: string; links: FooterLink[] }> = [
 function FooterNavLink({ link }: { link: FooterLink }) {
   const className =
     "text-sm font-semibold text-zinc-600 transition hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-white";
+
+  if (link.href.startsWith("http")) {
+    return (
+      <a
+        href={link.href}
+        className={className}
+        target="_blank"
+        rel="noreferrer"
+      >
+        {link.label}
+      </a>
+    );
+  }
 
   if (link.href.startsWith("#")) {
     return (

@@ -572,7 +572,7 @@ async function sendReceiveMoney(context: TelegramContext) {
     account.user.id,
     account.claim.handle
   );
-  const builderUrl = appUrl("/payments/payment-links/builder");
+  const builderUrl = appUrl("/pay/create");
   const lines = [
     `${ICONS.receive} Receive with ${formatHandle(account.claim.handle)}`,
     paylinkUrl

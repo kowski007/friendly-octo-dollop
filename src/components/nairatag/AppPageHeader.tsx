@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import { AuthModalButton } from "@/components/auth/AuthModalButton";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
@@ -36,7 +37,7 @@ const toolLinks = [
     requiresAuth: true,
     unauthenticatedLabel: "Get Started",
   },
-  { href: "/payments/payment-links", label: "Payment Links" },
+  { href: "/paylink", label: "Payment Links" },
   { href: "/send/crypto", label: "Send crypto" },
   { href: "/marketplace", label: "Marketplace" },
   { href: "/map", label: "Live map" },
@@ -44,10 +45,13 @@ const toolLinks = [
   { href: "/referrals", label: "Referrals" },
 ];
 
-function ToolsMenu() {
+function ToolsMenu({ hideDashboardLink = false }: { hideDashboardLink?: boolean }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const panelId = useId();
+  const visibleToolLinks = hideDashboardLink
+    ? toolLinks.filter((link) => link.href !== "/dashboard")
+    : toolLinks;
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -106,30 +110,32 @@ function ToolsMenu() {
       </button>
       <div
         id={panelId}
-        className="absolute left-0 top-full z-50 mt-2 w-48 rounded-2xl border border-zinc-200/80 bg-white/95 p-1.5 shadow-xl shadow-zinc-950/10 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/95 dark:shadow-black/30"
+        className="absolute left-0 top-full z-50 w-48 pt-2"
         hidden={!open}
       >
-        {toolLinks.map((link) => (
-          <div key={`${link.href}:${link.label}`} onClick={() => setOpen(false)}>
-            {link.requiresAuth ? (
-              <AuthModalButton
-                afterAuthHref={link.href}
-                unauthenticatedChildren={link.unauthenticatedLabel}
-                variant="plain"
-                className="!flex !w-full !justify-start !rounded-xl !px-3 !py-2 text-sm font-semibold"
-              >
-                {link.label}
-              </AuthModalButton>
-            ) : (
-              <Link
-                href={link.href}
-                className="block rounded-xl px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 dark:hover:text-white"
-              >
-                {link.label}
-              </Link>
-            )}
-          </div>
-        ))}
+        <div className="rounded-2xl border border-zinc-200/80 bg-white/95 p-1.5 shadow-xl shadow-zinc-950/10 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/95 dark:shadow-black/30">
+          {visibleToolLinks.map((link) => (
+            <div key={`${link.href}:${link.label}`} onClick={() => setOpen(false)}>
+              {link.requiresAuth ? (
+                <AuthModalButton
+                  afterAuthHref={link.href}
+                  unauthenticatedChildren={link.unauthenticatedLabel}
+                  variant="plain"
+                  className="!flex !w-full !justify-start !rounded-xl !px-3 !py-2 text-sm font-semibold"
+                >
+                  {link.label}
+                </AuthModalButton>
+              ) : (
+                <Link
+                  href={link.href}
+                  className="block rounded-xl px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 dark:hover:text-white"
+                >
+                  {link.label}
+                </Link>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -137,13 +143,16 @@ function ToolsMenu() {
 
 export function AppPageHeader({
   ctaHref = "/claim",
-  ctaLabel = "Claim a ₦handle",
+  ctaLabel = `Claim a ${"\u20A6"}handle`,
   rightSlot,
 }: {
   ctaHref?: string;
   ctaLabel?: string;
   rightSlot?: ReactNode;
 }) {
+  const pathname = usePathname();
+  const onDashboardRoute = pathname === "/dashboard" || pathname.startsWith("/dashboard/");
+
   return (
     <header className="sticky top-0 z-50 border-b border-zinc-200/60 bg-white/78 backdrop-blur dark:border-zinc-800/60 dark:bg-black/45">
       <Container className="flex items-center justify-between py-4">
@@ -164,15 +173,17 @@ export function AppPageHeader({
           >
             Home
           </Link>
-          <ToolsMenu />
-          <AuthModalButton
-            afterAuthHref="/dashboard"
-            unauthenticatedChildren="Get Started"
-            variant="plain"
-            className="rounded-full px-3 py-2 font-semibold transition hover:bg-zinc-100 hover:text-zinc-950 dark:hover:bg-zinc-900/70 dark:hover:text-white"
-          >
-            Dashboard
-          </AuthModalButton>
+          <ToolsMenu hideDashboardLink={onDashboardRoute} />
+          {!onDashboardRoute ? (
+            <AuthModalButton
+              afterAuthHref="/dashboard"
+              unauthenticatedChildren="Get Started"
+              variant="plain"
+              className="rounded-full px-3 py-2 font-semibold transition hover:bg-zinc-100 hover:text-zinc-950 dark:hover:bg-zinc-900/70 dark:hover:text-white"
+            >
+              Dashboard
+            </AuthModalButton>
+          ) : null}
           <Link
             href="/claim"
             className="rounded-full px-3 py-2 font-semibold transition hover:bg-zinc-100 hover:text-zinc-950 dark:hover:bg-zinc-900/70 dark:hover:text-white"

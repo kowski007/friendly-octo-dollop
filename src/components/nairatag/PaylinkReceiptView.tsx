@@ -189,7 +189,7 @@ export function PaylinkReceiptView({
                     Pay again
                   </Link>
                   <Link
-                    href="/payments/payment-links"
+                    href="/paylink"
                     className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200/80 bg-white/80 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-50 dark:border-zinc-800/80 dark:bg-zinc-950/30 dark:text-zinc-50 dark:hover:bg-zinc-900/70"
                   >
                     Back to PayLinks

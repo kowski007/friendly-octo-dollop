@@ -14,18 +14,10 @@ export async function GET(req: NextRequest) {
   const payload = token ? verifySessionToken(token) : null;
 
   if (!payload) {
-    const res = NextResponse.json(
+    return NextResponse.json(
       { error: "unauthorized" },
       { status: 401, headers: { "Cache-Control": "no-store" } }
     );
-    await logApiUsage({
-      endpoint: "/api/notifications/me",
-      method: "GET",
-      status: 401,
-      latencyMs: Date.now() - started,
-      clientKey,
-    });
-    return res;
   }
 
   const limit = Math.min(

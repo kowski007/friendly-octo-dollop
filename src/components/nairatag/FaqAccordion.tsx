@@ -66,7 +66,7 @@ export function FaqAccordion({
   const baseId = useId();
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2.5">
       {items.map((item, i) => {
         const isOpen = openIndex === i;
         const contentId = `${baseId}-faq-${i}`;
@@ -74,18 +74,18 @@ export function FaqAccordion({
           <div
             key={i}
             className={cn(
-              "rounded-3xl border border-black/10 px-6 py-5 shadow-sm transition dark:border-white/10",
+              "rounded-2xl border border-black/10 px-4 py-3.5 shadow-sm transition sm:px-5 sm:py-4 dark:border-white/10",
               toneClasses(item.tone)
             )}
           >
             <button
               type="button"
-              className="flex w-full items-center justify-between gap-4 text-left"
+              className="flex w-full items-center justify-between gap-3 text-left"
               aria-expanded={isOpen}
               aria-controls={contentId}
               onClick={() => setOpenIndex(isOpen ? -1 : i)}
             >
-              <span className="text-lg font-semibold tracking-tight">
+              <span className="pr-2 text-[15px] font-semibold leading-6 tracking-tight sm:text-base">
                 {item.title}
               </span>
               <PlusMinus open={isOpen} />
@@ -101,7 +101,7 @@ export function FaqAccordion({
               <div className="overflow-hidden">
                 <p
                   className={cn(
-                    "mt-4 max-w-xl text-sm leading-7",
+                    "mt-2.5 max-w-xl text-sm leading-6",
                     item.tone === "black"
                       ? "text-white/85 dark:text-zinc-950/80"
                       : "text-zinc-700 dark:text-zinc-200"

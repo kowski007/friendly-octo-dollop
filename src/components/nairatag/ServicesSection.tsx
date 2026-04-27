@@ -123,20 +123,28 @@ export function ServicesSection() {
         </div>
 
         <div className="mt-8 rounded-[2rem] bg-zinc-100/70 p-4 shadow-sm backdrop-blur dark:bg-zinc-950/20 sm:p-5">
-          <div className="grid gap-4 lg:grid-cols-3">
-            <ServicePanel
-              title="Add and manage handles"
-              caption="Claim names, link banks, and share pay profiles in one flow."
-            />
-            <ServicePanel
-              title="Set approvals and trust"
-              caption="Verified previews reduce mistakes before money leaves."
-              tone="orange"
-            />
-            <ServicePanel
-              title="Pay how vendors want"
-              caption="Use links, marketplace offers, QR, or API-powered send flows."
-            />
+          <div className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden lg:mx-0 lg:overflow-visible lg:px-0 lg:pb-0">
+            <div className="flex snap-x snap-mandatory gap-4 lg:grid lg:grid-cols-3">
+              <div className="min-w-[18rem] snap-start lg:min-w-0">
+                <ServicePanel
+                  title="Add and manage handles"
+                  caption="Claim names, link banks, and share pay profiles in one flow."
+                />
+              </div>
+              <div className="min-w-[18rem] snap-start lg:min-w-0">
+                <ServicePanel
+                  title="Set approvals and trust"
+                  caption="Verified previews reduce mistakes before money leaves."
+                  tone="orange"
+                />
+              </div>
+              <div className="min-w-[18rem] snap-start lg:min-w-0">
+                <ServicePanel
+                  title="Pay how vendors want"
+                  caption="Use links, marketplace offers, QR, or API-powered send flows."
+                />
+              </div>
+            </div>
           </div>
 
           <div className="mt-4 grid gap-4 lg:grid-cols-12">

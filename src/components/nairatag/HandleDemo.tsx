@@ -65,7 +65,7 @@ function normalizeHandle(input: string) {
     .trim()
     .replace(/\s+/g, "")
     .replace(/^\u20A6/u, "")
-    .replace(/^â‚¦/u, "")
+    .replace(/^\u20A6/u, "")
     .replace(/^@/u, "")
     .toLowerCase();
 }
@@ -105,7 +105,7 @@ function StatusBadge({
   if (status === "protected") return <Badge tone="verify">{badge ?? "Reserved"}</Badge>;
   if (status === "blocked") return <Badge>Unavailable</Badge>;
   if (available) return <Badge tone="orange">Available</Badge>;
-  return <Badge>Resolve</Badge>;
+  return <Badge>Claim</Badge>;
 }
 
 function SuggestionButton({
@@ -318,7 +318,7 @@ function ResultCard({
                     ? "Available to claim"
                     : resolved
                       ? "Already in use"
-                      : "Press Resolve to check")}
+                      : "Press Claim to check")}
             </div>
           </div>
           {available ? (
@@ -380,7 +380,7 @@ function ResultCard({
                     ? "This handle looks available."
                     : resolved
                       ? "This handle is already in use."
-                      : "Press Resolve to check this handle.")}
+                      : "Press Claim to check this handle.")}
             </div>
           </div>
           <Badge tone={status === "protected" ? "verify" : status === "blocked" ? "neutral" : "orange"}>
@@ -549,7 +549,7 @@ export function HandleDemo({
             </div>
             <div className="min-w-0">
               <div className="text-base font-semibold text-zinc-950 dark:text-zinc-50">
-                Resolve a{" "}
+                Claim a{" "}
                 <NairaTermBadge term="handle" tone="orange" className="-my-0.5" />
               </div>
               <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
@@ -614,7 +614,7 @@ export function HandleDemo({
                 : "mt-2 min-h-11 w-full rounded-2xl px-4 text-sm sm:mt-0 sm:w-auto"
             )}
           >
-            {loading ? "Checking..." : "Resolve"}
+            {loading ? "Searching and Claiming..." : "Claim"}
           </button>
         </div>
         {error ? (
