@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 
 import { cn } from "@/components/nairatag/ui";
+import { usePrivyRuntime } from "./PrivyRuntime";
 
 type AuthModalButtonProps = {
   children: ReactNode;
@@ -44,7 +45,9 @@ export function AuthModalButton({
   afterAuthHref = "#demo",
   variant = "secondary",
 }: AuthModalButtonProps) {
-  if (!process.env.NEXT_PUBLIC_PRIVY_APP_ID) {
+  const { enabled } = usePrivyRuntime();
+
+  if (!enabled) {
     return (
       <a href={afterAuthHref} className={cn(baseClass, variantClass[variant], className)}>
         {unauthenticatedChildren ?? children}

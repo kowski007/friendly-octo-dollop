@@ -69,12 +69,22 @@ export const metadata: Metadata = {
     description:
       "Send money to a name \u2014 not an account number. Claim your \u20A6handle and get verified instantly.",
     type: "website",
+    siteName: "NairaTag",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "NairaTag social share card",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "NairaTag",
     description:
       "Send money to a name \u2014 not an account number. Claim your \u20A6handle and get verified instantly.",
+    images: ["/opengraph-image"],
   },
 };
 
@@ -83,6 +93,11 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const privyAppId =
+    process.env.NEXT_PUBLIC_PRIVY_APP_ID?.trim() ||
+    process.env.PRIVY_APP_ID?.trim() ||
+    "";
+
   return (
     <html
       lang="en"
@@ -93,7 +108,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="flex min-h-full flex-col bg-white font-sans text-zinc-950 transition-colors dark:bg-zinc-950 dark:text-zinc-50">
-        <PrivyAppProvider>
+        <PrivyAppProvider appId={privyAppId}>
           <ToastProvider>
             <NotificationToastBridge />
             {children}

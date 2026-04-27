@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
+import { usePrivyRuntime } from "./PrivyRuntime";
 
 export type PrivySessionUser = {
   id: string;
@@ -16,7 +17,8 @@ type PrivySessionButtonProps = {
 };
 
 export function PrivySessionButton(props: PrivySessionButtonProps) {
-  if (!process.env.NEXT_PUBLIC_PRIVY_APP_ID) return null;
+  const { enabled } = usePrivyRuntime();
+  if (!enabled) return null;
   return <PrivySessionButtonInner {...props} />;
 }
 
